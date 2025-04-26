@@ -253,6 +253,7 @@ If you prefer not to use `uv`, you can invoke the server script directly using t
   "mcpServers": {
     "codealive": {
       "command": "/path/to/your/codealive-mcp/.venv/bin/python",
+      "args": [
         "/path/to/your/codealive-mcp/src/codealive_mcp_server.py",
         "--debug" // Optional
       ],
