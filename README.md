@@ -1,4 +1,4 @@
-# CodeAlive MCP Server
+# CodeAlive MCP: Deep Context for your project (especially for large codebases)
 
 [![CodeAlive Logo](https://app.codealive.dev/images/logos/dark-logo.svg)](https://www.codealive.dev/)
 
