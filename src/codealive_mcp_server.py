@@ -178,10 +178,11 @@ async def chat_completions(
              messages=[{"role": "user", "content": "How is password hashing implemented?"}],
              conversation_id="conv_6789f123a456b789c123d456"
            )
+    
         
     Note:
-        - Either conversation_id OR data_sources must be provided
-        - When creating a new conversation, data_sources is required
+        - Either conversation_id OR data_sources is typically provided
+        - When creating a new conversation, data_sources is optional if the API key has exactly one assigned data source
         - When continuing a conversation, conversation_id is required
         - The conversation maintains context across multiple messages
         - Messages should be in chronological order with the newest message last
@@ -199,7 +200,7 @@ async def chat_completions(
 
     # Validate that either conversation_id or data_sources is provided
     if not conversation_id and (not data_sources or len(data_sources) == 0):
-        return "Error: Either conversation_id or data_sources must be provided. For new conversations, data_sources is required. For continuing conversations, conversation_id is required."
+        await ctx.info("No data sources provided. If the API key has exactly one assigned data source, that will be used as default.")
 
     # Validate that each message has the required fields
     for msg in messages:
@@ -459,7 +460,7 @@ async def search_code(
         return "Error: Query cannot be empty. Please provide a search term, function name, or description of the code you're looking for."
 
     if not data_source_ids or len(data_source_ids) == 0:
-        return "Error: At least one data source ID must be provided. Use get_data_sources() to retrieve available data source IDs."
+        await ctx.info("No data source IDs provided. If the API key has exactly one assigned data source, that will be used as default.")
 
     try:
         # Normalize mode string to match expected enum values
@@ -471,7 +472,10 @@ async def search_code(
             normalized_mode = "auto"
 
         # Log the search attempt
-        await ctx.info(f"Searching for '{query}' in {len(data_source_ids)} data source(s) using {normalized_mode} mode")
+        if data_source_ids and len(data_source_ids) > 0:
+            await ctx.info(f"Searching for '{query}' in {len(data_source_ids)} data source(s) using {normalized_mode} mode")
+        else:
+            await ctx.info(f"Searching for '{query}' using API key's default data source with {normalized_mode} mode")
 
         # Prepare query parameters
         params = {
@@ -480,11 +484,13 @@ async def search_code(
             "IncludeContent": "true" if include_content else "false"
         }
 
-        if data_source_ids:
+        if data_source_ids and len(data_source_ids) > 0:
             # Add each data source ID as a separate query parameter
             for ds_id in data_source_ids:
                 if ds_id:  # Skip None or empty values
                     params["DataSourceIds"] = ds_id
+        else:
+            await ctx.info("Using API key's default data source (if available)")
 
         # Make API request
         response = await context.client.get("/api/search", params=params)

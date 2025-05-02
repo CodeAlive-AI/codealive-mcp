@@ -41,9 +41,9 @@ Using this MCP server allows AI agents (like Claude, Copilot, etc.) to leverage 
 
 The MCP server provides the following tools:
 
-1.  **`chat_completions`**: Access the CodeAlive Chat API with codebase context.
+1.  **`chat_completions`**: Access the CodeAlive Chat API with codebase context. If your API key is assigned to exactly one datasource, specifying the datasource is optional.
 2.  **`get_data_sources`**: List available repositories and workspaces indexed by CodeAlive.
-3.  **`search_code`**: Search for code snippets across your datasources using CodeAlive's semantic search.
+3.  **`search_code`**: Search for code snippets across your datasources using CodeAlive's semantic search. If your API key is assigned to exactly one datasource, specifying the datasource is optional.
 
 ## Getting Started
 
