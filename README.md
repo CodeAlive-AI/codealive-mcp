@@ -1,6 +1,7 @@
 # CodeAlive MCP: Deep Context for your project (especially for large codebases)
 
 [![CodeAlive Logo](https://app.codealive.dev/images/logos/dark-logo.svg)](https://www.codealive.dev/)
+[![smithery badge](https://smithery.ai/badge/@CodeAlive-AI/codealive-mcp)](https://smithery.ai/server/@CodeAlive-AI/codealive-mcp)
 
 This MCP (Model Context Protocol) server for the [CodeAlive API](https://www.codealive.dev/) enables AI clients like Claude Desktop, Cursor, Windserf, VS Code (GitHub Copilot), Cline, Roo-Code, and Refact to access CodeAlive's advanced semantic code search and codebase interaction features.
 
@@ -63,6 +64,14 @@ The MCP server provides the following tools:
 6.  **Important:** Copy the generated API key immediately and store it securely. You won't be able to see it again after closing the dialog.
 
 ### Installation
+
+#### Installing via Smithery
+
+To install CodeAlive for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@CodeAlive-AI/codealive-mcp):
+
+```bash
+npx -y @smithery/cli install @CodeAlive-AI/codealive-mcp --client claude
+```
 
 #### Installing with uv (Recommended)
 
