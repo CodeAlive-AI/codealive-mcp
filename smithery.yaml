@@ -1,0 +1,71 @@
+# Smithery configuration file: https://smithery.ai/docs/build/project-config
+
+startCommand:
+  type: stdio
+  configSchema:
+    # JSON Schema defining the configuration options for the MCP.
+    type: object
+    required:
+      - apiKey
+    properties:
+      apiKey:
+        type: string
+        description: CodeAlive API key for authentication
+      baseUrl:
+        type: string
+        default: ""
+        description: CodeAlive Base URL (optional)
+      transport:
+        type: string
+        default: stdio
+        description: Transport type
+      host:
+        type: string
+        default: 0.0.0.0
+        description: Host for SSE transport
+      port:
+        type: number
+        default: 8000
+        description: Port for SSE transport
+      debug:
+        type: boolean
+        default: false
+        description: Enable debug mode
+      ignoreSsl:
+        type: boolean
+        default: false
+        description: Ignore SSL certificate validation
+  commandFunction:
+    # A JS function that produces the CLI command based on the given config to start the MCP on stdio.
+    |-
+    (config) => {
+      const args = [];
+      // Pass API key via env for security
+      // Transport
+      args.push("--transport", config.transport);
+      if (config.transport === 'sse') {
+        args.push("--host", config.host.toString(), "--port", config.port.toString());
+      }
+      if (config.baseUrl) {
+        args.push("--base-url", config.baseUrl);
+      }
+      if (config.debug) {
+        args.push("--debug");
+      }
+      if (config.ignoreSsl) {
+        args.push("--ignore-ssl");
+      }
+      return {
+        command: "python",
+        args: ["src/codealive_mcp_server.py", ...args],
+        env: { CODEALIVE_API_KEY: config.apiKey }
+      };
+    }
+  exampleConfig:
+    apiKey: YOUR_CODEALIVE_API_KEY_HERE
+    baseUrl: ""
+    transport: stdio
+    host: 0.0.0.0
+    port: 8000
+    debug: false
+    ignoreSsl: false
