@@ -64,14 +64,6 @@ The MCP server provides the following tools:
 
 ### Installation
 
-#### Installing via Smithery
-
-To install CodeAlive for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@CodeAlive-AI/codealive-mcp):
-
-```bash
-npx -y @smithery/cli install @CodeAlive-AI/codealive-mcp --client claude
-```
-
 #### Installing with uv (Recommended)
 
 ```bash
@@ -96,6 +88,14 @@ cd codealive-mcp
 python -m venv .venv
 source .venv/bin/activate  # On Windows use: .venv\\Scripts\\activate
 pip install -e .
+```
+
+#### Installing via Smithery
+
+To install CodeAlive for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@CodeAlive-AI/codealive-mcp):
+
+```bash
+npx -y @smithery/cli install @CodeAlive-AI/codealive-mcp --client claude
 ```
 
 ## Configuration
