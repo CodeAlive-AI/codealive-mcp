@@ -187,9 +187,9 @@ If you already have settings, merge this block without removing other configurat
 
 3. Restart Claude Code
 
-1. Quit all running Claude Code sessions (terminals or apps).
-2. Reopen Claude Code, or start it in your terminal.
-3. Check the integration by running `/tools` or verifying that your tools appear in the tool list.
+* Quit all running Claude Code sessions (terminals or apps).
+* Reopen Claude Code, or start it in your terminal.
+* Check the integration by running `/tools` or verifying that your tools appear in the tool list.
 
 ---
 
