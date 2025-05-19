@@ -28,6 +28,7 @@ Using this MCP server allows AI agents (like Claude, Copilot, etc.) to leverage 
     *   [Command Line Options](#command-line-options)
 *   [Integrating with AI Clients](#integrating-with-ai-clients)
     *   [Continue](#continue)
+    *   [Claude Code](#claude-code)
     *   [Claude Desktop](#claude-desktop)
     *   [Visual Studio Code with GitHub Copilot](#visual-studio-code-with-github-copilot)
     *   [Cursor](#cursor)
@@ -137,6 +138,64 @@ Below are configuration examples for popular AI clients. Remember to replace pla
     ```
 
 2.  Restart Continue or reload the configuration.
+
+### Claude Code
+
+1. Locate Your Configuration File
+
+Claude Code reads settings from the following locations:
+
+* **User-wide (global):**
+
+  * **macOS/Linux:** `~/.claude/settings.json`
+  * **Windows:** `%USERPROFILE%\.claude\settings.json`
+* **Project-level (overrides global):**
+
+  * `<project-root>/.claude/settings.json`
+  * **Local (not checked in):** `<project-root>/.claude/settings.local.json`
+
+If the file doesn’t exist, create it.
+
+2. Add Your MCP Server Configuration
+
+Edit your chosen `settings.json` and add (or merge) a top-level `"mcpServers"` block:
+
+```jsonc
+{
+  // ...existing settings...
+
+  "mcpServers": {
+    "codealive": {
+      "command": "/path/to/your/codealive-mcp/.venv/bin/python",
+      "args": [
+        "/path/to/your/codealive-mcp/src/codealive_mcp_server.py",
+        "--debug" // Optional: enable debug logging
+      ],
+      "env": {
+        "CODEALIVE_API_KEY": "YOUR_API_KEY_HERE"
+      }
+    }
+  }
+}
+```
+
+* **`command`**: Path to the executable (Python, Node, etc.) for your MCP server.
+* **`args`**: Arguments for launching the server.
+* **`env`**: Environment variables (API keys, etc.) needed by your server.
+
+If you already have settings, merge this block without removing other configuration.
+
+3. Restart Claude Code
+
+1. Quit all running Claude Code sessions (terminals or apps).
+2. Reopen Claude Code, or start it in your terminal.
+3. Check the integration by running `/tools` or verifying that your tools appear in the tool list.
+
+---
+
+**CodeAlive MCP server should now be available in Claude Code!**
+For more details, see [Anthropic’s MCP docs](https://docs.anthropic.com/claude/docs/mcp).
+
 
 ### Claude Desktop
 
