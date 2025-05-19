@@ -141,7 +141,7 @@ Below are configuration examples for popular AI clients. Remember to replace pla
 
 ### Claude Code
 
-1. Locate Your Configuration File
+#### 1. Locate Your Configuration File
 
 Claude Code reads settings from the following locations:
 
@@ -156,7 +156,7 @@ Claude Code reads settings from the following locations:
 
 If the file doesn’t exist, create it.
 
-2. Add Your MCP Server Configuration
+#### 2. Add Your MCP Server Configuration
 
 Edit your chosen `settings.json` and add (or merge) a top-level `"mcpServers"` block:
 
@@ -185,11 +185,11 @@ Edit your chosen `settings.json` and add (or merge) a top-level `"mcpServers"` b
 
 If you already have settings, merge this block without removing other configuration.
 
-3. Restart Claude Code
+#### 3. Restart Claude Code
 
-* Quit all running Claude Code sessions (terminals or apps).
-* Reopen Claude Code, or start it in your terminal.
-* Check the integration by running `/tools` or verifying that your tools appear in the tool list.
+1. Quit all running Claude Code sessions (terminals or apps).
+2. Reopen Claude Code, or start it in your terminal.
+3. Check the integration by running `/tools` or verifying that your tools appear in the tool list.
 
 ---
 
