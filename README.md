@@ -2,6 +2,8 @@
 
 [![CodeAlive Logo](https://app.codealive.ai/images/logos/dark-logo.svg)](https://www.codealive.ai/)
 
+[![smithery badge](https://smithery.ai/badge/@CodeAlive-AI/codealive-mcp)](https://smithery.ai/server/@CodeAlive-AI/codealive-mcp)
+
 This MCP (Model Context Protocol) server for the [CodeAlive API](https://www.codealive.ai/) enables AI clients like Claude Desktop, Cursor, Windserf, VS Code (GitHub Copilot), Cline, Roo-Code, and Refact to access CodeAlive's advanced semantic code search and codebase interaction features.
 
 CodeAlive MCP enhances these agents by providing **enriched context** from your project's codebase, enabling more intelligent and efficient interactions.
