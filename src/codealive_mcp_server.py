@@ -37,7 +37,7 @@ async def codealive_lifespan(server: FastMCP) -> AsyncIterator[CodeAliveContext]
     # Get base URL from environment or use default
     if os.environ.get("CODEALIVE_BASE_URL") is None:
         print("WARNING: CODEALIVE_BASE_URL not found in environment, using default")
-        base_url = "https://app.codealive.dev"
+        base_url = "https://app.codealive.ai"
     else:
         base_url = os.environ.get("CODEALIVE_BASE_URL")
         print(f"DEBUG: Found CODEALIVE_BASE_URL in environment: '{base_url}'")
@@ -646,7 +646,7 @@ if __name__ == "__main__":
 
     if not base_url:
         print("WARNING: CODEALIVE_BASE_URL environment variable is not set, using default.")
-        print("CodeAlive will connect to the production API at https://app.codealive.dev")
+        print("CodeAlive will connect to the production API at https://app.codealive.ai")
 
     # Run the server with the selected transport
     if args.transport == "sse":

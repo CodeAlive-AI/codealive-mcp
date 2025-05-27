@@ -1,14 +1,14 @@
 # CodeAlive MCP: Deep Context for your project (especially for large codebases)
 
-[![CodeAlive Logo](https://app.codealive.dev/images/logos/dark-logo.svg)](https://www.codealive.dev/)
+[![CodeAlive Logo](https://app.codealive.ai/images/logos/dark-logo.svg)](https://www.codealive.ai/)
 
-This MCP (Model Context Protocol) server for the [CodeAlive API](https://www.codealive.dev/) enables AI clients like Claude Desktop, Cursor, Windserf, VS Code (GitHub Copilot), Cline, Roo-Code, and Refact to access CodeAlive's advanced semantic code search and codebase interaction features.
+This MCP (Model Context Protocol) server for the [CodeAlive API](https://www.codealive.ai/) enables AI clients like Claude Desktop, Cursor, Windserf, VS Code (GitHub Copilot), Cline, Roo-Code, and Refact to access CodeAlive's advanced semantic code search and codebase interaction features.
 
 CodeAlive MCP enhances these agents by providing **enriched context** from your project's codebase, enabling more intelligent and efficient interactions.
 
 ## What is CodeAlive?
 
-[CodeAlive](https://www.codealive.dev/) is a platform that analyzes your entire codebase, including documentation and dependencies, to understand its structure, patterns, and logic. It creates a detailed internal map of your repositories or workspaces, enabling fast, reliable, and high-quality answers to questions about your solution for any IT professional.
+[CodeAlive](https://www.codealive.ai/) is a platform that analyzes your entire codebase, including documentation and dependencies, to understand its structure, patterns, and logic. It creates a detailed internal map of your repositories or workspaces, enabling fast, reliable, and high-quality answers to questions about your solution for any IT professional.
 
 Using this MCP server allows AI agents (like Claude, Copilot, etc.) to leverage CodeAlive's deep code understanding. This helps agents:
 
@@ -56,7 +56,7 @@ The MCP server provides the following tools:
 
 ### Getting an API Key
 
-1.  Log in to your CodeAlive account at [https://app.codealive.dev/](https://app.codealive.dev/).
+1.  Log in to your CodeAlive account at [https://app.codealive.ai/](https://app.codealive.ai/).
 2.  Navigate to the **API Keys** section (under Organization).
 3.  Click on "**+ Create API Key**".
 4.  Give your key a descriptive name (e.g., "My Local MCP Key") and select the appropriate scope (e.g., "All Data Sources" or select specific ones).
@@ -369,7 +369,7 @@ If the MCP server isn't working correctly with your AI client, follow these step
 
 If problems persist, consider opening an issue on the CodeAlive MCP server repository (if available) with relevant logs and configuration details (masking your API key).
 
-You can also contact our support team at support@codealive.dev for further assistance.
+You can also contact our support team at support@codealive.ai for further assistance.
 
 ## License
 
