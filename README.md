@@ -202,10 +202,15 @@ For more details, see [Anthropic’s MCP docs](https://docs.anthropic.com/claude
 ### Claude Desktop
 
 1.  Edit your Claude Desktop configuration file:
+
     *   **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
     *   **Windows:** `%APPDATA%\Claude\claude_desktop_config.json` (usually `C:\Users\YourUsername\AppData\Roaming\Claude\claude_desktop_config.json`)
 
 2.  Add the MCP server configuration:
+
+    You can configure the CodeAlive MCP server to run either with Python (recommended for local development) or with Docker (for easier setup without a Python environment).
+
+    **Option 1: Using Python**
 
     ```json
     {
@@ -223,6 +228,31 @@ For more details, see [Anthropic’s MCP docs](https://docs.anthropic.com/claude
       }
     }
     ```
+
+    **Option 2: Using Docker**
+
+    ```json
+    {
+      "mcpServers": {
+        "codealive": {
+          "command": "docker",
+          "args": [
+            "run",
+            "--rm",
+            "-i",
+            "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
+            "ghcr.io/codealive-ai/codealive-mcp:latest"
+          ]
+        }
+      }
+    }
+    ```
+    *If the `latest` tag is not available, you can use `ghcr.io/codealive-ai/codealive-mcp:main` instead.*
+
+    > **Note:**  
+    > The `-i` flag keeps STDIN open for the MCP protocol.  
+    > The environment variable is set using `-e`, followed by `"CODEALIVE_API_KEY=YOUR_API_KEY_HERE"` as a separate argument.
+
     *(Ensure this merges correctly if the file already has content)*
 
 3.  Restart Claude Desktop completely.
@@ -266,28 +296,52 @@ For more details, see [Anthropic’s MCP docs](https://docs.anthropic.com/claude
 1.  Open Cursor settings (`Cmd+,` or `Ctrl+,`).
 2.  Navigate to the "MCP" section in the left panel.
 3.  Click "Add new global MCP server".
-4.  Enter the following JSON configuration, updating paths and API key:
+4.  Enter one of the following JSON configurations, updating paths and API key as needed:
 
-    ```json
-    {
-      "mcpServers": {
-        "codealive": {
-          "command": "uv",
-          "args": [
-            "--directory",
-            "/path/to/your/codealive-mcp", // Path to the MCP server project root
-            "run",
-            "python",
-            "src/codealive_mcp_server.py",
-            "--debug" // Optional: Enable debug logging
-          ],
-          "env": {
-            "CODEALIVE_API_KEY": "YOUR_API_KEY_HERE"
-          }
-        }
+  **Option 1: Using Python (recommended for local development)**
+
+  ```json
+  {
+    "mcpServers": {
+    "codealive": {
+      "command": "/path/to/your/codealive-mcp/.venv/bin/python",
+      "args": [
+      "/path/to/your/codealive-mcp/src/codealive_mcp_server.py",
+      "--debug" // Optional: Enable debug logging
+      ],
+      "env": {
+      "CODEALIVE_API_KEY": "YOUR_API_KEY_HERE"
       }
     }
-    ```
+    }
+  }
+  ```
+
+  **Option 2: Using Docker (no Python environment required)**
+
+  ```json
+  {
+    "mcpServers": {
+    "codealive": {
+      "command": "docker",
+      "args": [
+      "run",
+      "--rm",
+      "-i",
+      "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
+      "ghcr.io/codealive-ai/codealive-mcp:latest"
+      ]
+    }
+    }
+  }
+  ```
+  *If the `latest` tag is not available, use `ghcr.io/codealive-ai/codealive-mcp:main` instead.*
+
+  > **Note:**  
+  > The `-i` flag keeps STDIN open for the MCP protocol.  
+  > The environment variable is set using `-e`, followed by `"CODEALIVE_API_KEY=YOUR_API_KEY_HERE"` as a separate argument.
+
+  *(Ensure this merges correctly if your file already has content)*
 
 5.  Save the configuration.
 6.  Restart Cursor completely.
