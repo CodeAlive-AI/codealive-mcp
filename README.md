@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/codealive-ai-codealive-mcp-badge.png)](https://mseep.ai/app/codealive-ai-codealive-mcp)
+
 # CodeAlive MCP: Deep Context for your project (especially for large codebases)
 
 [![CodeAlive Logo](https://app.codealive.ai/images/logos/dark-logo.svg)](https://www.codealive.ai/)
