@@ -20,6 +20,7 @@ load_dotenv(dotenv_path=dotenv_path)
 
 # Import FastMCP components
 from fastmcp import Context, FastMCP
+from fastmcp.server.dependencies import get_http_headers
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 import datetime
@@ -33,26 +34,29 @@ class CodeAliveContext:
 
 def get_api_key_from_context(ctx: Context) -> str:
     """Extract API key based on transport mode"""
-    # Try to detect HTTP mode by checking if we're in a web context
-    # In HTTP mode, we'll use a fixed API key for now (passed via environment)
-    # This is a temporary fix until we understand FastMCP HTTP context better
-    
-    # Check if we have any HTTP-like context attributes
-    http_mode = (
-        hasattr(ctx, 'request') or 
-        hasattr(ctx, 'session') or 
-        os.environ.get("TRANSPORT_MODE") == "http"
-    )
-    
-    if http_mode:
-        # HTTP mode - for now, use environment variable as fallback
-        # TODO: Figure out proper FastMCP HTTP header access
-        api_key = os.environ.get("CODEALIVE_HTTP_API_KEY") or os.environ.get("CODEALIVE_API_KEY", "")
-        if not api_key:
-            raise ValueError("HTTP mode: CODEALIVE_HTTP_API_KEY environment variable required")
-        return api_key
-    else:
-        # STDIO mode - use environment variable
+    # Try to get HTTP headers safely using FastMCP dependency function
+    try:
+        headers = get_http_headers()
+        auth_header = headers.get("authorization", "")
+        
+        if auth_header and auth_header.startswith("Bearer "):
+            # HTTP mode with Bearer token
+            return auth_header[7:]  # Remove "Bearer " prefix
+        elif headers:
+            # HTTP mode but no/invalid Authorization header
+            # Fall back to environment variable for containerized deployment
+            api_key = os.environ.get("CODEALIVE_HTTP_API_KEY") or os.environ.get("CODEALIVE_API_KEY", "")
+            if not api_key:
+                raise ValueError("HTTP mode: Authorization: Bearer <api-key> header required or CODEALIVE_API_KEY environment variable")
+            return api_key
+        else:
+            # STDIO mode - no HTTP headers available
+            api_key = os.environ.get("CODEALIVE_API_KEY", "")
+            if not api_key:
+                raise ValueError("STDIO mode: CODEALIVE_API_KEY environment variable required")
+            return api_key
+    except Exception:
+        # Fallback to STDIO mode if header access fails
         api_key = os.environ.get("CODEALIVE_API_KEY", "")
         if not api_key:
             raise ValueError("STDIO mode: CODEALIVE_API_KEY environment variable required")
