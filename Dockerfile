@@ -12,15 +12,15 @@ RUN apt-get update \
 
 # Install Python dependencies
 RUN pip install --no-cache-dir \
-    mcp[cli]>=1.6.0 \
+    fastmcp>=2.0.0 \
     httpx>=0.26.0 \
     python-dotenv>=1.0.0
 
 # Copy application code
 COPY . /app
 
-# Expose port for SSE transport
+# Expose port for HTTP transport
 EXPOSE 8000
 
-# Default command: stdio transport
-CMD ["python", "src/codealive_mcp_server.py", "--transport", "stdio"]
+# Default command: HTTP transport for containerized deployment
+CMD ["python", "src/codealive_mcp_server.py", "--transport", "http", "--host", "0.0.0.0", "--port", "8000"]

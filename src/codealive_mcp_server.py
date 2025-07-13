@@ -19,7 +19,10 @@ dotenv_path = os.path.join(project_dir, '.env')
 load_dotenv(dotenv_path=dotenv_path)
 
 # Import FastMCP components
-from mcp.server.fastmcp import Context, FastMCP
+from fastmcp import Context, FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+import datetime
 
 @dataclass
 class CodeAliveContext:
@@ -28,12 +31,32 @@ class CodeAliveContext:
     api_key: str
     base_url: str
 
+def get_api_key_from_context(ctx: Context) -> str:
+    """Extract API key based on transport mode"""
+    transport_mode = os.environ.get("TRANSPORT_MODE", "stdio")
+    
+    if transport_mode == "http":
+        # HTTP mode - extract from Authorization header
+        # Check if we have HTTP request context
+        if hasattr(ctx, 'request') and ctx.request:
+            auth_header = ctx.request.headers.get("Authorization", "")
+            if not auth_header or not auth_header.startswith("Bearer "):
+                raise ValueError("HTTP mode: Authorization: Bearer <api-key> header required")
+            return auth_header[7:]  # Remove "Bearer "
+        else:
+            raise ValueError("HTTP mode: No request context available for Authorization header")
+    else:
+        # STDIO mode - use environment variable
+        api_key = os.environ.get("CODEALIVE_API_KEY", "")
+        if not api_key:
+            raise ValueError("STDIO mode: CODEALIVE_API_KEY environment variable required")
+        return api_key
+
 @asynccontextmanager
 async def codealive_lifespan(server: FastMCP) -> AsyncIterator[CodeAliveContext]:
     """Manage CodeAlive API client lifecycle"""
-    # Get environment variables or use defaults - with stronger logging
-    api_key = os.environ.get("CODEALIVE_API_KEY", "")
-
+    transport_mode = os.environ.get("TRANSPORT_MODE", "stdio")
+    
     # Get base URL from environment or use default
     if os.environ.get("CODEALIVE_BASE_URL") is None:
         print("WARNING: CODEALIVE_BASE_URL not found in environment, using default")
@@ -45,28 +68,45 @@ async def codealive_lifespan(server: FastMCP) -> AsyncIterator[CodeAliveContext]
     # Check if we should bypass SSL verification
     verify_ssl = not os.environ.get("CODEALIVE_IGNORE_SSL", "").lower() in ["true", "1", "yes"]
 
-    # Log environment configuration
-    print(f"CodeAlive MCP Server starting with:")
-    print(f"  - API Key: {'*' * 5}{api_key[-5:] if api_key else 'Not set'}")
-    print(f"  - Base URL: {base_url}")
-    print(f"  - SSL Verification: {'Enabled' if verify_ssl else 'Disabled'}")
-    print(f"  - Environment variables found: {list(filter(lambda x: x.startswith('CODEALIVE_'), os.environ.keys()))}")
-
-    # Create a client
-    client = httpx.AsyncClient(
-        base_url=base_url,
-        headers={
-            "X-Api-Key": api_key,
-            "Content-Type": "application/json",
-        },
-        timeout=60.0,  # Longer timeout for chat completions
-        verify=verify_ssl,  # Only verify SSL if not in debug mode
-    )
+    if transport_mode == "stdio":
+        # STDIO mode: create client with fixed API key
+        api_key = os.environ.get("CODEALIVE_API_KEY", "")
+        print(f"CodeAlive MCP Server starting in STDIO mode:")
+        print(f"  - API Key: {'*' * 5}{api_key[-5:] if api_key else 'Not set'}")
+        print(f"  - Base URL: {base_url}")
+        print(f"  - SSL Verification: {'Enabled' if verify_ssl else 'Disabled'}")
+        
+        # Create client with fixed headers for STDIO mode
+        client = httpx.AsyncClient(
+            base_url=base_url,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            timeout=60.0,
+            verify=verify_ssl,
+        )
+    else:
+        # HTTP mode: create client factory (no fixed API key)
+        print(f"CodeAlive MCP Server starting in HTTP mode:")
+        print(f"  - API Keys: Extracted from Authorization headers per request")
+        print(f"  - Base URL: {base_url}")
+        print(f"  - SSL Verification: {'Enabled' if verify_ssl else 'Disabled'}")
+        
+        # Create base client without authentication headers
+        client = httpx.AsyncClient(
+            base_url=base_url,
+            headers={
+                "Content-Type": "application/json",
+            },
+            timeout=60.0,
+            verify=verify_ssl,
+        )
 
     try:
         yield CodeAliveContext(
             client=client,
-            api_key=api_key,
+            api_key="",  # Will be set per-request in HTTP mode
             base_url=base_url
         )
     finally:
@@ -119,6 +159,16 @@ mcp = FastMCP(
     """,
     lifespan=codealive_lifespan
 )
+
+# Add health check endpoint for AWS ALB
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(request: Request) -> JSONResponse:
+    """Health check endpoint for load balancer"""
+    return JSONResponse({
+        "status": "healthy",
+        "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "service": "codealive-mcp-server"
+    })
 
 @mcp.tool()
 async def chat_completions(
@@ -229,14 +279,21 @@ async def chat_completions(
         request_data["dataSources"] = valid_data_sources
 
     try:
+        # Get API key based on transport mode
+        api_key = get_api_key_from_context(ctx)
+        
         # Log the attempt
         await ctx.info(f"Requesting chat completion with {len(messages)} messages" +
                        (f" in conversation {conversation_id}" if conversation_id else " in a new conversation"))
 
+        # Create headers with authorization
+        headers = {"Authorization": f"Bearer {api_key}"}
+        
         # Make API request
         response = await context.client.post(
             "/api/chat/completions",
-            json=request_data
+            json=request_data,
+            headers=headers
         )
 
         # Check for errors
@@ -341,11 +398,17 @@ async def get_data_sources(
     context: CodeAliveContext = ctx.request_context.lifespan_context
 
     try:
+        # Get API key based on transport mode
+        api_key = get_api_key_from_context(ctx)
+        
         # Determine the endpoint based on alive_only flag
         endpoint = "/api/datasources/alive" if alive_only else "/api/datasources/all"
 
+        # Create headers with authorization
+        headers = {"Authorization": f"Bearer {api_key}"}
+        
         # Make API request
-        response = await context.client.get(endpoint)
+        response = await context.client.get(endpoint, headers=headers)
 
         # Check for errors
         response.raise_for_status()
@@ -492,8 +555,14 @@ async def search_code(
         else:
             await ctx.info("Using API key's default data source (if available)")
 
+        # Get API key based on transport mode
+        api_key = get_api_key_from_context(ctx)
+        
+        # Create headers with authorization
+        headers = {"Authorization": f"Bearer {api_key}"}
+        
         # Make API request
-        response = await context.client.get("/api/search", params=params)
+        response = await context.client.get("/api/search", params=params, headers=headers)
 
         # Check for errors
         response.raise_for_status()
@@ -595,9 +664,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="CodeAlive MCP Server")
     parser.add_argument("--api-key", help="CodeAlive API Key")
     parser.add_argument("--base-url", help="CodeAlive Base URL")
-    parser.add_argument("--transport", help="Transport type (stdio or sse)", default="stdio")
-    parser.add_argument("--host", help="Host for SSE transport", default="0.0.0.0")
-    parser.add_argument("--port", help="Port for SSE transport", type=int, default=8000)
+    parser.add_argument("--transport", help="Transport type (stdio or http)", default="stdio")
+    parser.add_argument("--host", help="Host for HTTP transport", default="0.0.0.0")
+    parser.add_argument("--port", help="Port for HTTP transport", type=int, default=8000)
     parser.add_argument("--debug", action="store_true", help="Enable debug mode for verbose logging")
     parser.add_argument("--ignore-ssl", action="store_true", help="Ignore SSL certificate validation")
 
@@ -636,20 +705,34 @@ if __name__ == "__main__":
                 masked_env = env_content.replace(os.environ.get("CODEALIVE_API_KEY", ""), "****API_KEY****")
                 print(f"  - Dotenv content:\n{masked_env}")
 
-    # Check environment variables before starting server
+    # Set transport mode for validation
+    os.environ["TRANSPORT_MODE"] = args.transport
+    
+    # Validate configuration based on transport mode
     api_key = os.environ.get("CODEALIVE_API_KEY", "")
     base_url = os.environ.get("CODEALIVE_BASE_URL", "")
 
-    if not api_key:
-        print("WARNING: CODEALIVE_API_KEY environment variable is not set.")
-        print("Please set this in your .env file or environment.")
+    if args.transport == "stdio":
+        # STDIO mode: require API key in environment
+        if not api_key:
+            print("ERROR: STDIO mode requires CODEALIVE_API_KEY environment variable.")
+            print("Please set this in your .env file or environment.")
+            sys.exit(1)
+        print(f"STDIO mode: Using API key from environment (ends with: ...{api_key[-4:] if len(api_key) > 4 else '****'})")
+    else:
+        # HTTP mode: prohibit API key in environment
+        if api_key:
+            print("ERROR: HTTP mode detected CODEALIVE_API_KEY in environment.")
+            print("Remove the environment variable. API keys must be provided via Authorization: Bearer headers.")
+            sys.exit(1)
+        print("HTTP mode: API keys will be extracted from Authorization: Bearer headers")
 
     if not base_url:
         print("WARNING: CODEALIVE_BASE_URL environment variable is not set, using default.")
         print("CodeAlive will connect to the production API at https://app.codealive.ai")
 
     # Run the server with the selected transport
-    if args.transport == "sse":
-        mcp.run(transport="sse", host=args.host, port=args.port)
+    if args.transport == "http":
+        mcp.run(transport="http", host=args.host, port=args.port)
     else:
         mcp.run(transport="stdio")
