@@ -114,9 +114,9 @@ The following environment variables are supported:
 ### Command Line Options
 
 *   `--api-key`: Your CodeAlive API key. Overrides the `CODEALIVE_API_KEY` environment variable.
-*   `--transport`: Transport type: `"stdio"` (default) or `"sse"`.
-*   `--host`: Host address for SSE transport (default: `0.0.0.0`).
-*   `--port`: Port for SSE transport (default: `8000`).
+*   `--transport`: Transport type: `"stdio"` (default) or `"http"`.
+*   `--host`: Host address for HTTP transport (default: `0.0.0.0`).
+*   `--port`: Port for HTTP transport (default: `8000`).
 *   `--debug`: Enable debug mode with verbose logging to standard output/error.
 
 ## Integrating with AI Clients
@@ -387,6 +387,38 @@ If you prefer not to use `uv`, you can invoke the server script directly using t
   }
 }
 ```
+
+## Deployment Modes
+
+The CodeAlive MCP server supports two deployment modes with different authentication patterns:
+
+### Local Development (STDIO Mode)
+For local development and Claude Desktop integration:
+```bash
+# Requires CODEALIVE_API_KEY environment variable
+export CODEALIVE_API_KEY="your_api_key_here"
+python src/codealive_mcp_server.py --transport stdio
+```
+
+### Remote Deployment (HTTP Mode)
+For remote deployment and web-based integrations:
+```bash
+# No environment variable required - uses Bearer token authentication
+python src/codealive_mcp_server.py --transport http --host 0.0.0.0 --port 8000
+
+# Client calls with Authorization header:
+curl -H "Authorization: Bearer your_api_key_here" \
+     -H "Content-Type: application/json" \
+     -X POST https://your-server.com/mcp/ \
+     -d '{"method": "tools/list"}'
+
+# Health check endpoint:
+curl https://your-server.com/health
+```
+
+**Key Differences:**
+- **STDIO mode**: Uses environment variable for API key, suitable for local/desktop clients
+- **HTTP mode**: Requires `Authorization: Bearer` header per request, suitable for web/remote clients
 
 ## Troubleshooting
 
