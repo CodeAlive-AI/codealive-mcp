@@ -44,11 +44,7 @@ def get_api_key_from_context(ctx: Context) -> str:
             return auth_header[7:]  # Remove "Bearer " prefix
         elif headers:
             # HTTP mode but no/invalid Authorization header
-            # Fall back to environment variable for containerized deployment
-            api_key = os.environ.get("CODEALIVE_HTTP_API_KEY") or os.environ.get("CODEALIVE_API_KEY", "")
-            if not api_key:
-                raise ValueError("HTTP mode: Authorization: Bearer <api-key> header required or CODEALIVE_API_KEY environment variable")
-            return api_key
+            raise ValueError("HTTP mode: Authorization: Bearer <api-key> header required")
         else:
             # STDIO mode - no HTTP headers available
             api_key = os.environ.get("CODEALIVE_API_KEY", "")
@@ -730,13 +726,12 @@ if __name__ == "__main__":
             sys.exit(1)
         print(f"STDIO mode: Using API key from environment (ends with: ...{api_key[-4:] if len(api_key) > 4 else '****'})")
     else:
-        # HTTP mode: allow API key in environment for AWS Fargate deployment
+        # HTTP mode: API keys must be provided via Authorization: Bearer headers
         if api_key:
-            print("HTTP mode: Using API key from environment for Fargate deployment")
-            # Set HTTP API key for the auth function
-            os.environ["CODEALIVE_HTTP_API_KEY"] = api_key
-        else:
-            print("HTTP mode: No environment API key found. API keys will be extracted from Authorization: Bearer headers")
+            print("WARNING: HTTP mode detected CODEALIVE_API_KEY in environment.")
+            print("In production, API keys should be provided via Authorization: Bearer headers.")
+            print("Environment variable will be ignored in HTTP mode.")
+        print("HTTP mode: API keys will be extracted from Authorization: Bearer headers")
 
     if not base_url:
         print("WARNING: CODEALIVE_BASE_URL environment variable is not set, using default.")
