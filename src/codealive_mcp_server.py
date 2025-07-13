@@ -740,7 +740,7 @@ if __name__ == "__main__":
 
     # Run the server with the selected transport
     if args.transport == "http":
-        # Use root path instead of /mcp/
-        mcp.run(transport="http", host=args.host, port=args.port, path="/")
+        # Use /api path to avoid conflicts with health endpoint
+        mcp.run(transport="http", host=args.host, port=args.port, path="/api")
     else:
         mcp.run(transport="stdio")
