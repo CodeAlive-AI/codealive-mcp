@@ -4,461 +4,378 @@
 
 [![smithery badge](https://smithery.ai/badge/@CodeAlive-AI/codealive-mcp)](https://smithery.ai/server/@CodeAlive-AI/codealive-mcp)
 
-This MCP (Model Context Protocol) server for the [CodeAlive API](https://www.codealive.ai/) enables AI clients like Claude Desktop, Cursor, Windserf, VS Code (GitHub Copilot), Cline, Roo-Code, and Refact to access CodeAlive's advanced semantic code search and codebase interaction features.
+**Connect your AI assistant to CodeAlive's powerful code understanding platform in seconds!**
 
-CodeAlive MCP enhances these agents by providing **enriched context** from your project's codebase, enabling more intelligent and efficient interactions.
+This MCP (Model Context Protocol) server enables AI clients like Claude Code, Cursor, Claude Desktop, Continue, VS Code (GitHub Copilot), and Cline to access CodeAlive's advanced semantic code search and codebase interaction features.
 
 ## What is CodeAlive?
 
-[CodeAlive](https://www.codealive.ai/) is a platform that analyzes your entire codebase, including documentation and dependencies, to understand its structure, patterns, and logic. It creates a detailed internal map of your repositories or workspaces, enabling fast, reliable, and high-quality answers to questions about your solution for any IT professional.
+[CodeAlive](https://www.codealive.ai/) analyzes your entire codebase to understand its structure, patterns, and logic. It creates a detailed internal map of your repositories, enabling AI assistants to:
 
-Using this MCP server allows AI agents (like Claude, Copilot, etc.) to leverage CodeAlive's deep code understanding. This helps agents:
+*   **Find relevant code faster** with semantic search
+*   **Understand the bigger picture** beyond isolated files  
+*   **Provide better answers** with full project context
+*   **Reduce costs and time** by eliminating guesswork
 
-*   **Find relevant code faster:** Get precise code snippets related to your questions.
-*   **Understand the bigger picture:** Gain context about the entire repository or workspace, not just isolated files.
-*   **Reduce costs and time:** Improve agent efficiency by providing accurate context directly, reducing the need for extensive file searching or guesswork.
+## 🛠 Available Tools
+
+Once connected, you'll have access to these powerful tools:
+
+1. **`get_data_sources`** - List your indexed repositories and workspaces
+2. **`search_code`** - Semantic code search across your codebase  
+3. **`chat_completions`** - AI chat with full project context
+
+## 🎯 Usage Examples
+
+After setup, try these commands with your AI assistant:
+
+- *"Show me all available repositories"* → Uses `get_data_sources`
+- *"Find authentication code in the user service"* → Uses `search_code`
+- *"Explain how the payment flow works in this codebase"* → Uses `chat_completions`
 
 ## Table of Contents
 
-*   [Available Tools](#available-tools)
-*   [Getting Started](#getting-started)
-    *   [Prerequisites](#prerequisites)
-    *   [Getting an API Key](#getting-an-api-key)
-    *   [Installation](#installation)
-*   [Configuration](#configuration)
-    *   [Environment Variables](#environment-variables)
-    *   [Command Line Options](#command-line-options)
-*   [Integrating with AI Clients](#integrating-with-ai-clients)
-    *   [Continue](#continue)
+*   [Quick Start (Remote)](#-quick-start-remote)
+*   [AI Client Integrations](#-ai-client-integrations)
     *   [Claude Code](#claude-code)
-    *   [Claude Desktop](#claude-desktop)
-    *   [Visual Studio Code with GitHub Copilot](#visual-studio-code-with-github-copilot)
     *   [Cursor](#cursor)
-*   [Using Python Directly](#using-python-directly)
-    *   [Claude Desktop with Python](#claude-desktop-with-python)
-    *   [Cursor with Python](#cursor-with-python)
-*   [Troubleshooting](#troubleshooting)
-*   [License](#license)
+    *   [Continue](#continue)
+    *   [Visual Studio Code with GitHub Copilot](#visual-studio-code-with-github-copilot)
+    *   [Claude Desktop](#claude-desktop)
+    *   [Cline](#cline)
+*   [Alternative: Docker Setup](#-alternative-docker-setup)
+*   [Advanced: Local Development](#-advanced-local-development)
+*   [Available Tools](#-available-tools)
+*   [Usage Examples](#-usage-examples)
+*   [Troubleshooting](#-troubleshooting)
+*   [License](#-license)
 
-## Available Tools
+## 🚀 Quick Start (Remote)
 
-The MCP server provides the following tools:
+**The fastest way to get started** - no installation required! Our remote MCP server at `https://mcp.codealive.ai/api/` provides instant access to CodeAlive's capabilities.
 
-1.  **`chat_completions`**: Access the CodeAlive Chat API with codebase context. If your API key is assigned to exactly one datasource, specifying the datasource is optional.
-2.  **`get_data_sources`**: List available repositories and workspaces indexed by CodeAlive.
-3.  **`search_code`**: Search for code snippets across your datasources using CodeAlive's semantic search. If your API key is assigned to exactly one datasource, specifying the datasource is optional.
+### Step 1: Get Your API Key
 
-## Getting Started
+1. Sign up at [https://app.codealive.ai/](https://app.codealive.ai/)
+2. Navigate to **API Keys** (under Organization)
+3. Click **"+ Create API Key"**
+4. Copy your API key immediately - you won't see it again!
+
+### Step 2: Choose Your AI Client
+
+Select your preferred AI client below for instant setup:
+
+## 🤖 AI Client Integrations
+
+### Claude Code
+
+**One command setup:**
+
+```bash
+claude mcp add --transport http codealive https://mcp.codealive.ai/api/ --header "Authorization: Bearer YOUR_API_KEY_HERE"
+```
+
+Replace `YOUR_API_KEY_HERE` with your actual API key. That's it! 🎉
+
+### Cursor
+
+1. Open Cursor → Settings (`Cmd+,` or `Ctrl+,`)
+2. Navigate to **"MCP"** in the left panel
+3. Click **"Add new MCP server"**
+4. Paste this configuration:
+
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "url": "https://mcp.codealive.ai/api/",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY_HERE"
+      }
+    }
+  }
+}
+```
+
+5. Save and restart Cursor
+
+### Continue
+
+1. Create/edit `.continue/config.yaml` in your project or `~/.continue/config.yaml`
+2. Add this configuration:
+
+```yaml
+mcpServers:
+  - name: CodeAlive
+    type: streamable-http
+    url: https://mcp.codealive.ai/api/
+    requestOptions:
+      headers:
+        Authorization: "Bearer YOUR_API_KEY_HERE"
+```
+
+3. Restart VS Code
+
+### Visual Studio Code with GitHub Copilot
+
+1. Open Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`)
+2. Run **"MCP: Add Server"**
+3. Choose **"HTTP"** server type
+4. Enter this configuration:
+
+```json
+{
+  "servers": {
+    "codealive": {
+      "type": "http",
+      "url": "https://mcp.codealive.ai/api/",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY_HERE"
+      }
+    }
+  }
+}
+```
+
+5. Restart VS Code
+
+### Claude Desktop
+
+> **Note:** Claude Desktop remote MCP requires OAuth authentication. Use Docker option below for Bearer token support.
+
+### Cline
+
+1. Open Cline extension in VS Code
+2. Click the MCP Servers icon to configure
+3. Add this configuration to your MCP settings:
+
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "url": "https://mcp.codealive.ai/api/",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY_HERE"
+      }
+    }
+  }
+}
+```
+
+4. Save and restart VS Code
+
+---
+
+## 🐳 Alternative: Docker Setup
+
+If you prefer Docker over the remote service, use our Docker image:
+
+### Claude Desktop with Docker
+
+For local development or if you prefer Docker over the remote service:
+
+1. Edit your config file:
+   - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+2. Add this configuration:
+
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
+        "ghcr.io/codealive-ai/codealive-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+3. Restart Claude Desktop
+
+### Cursor with Docker
+
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
+        "ghcr.io/codealive-ai/codealive-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+### Continue with Docker
+
+```yaml
+mcpServers:
+  - name: CodeAlive
+    type: stdio
+    command: docker
+    args:
+      - run
+      - --rm
+      - -i
+      - -e
+      - CODEALIVE_API_KEY=YOUR_API_KEY_HERE
+      - ghcr.io/codealive-ai/codealive-mcp:latest
+```
+
+### VS Code with Docker
+
+Create `.vscode/mcp.json` in your workspace:
+
+```json
+{
+  "servers": {
+    "codealive": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
+        "ghcr.io/codealive-ai/codealive-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+### Cline with Docker
+
+1. Open Cline extension in VS Code
+2. Click the MCP Servers icon to configure
+3. Add this Docker configuration:
+
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
+        "ghcr.io/codealive-ai/codealive-mcp:latest"
+      ]
+    }
+  }
+}
+```
+
+---
+
+## 🔧 Advanced: Local Development
+
+**For developers who want to customize or contribute to the MCP server.**
 
 ### Prerequisites
 
-*   Python 3.11
+*   Python 3.11+
 *   [uv](https://github.com/astral-sh/uv) (recommended) or pip
-*   A CodeAlive account and API Key
-
-### Getting an API Key
-
-1.  Log in to your CodeAlive account at [https://app.codealive.ai/](https://app.codealive.ai/).
-2.  Navigate to the **API Keys** section (under Organization).
-3.  Click on "**+ Create API Key**".
-4.  Give your key a descriptive name (e.g., "My Local MCP Key") and select the appropriate scope (e.g., "All Data Sources" or select specific ones).
-5.  Click "**Create**".
-6.  **Important:** Copy the generated API key immediately and store it securely. You won't be able to see it again after closing the dialog.
 
 ### Installation
 
-#### Installing with uv (Recommended)
-
 ```bash
 # Clone the repository
 git clone https://github.com/CodeAlive-AI/codealive-mcp.git
 cd codealive-mcp
 
-# Create a virtual environment and install dependencies
+# Setup with uv (recommended)
 uv venv
-source .venv/bin/activate  # On Windows use: .venv\\Scripts\\activate
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 uv pip install -e .
-```
 
-#### Installing with pip
-
-```bash
-# Clone the repository
-git clone https://github.com/CodeAlive-AI/codealive-mcp.git
-cd codealive-mcp
-
-# Create a virtual environment and install dependencies
+# Or setup with pip
 python -m venv .venv
-source .venv/bin/activate  # On Windows use: .venv\\Scripts\\activate
+source .venv/bin/activate  # Windows: .venv\Scripts\activate  
 pip install -e .
 ```
 
-#### Installing via Smithery
+### Local Server Configuration
 
-To install CodeAlive for Claude Desktop automatically via [Smithery](https://smithery.ai/server/@CodeAlive-AI/codealive-mcp):
+Once installed locally, configure your AI client to use the local server:
+
+#### Claude Code (Local)
+```bash
+claude mcp add codealive-local /path/to/codealive-mcp/.venv/bin/python /path/to/codealive-mcp/src/codealive_mcp_server.py --env CODEALIVE_API_KEY=YOUR_API_KEY_HERE
+```
+
+#### Other Clients (Local)
+Replace the Docker `command` and `args` with:
+```json
+{
+  "command": "/path/to/codealive-mcp/.venv/bin/python",
+  "args": ["/path/to/codealive-mcp/src/codealive_mcp_server.py"],
+  "env": {
+    "CODEALIVE_API_KEY": "YOUR_API_KEY_HERE"
+  }
+}
+```
+
+### Running HTTP Server Locally
+
+```bash
+# Start local HTTP server
+export CODEALIVE_API_KEY="your_api_key_here"
+python src/codealive_mcp_server.py --transport http --host localhost --port 8000
+
+# Test health endpoint
+curl http://localhost:8000/health
+```
+
+### Smithery Installation
+
+Auto-install for Claude Desktop via [Smithery](https://smithery.ai/server/@CodeAlive-AI/codealive-mcp):
 
 ```bash
 npx -y @smithery/cli install @CodeAlive-AI/codealive-mcp --client claude
 ```
 
-## Configuration
+---
 
-Configure the server using environment variables or command-line arguments.
+## 🐞 Troubleshooting
 
-### Environment Variables
+### Quick Diagnostics
 
-The following environment variables are supported:
+1. **Test the hosted service:**
+   ```bash
+   curl https://mcp.codealive.ai/health
+   ```
 
-*   `CODEALIVE_API_KEY`: Your CodeAlive API key. (Required unless passed via `--api-key`)
+2. **Check your API key:**
+   ```bash
+   curl -H "Authorization: Bearer YOUR_API_KEY" https://app.codealive.ai/api/v1/data_sources
+   ```
 
-### Command Line Options
+3. **Enable debug logging:** Add `--debug` to local server args
 
-*   `--api-key`: Your CodeAlive API key. Overrides the `CODEALIVE_API_KEY` environment variable.
-*   `--transport`: Transport type: `"stdio"` (default) or `"http"`.
-*   `--host`: Host address for HTTP transport (default: `0.0.0.0`).
-*   `--port`: Port for HTTP transport (default: `8000`).
-*   `--debug`: Enable debug mode with verbose logging to standard output/error.
+### Common Issues
 
-## Integrating with AI Clients
+- **"Connection refused"** → Check internet connection
+- **"401 Unauthorized"** → Verify your API key  
+- **"No repositories found"** → Check API key permissions in CodeAlive dashboard
+- **Client-specific logs** → See your AI client's documentation for MCP logs
 
-Below are configuration examples for popular AI clients. Remember to replace placeholders like `/path/to/your/codealive-mcp` and `YOUR_API_KEY_HERE` with your actual values. Using environment variables (`env` block) is generally recommended over putting the API key directly in the configuration file.
+### Getting Help
 
-### Continue
-
-1.  Configure the MCP server in your project's `.continue/config.yaml` or globally in `~/.continue/config.yaml`:
-
-    ```yaml
-    # ~/.continue/config.yaml or ./.continue/config.yaml
-    mcpServers:
-      - name: CodeAlive
-        command: /path/to/your/codealive-mcp/.venv/bin/python # Or use 'uv' if preferred (see Cursor example)
-        args:
-          - /path/to/your/codealive-mcp/src/codealive_mcp_server.py
-          - --debug # Optional: Enable debug logging
-        env:
-          CODEALIVE_API_KEY: YOUR_API_KEY_HERE
-    ```
-
-2.  Restart Continue or reload the configuration.
-
-### Claude Code
-
-#### 1. Locate Your Configuration File
-
-Claude Code reads settings from the following locations:
-
-* **User-wide (global):**
-
-  * **macOS/Linux:** `~/.claude/settings.json`
-  * **Windows:** `%USERPROFILE%\.claude\settings.json`
-* **Project-level (overrides global):**
-
-  * `<project-root>/.claude/settings.json`
-  * **Local (not checked in):** `<project-root>/.claude/settings.local.json`
-
-If the file doesn’t exist, create it.
-
-#### 2. Add Your MCP Server Configuration
-
-Edit your chosen `settings.json` and add (or merge) a top-level `"mcpServers"` block:
-
-```jsonc
-{
-  // ...existing settings...
-
-  "mcpServers": {
-    "codealive": {
-      "command": "/path/to/your/codealive-mcp/.venv/bin/python",
-      "args": [
-        "/path/to/your/codealive-mcp/src/codealive_mcp_server.py",
-        "--debug" // Optional: enable debug logging
-      ],
-      "env": {
-        "CODEALIVE_API_KEY": "YOUR_API_KEY_HERE"
-      }
-    }
-  }
-}
-```
-
-* **`command`**: Path to the executable (Python, Node, etc.) for your MCP server.
-* **`args`**: Arguments for launching the server.
-* **`env`**: Environment variables (API keys, etc.) needed by your server.
-
-If you already have settings, merge this block without removing other configuration.
-
-#### 3. Restart Claude Code
-
-1. Quit all running Claude Code sessions (terminals or apps).
-2. Reopen Claude Code, or start it in your terminal.
-3. Check the integration by running `/tools` or verifying that your tools appear in the tool list.
+- 📧 Email: support@codealive.ai
+- 🐛 Issues: [GitHub Issues](https://github.com/CodeAlive-AI/codealive-mcp/issues)
 
 ---
 
-**CodeAlive MCP server should now be available in Claude Code!**
-For more details, see [Anthropic’s MCP docs](https://docs.anthropic.com/claude/docs/mcp).
+## 📄 License
 
+MIT License - see [LICENSE](LICENSE) file for details.
 
-### Claude Desktop
+---
 
-1.  Edit your Claude Desktop configuration file:
-
-    *   **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-    *   **Windows:** `%APPDATA%\Claude\claude_desktop_config.json` (usually `C:\Users\YourUsername\AppData\Roaming\Claude\claude_desktop_config.json`)
-
-2.  Add the MCP server configuration:
-
-    You can configure the CodeAlive MCP server to run either with Python (recommended for local development) or with Docker (for easier setup without a Python environment).
-
-    **Option 1: Using Python**
-
-    ```json
-    {
-      "mcpServers": {
-        "codealive": {
-          "command": "/path/to/your/codealive-mcp/.venv/bin/python",
-          "args": [
-            "/path/to/your/codealive-mcp/src/codealive_mcp_server.py",
-            "--debug" // Optional: Enable debug logging
-          ],
-          "env": {
-            "CODEALIVE_API_KEY": "YOUR_API_KEY_HERE"
-          }
-        }
-      }
-    }
-    ```
-
-    **Option 2: Using Docker**
-
-    ```json
-    {
-      "mcpServers": {
-        "codealive": {
-          "command": "docker",
-          "args": [
-            "run",
-            "--rm",
-            "-i",
-            "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-            "ghcr.io/codealive-ai/codealive-mcp:latest"
-          ]
-        }
-      }
-    }
-    ```
-    *If the `latest` tag is not available, you can use `ghcr.io/codealive-ai/codealive-mcp:main` instead.*
-
-    > **Note:**  
-    > The `-i` flag keeps STDIN open for the MCP protocol.  
-    > The environment variable is set using `-e`, followed by `"CODEALIVE_API_KEY=YOUR_API_KEY_HERE"` as a separate argument.
-
-    *(Ensure this merges correctly if the file already has content)*
-
-3.  Restart Claude Desktop completely.
-
-### Visual Studio Code with GitHub Copilot
-
-1.  Open VS Code settings (JSON) using the Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`) and selecting "Preferences: Open User Settings (JSON)".
-
-2.  Add the MCP server configuration to your `settings.json`:
-
-    ```json
-    {
-      // ... other settings ...
-      "mcp": {
-        "servers": {
-          "codealive": {
-            "command": "uv",
-            "args": [
-              "--directory",
-              "/path/to/your/codealive-mcp", // Path to the MCP server project root
-              "run",
-              "python",
-              "src/codealive_mcp_server.py",
-              "--debug" // Optional: Enable debug logging
-            ],
-            "env": {
-              "CODEALIVE_API_KEY": "YOUR_API_KEY_HERE"
-            }
-          }
-        }
-      }
-      // ... other settings ...
-    }
-    ```
-    *(Ensure this merges correctly with existing settings)*
-
-3.  Restart VS Code. Ensure the GitHub Copilot extension is configured to potentially use MCP servers if required by its version/settings.
-
-### Cursor
-
-1.  Open Cursor settings (`Cmd+,` or `Ctrl+,`).
-2.  Navigate to the "MCP" section in the left panel.
-3.  Click "Add new global MCP server".
-4.  Enter one of the following JSON configurations, updating paths and API key as needed:
-
-  **Option 1: Using Python (recommended for local development)**
-
-  ```json
-  {
-    "mcpServers": {
-    "codealive": {
-      "command": "/path/to/your/codealive-mcp/.venv/bin/python",
-      "args": [
-      "/path/to/your/codealive-mcp/src/codealive_mcp_server.py",
-      "--debug" // Optional: Enable debug logging
-      ],
-      "env": {
-      "CODEALIVE_API_KEY": "YOUR_API_KEY_HERE"
-      }
-    }
-    }
-  }
-  ```
-
-  **Option 2: Using Docker (no Python environment required)**
-
-  ```json
-  {
-    "mcpServers": {
-    "codealive": {
-      "command": "docker",
-      "args": [
-      "run",
-      "--rm",
-      "-i",
-      "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-      "ghcr.io/codealive-ai/codealive-mcp:latest"
-      ]
-    }
-    }
-  }
-  ```
-  *If the `latest` tag is not available, use `ghcr.io/codealive-ai/codealive-mcp:main` instead.*
-
-  > **Note:**  
-  > The `-i` flag keeps STDIN open for the MCP protocol.  
-  > The environment variable is set using `-e`, followed by `"CODEALIVE_API_KEY=YOUR_API_KEY_HERE"` as a separate argument.
-
-  *(Ensure this merges correctly if your file already has content)*
-
-5.  Save the configuration.
-6.  Restart Cursor completely.
-
-## Using Python Directly
-
-If you prefer not to use `uv`, you can invoke the server script directly using the Python interpreter from your virtual environment. Update the `command` and `args` in the client configurations accordingly.
-
-### Claude Desktop with Python
-
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "command": "/path/to/your/codealive-mcp/.venv/bin/python", // Full path to python in venv
-      "args": [
-        "/path/to/your/codealive-mcp/src/codealive_mcp_server.py",
-        "--debug" // Optional
-      ],
-      "env": {
-        "CODEALIVE_API_KEY": "YOUR_API_KEY_HERE"
-      }
-    }
-  }
-}
-```
-
-### Cursor with Python
-
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "command": "/path/to/your/codealive-mcp/.venv/bin/python",
-      "args": [
-        "/path/to/your/codealive-mcp/src/codealive_mcp_server.py",
-        "--debug" // Optional
-      ],
-      "env": {
-        "CODEALIVE_API_KEY": "YOUR_API_KEY_HERE"
-      }
-    }
-  }
-}
-```
-
-## Deployment Modes
-
-The CodeAlive MCP server supports two deployment modes with different authentication patterns:
-
-### Local Development (STDIO Mode)
-For local development and Claude Desktop integration:
-```bash
-# Requires CODEALIVE_API_KEY environment variable
-export CODEALIVE_API_KEY="your_api_key_here"
-python src/codealive_mcp_server.py --transport stdio
-```
-
-### Remote Deployment (HTTP Mode)
-For remote deployment and web-based integrations:
-```bash
-# No environment variable required - uses Bearer token authentication
-python src/codealive_mcp_server.py --transport http --host 0.0.0.0 --port 8000
-
-# Client calls with Authorization header:
-curl -H "Authorization: Bearer your_api_key_here" \
-     -H "Content-Type: application/json" \
-     -X POST https://your-server.com/mcp/ \
-     -d '{"method": "tools/list"}'
-
-# Health check endpoint:
-curl https://your-server.com/health
-```
-
-**Key Differences:**
-- **STDIO mode**: Uses environment variable for API key, suitable for local/desktop clients
-- **HTTP mode**: Requires `Authorization: Bearer` header per request, suitable for web/remote clients
-
-## Troubleshooting
-
-If the MCP server isn't working correctly with your AI client, follow these steps:
-
-1.  **Enable Debug Logging:** Add the `--debug` flag to the `args` in your client's MCP configuration. This will print verbose logs from the MCP server itself to its standard output/error stream. Where this stream goes depends on how the client manages the MCP process.
-2.  **Check MCP Server Output:**
-    *   Try running the server command directly in your terminal (activate the virtual environment first):
-        ```bash
-        # Activate venv first!
-        export CODEALIVE_API_KEY="YOUR_API_KEY_HERE"
-        python src/codealive_mcp_server.py --debug --transport stdio
-        ```
-    *   Look for any error messages, especially related to API key validation or connection issues.
-3.  **Check Client Logs:** Consult the documentation or settings for your specific AI client to find its log files. Look for errors related to starting or communicating with the "codealive" MCP server.
-    *   **Claude Desktop:**
-        *   Check the main application logs.
-        *   Look for MCP-specific logs:
-            *   macOS: `~/Library/Logs/Claude/mcp.log` and `~/Library/Logs/Claude/mcp-server-codealive.log`
-            *   Windows: `%LOCALAPPDATA%\Claude\Logs\mcp.log` and `%LOCALAPPDATA%\Claude\Logs\mcp-server-codealive.log` (Path is typically `C:\Users\YourUsername\AppData\Local\Claude\Logs`)
-    *   **Cursor:**
-        *   Use the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) -> `Developer: Toggle Developer Tools` -> Console tab (for browser-level errors).
-        *   **Check the Output Panel:** Go to `View` -> `Output` (or click `Output` in the bottom panel). In the dropdown menu on the right side of the Output panel, look for a channel named `CodeAlive`, `MCP`, or related to the server process. This often contains the direct stdout/stderr from the MCP server if `--debug` is enabled.
-        *   Use the Command Palette -> `Developer: Open Logs Folder`. Check files within, especially related to the main process or extension host.
-        *   Log folder locations:
-            *   macOS: `~/Library/Application Support/Cursor/logs/`
-            *   Windows: `%APPDATA%\Cursor\logs\` (Typically `C:\Users\YourUsername\AppData\Roaming\Cursor\logs\`)
-    *   **VS Code (Continue / Copilot):**
-        *   Use the Command Palette (`Cmd+Shift+P` / `Ctrl+Shift+P`) -> `Developer: Toggle Developer Tools` -> Console tab (for browser-level errors).
-        *   **Check the Output Panel:** Go to `View` -> `Output` (or click `Output` in the bottom panel). In the dropdown menu on the right side of the Output panel, look for a channel named `CodeAlive`, `MCP`, `GitHub Copilot`, or `Continue`. The MCP server logs (especially with `--debug`) might be routed here.
-        *   Use the Command Palette -> `Developer: Show Logs...` -> Select `Extension Host` from the dropdown. Look for errors related to Copilot or Continue extensions trying to communicate via MCP.
-        *   For Continue specific logs: Use Command Palette -> `Continue: Focus on Continue Console View` (requires enabling `Continue: Enable Console` in settings). See [Continue Troubleshooting Docs](https://docs.continue.dev/troubleshooting#check-the-logs).
-4.  **Verify Configuration:** Double-check the `command`, `args`, and `env` paths and values in your client's MCP configuration file. Ensure JSON/YAML syntax is correct.
-5.  **API Key:** Ensure your `CODEALIVE_API_KEY` is correct.
-
-
-If problems persist, consider opening an issue on the CodeAlive MCP server repository (if available) with relevant logs and configuration details (masking your API key).
-
-You can also contact our support team at support@codealive.ai for further assistance.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 
+**Ready to supercharge your AI assistant with deep code understanding?**  
+[Get started now →](https://app.codealive.ai/)
