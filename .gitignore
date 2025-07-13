@@ -172,3 +172,9 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Claude Code local settings (contains API keys)
+.claude/
+
+# JetBrains IDE
+.idea/

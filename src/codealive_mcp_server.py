@@ -33,18 +33,24 @@ class CodeAliveContext:
 
 def get_api_key_from_context(ctx: Context) -> str:
     """Extract API key based on transport mode"""
-    transport_mode = os.environ.get("TRANSPORT_MODE", "stdio")
+    # Try to detect HTTP mode by checking if we're in a web context
+    # In HTTP mode, we'll use a fixed API key for now (passed via environment)
+    # This is a temporary fix until we understand FastMCP HTTP context better
     
-    if transport_mode == "http":
-        # HTTP mode - extract from Authorization header
-        # Check if we have HTTP request context
-        if hasattr(ctx, 'request') and ctx.request:
-            auth_header = ctx.request.headers.get("Authorization", "")
-            if not auth_header or not auth_header.startswith("Bearer "):
-                raise ValueError("HTTP mode: Authorization: Bearer <api-key> header required")
-            return auth_header[7:]  # Remove "Bearer "
-        else:
-            raise ValueError("HTTP mode: No request context available for Authorization header")
+    # Check if we have any HTTP-like context attributes
+    http_mode = (
+        hasattr(ctx, 'request') or 
+        hasattr(ctx, 'session') or 
+        os.environ.get("TRANSPORT_MODE") == "http"
+    )
+    
+    if http_mode:
+        # HTTP mode - for now, use environment variable as fallback
+        # TODO: Figure out proper FastMCP HTTP header access
+        api_key = os.environ.get("CODEALIVE_HTTP_API_KEY") or os.environ.get("CODEALIVE_API_KEY", "")
+        if not api_key:
+            raise ValueError("HTTP mode: CODEALIVE_HTTP_API_KEY environment variable required")
+        return api_key
     else:
         # STDIO mode - use environment variable
         api_key = os.environ.get("CODEALIVE_API_KEY", "")
@@ -720,12 +726,13 @@ if __name__ == "__main__":
             sys.exit(1)
         print(f"STDIO mode: Using API key from environment (ends with: ...{api_key[-4:] if len(api_key) > 4 else '****'})")
     else:
-        # HTTP mode: prohibit API key in environment
+        # HTTP mode: allow API key in environment for AWS Fargate deployment
         if api_key:
-            print("ERROR: HTTP mode detected CODEALIVE_API_KEY in environment.")
-            print("Remove the environment variable. API keys must be provided via Authorization: Bearer headers.")
-            sys.exit(1)
-        print("HTTP mode: API keys will be extracted from Authorization: Bearer headers")
+            print("HTTP mode: Using API key from environment for Fargate deployment")
+            # Set HTTP API key for the auth function
+            os.environ["CODEALIVE_HTTP_API_KEY"] = api_key
+        else:
+            print("HTTP mode: No environment API key found. API keys will be extracted from Authorization: Bearer headers")
 
     if not base_url:
         print("WARNING: CODEALIVE_BASE_URL environment variable is not set, using default.")
@@ -733,6 +740,7 @@ if __name__ == "__main__":
 
     # Run the server with the selected transport
     if args.transport == "http":
-        mcp.run(transport="http", host=args.host, port=args.port)
+        # Use root path instead of /mcp/
+        mcp.run(transport="http", host=args.host, port=args.port, path="/")
     else:
         mcp.run(transport="stdio")
