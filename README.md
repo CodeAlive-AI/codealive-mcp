@@ -188,7 +188,7 @@ For local development or if you prefer Docker over the remote service:
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:latest"
+        "ghcr.io/codealive-ai/codealive-mcp:main"
       ]
     }
   }
@@ -207,7 +207,7 @@ For local development or if you prefer Docker over the remote service:
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:latest"
+        "ghcr.io/codealive-ai/codealive-mcp:main"
       ]
     }
   }
@@ -227,7 +227,7 @@ mcpServers:
       - -i
       - -e
       - CODEALIVE_API_KEY=YOUR_API_KEY_HERE
-      - ghcr.io/codealive-ai/codealive-mcp:latest
+      - ghcr.io/codealive-ai/codealive-mcp:main
 ```
 
 ### VS Code with Docker
@@ -242,7 +242,7 @@ Create `.vscode/mcp.json` in your workspace:
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:latest"
+        "ghcr.io/codealive-ai/codealive-mcp:main"
       ]
     }
   }
@@ -263,7 +263,7 @@ Create `.vscode/mcp.json` in your workspace:
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:latest"
+        "ghcr.io/codealive-ai/codealive-mcp:main"
       ]
     }
   }
