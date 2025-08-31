@@ -462,30 +462,40 @@ async def search_code(
         include_content: bool = True
 ) -> str:
     """
-    Search for code snippets across the provided data sources using natural language or code patterns.
-    
+    SEMANTIC search across your codebases.
+
+    This endpoint is optimized for **natural-language** questions and intent-driven queries
+    (not rigid templates). Ask it things like:
+      • "What is the authentication flow?"
+      • "Where is the user registration logic implemented?"
+      • "How do services communicate with the billing API?"
+      • "Where is rate limiting handled?"
+      • "Show me how we validate JWTs."
+
+    You can still include function/class names if you know them, but it's not required.
+
     Args:
-        query: The search query - can be natural language ("find authentication code") or code patterns ("function getUserById")
-              For best results, be specific and include relevant keywords or function/class names
-              Example: "implement JWT token validation"
-              
-        data_source_ids: List of data source IDs to search in (required)
-                        Can be workspace IDs (to search across all repositories in the workspace) 
-                        or individual repository IDs for more targeted searches.
-                        Example: ["67f664fd4c2a00698a52bb6f", "5e8f9a2c1d3b7e4a6c9d0f8e"]
-                        
+        query: A natural-language description of what you're looking for.
+               Prefer questions/phrases over template strings.
+               Examples: "What initializes the database connection?",
+                         "Where do we parse OAuth callbacks?",
+                         "user registration controller"
+
+        data_source_ids: List of data source IDs to search in (required).
+                         Can be workspace IDs (search all repositories in the workspace)
+                         or individual repository IDs for targeted searches.
+                         Example: ["67f664fd4c2a00698a52bb6f", "5e8f9a2c1d3b7e4a6c9d0f8e"]
+
         mode: Search mode (case-insensitive):
-              - "auto": (Default) RECOMMENDED - Intelligently adapts search depth based on query complexity
-              - "fast": Quick scan for exact matches, best for simple queries and large codebases
-              - "fast_deeper": Balanced search with moderate semantic analysis, good for general use
-              - "deep": Use SPARINGLY - Resource-intensive thorough semantic analysis, only for very complex
-                        conceptual queries when other modes fail to yield results
-              Example: "auto"
-                
-        include_content: Whether to include the full file content in results (default: true)
-                        Set to false for faster, more concise results when only locations are needed
-                        Example: true
-        
+              - "auto": (Default, recommended) Adaptive semantic search.
+              - "fast": Lightweight/lexical pass; quickest for obvious matches.
+              - "fast_deeper": Balanced semantic + lexical search for general use.
+              - "deep": Exhaustive semantic exploration; use sparingly for hard,
+                        cross-cutting questions.
+
+        include_content: Whether to include full file content in results (default: true).
+                         Set to false for faster, more concise results when only locations are needed.
+
     Returns:
         Formatted search results including:
         - Source repository/workspace name and type
@@ -493,31 +503,30 @@ async def search_code(
         - Line numbers
         - Code snippet showing the matching section
         - Full file content (if include_content=true)
-        
+
     Examples:
-        1. Find authentication implementation (using default auto mode - recommended):
-           search_code(query="user authentication implementation", data_source_ids=["repo123"])
-           
-        2. Find a specific function quickly:
-           search_code(query="calculateTotalPrice function", data_source_ids=["repo123"], mode="fast")
-           
-        3. Search across an entire workspace:
-           search_code(query="database connection", data_source_ids=["workspace456"])
-           
-        4. Search across specific repositories from different workspaces:
-           search_code(query="authentication flow", data_source_ids=["repo123", "repo789"])
-        
-        5. Get concise results without full file contents:
-           search_code(query="password reset", data_source_ids=["repo123"], include_content=false)
-    
+        1. Natural-language question (recommended):
+           search_code(query="What is the auth flow?", data_source_ids=["repo123"])
+
+        2. Intent query:
+           search_code(query="Where is user registration logic?", data_source_ids=["repo123"])
+
+        3. Workspace-wide question:
+           search_code(query="How do microservices talk to the billing API?", data_source_ids=["workspace456"])
+
+        4. Mixed query with a known identifier:
+           search_code(query="Where do we validate JWTs (AuthService)?", data_source_ids=["repo123"])
+
+        5. Concise results without full file contents:
+           search_code(query="Where is password reset handled?", data_source_ids=["repo123"], include_content=false)
+
     Note:
         - At least one data_source_id must be provided
         - All data sources must be in "Alive" state
         - The API key must have access to the specified data sources
-        - Always start with "auto" mode first, as it intelligently chooses the appropriate search strategy
-        - The "deep" mode should only be used when absolutely necessary as it's resource-intensive
-        - For finding specific implementations, include function names in your query
-        - For understanding architectural patterns, use natural language descriptions
+        - Prefer natural-language questions; templates are unnecessary.
+        - Start with "auto" for best semantic results; escalate to "deep" only if needed.
+        - If you know precise symbols (functions/classes), include them to narrow scope.
     """
     # Get context
     context: CodeAliveContext = ctx.request_context.lifespan_context
