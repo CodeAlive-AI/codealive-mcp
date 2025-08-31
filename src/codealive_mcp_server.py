@@ -459,7 +459,7 @@ async def search_code(
         query: str,
         data_source_ids: List[str] = None,
         mode: str = "auto",
-        include_content: bool = True
+        include_content: bool = False
 ) -> str:
     """
     SEMANTIC search across your codebases.
@@ -493,8 +493,8 @@ async def search_code(
               - "deep": Exhaustive semantic exploration; use sparingly for hard,
                         cross-cutting questions.
 
-        include_content: Whether to include full file content in results (default: true).
-                         Set to false for faster, more concise results when only locations are needed.
+        include_content: Whether to include full file content in results (default: false).
+                         It's **not recommended** to include full file content, cause files content may be outdated.
 
     Returns:
         Formatted search results including:
