@@ -489,7 +489,6 @@ async def search_code(
         mode: Search mode (case-insensitive):
               - "auto": (Default, recommended) Adaptive semantic search.
               - "fast": Lightweight/lexical pass; quickest for obvious matches.
-              - "fast_deeper": Balanced semantic + lexical search for general use.
               - "deep": Exhaustive semantic exploration; use sparingly for hard,
                         cross-cutting questions.
 
@@ -543,8 +542,8 @@ async def search_code(
         normalized_mode = mode.lower() if mode else "auto"
 
         # Map input mode to backend's expected enum values
-        if normalized_mode not in ["auto", "fast", "fast_deeper", "deep"]:
-            await ctx.warning(f"Invalid search mode: {mode}. Valid modes are 'auto', 'fast', 'fast_deeper', and 'deep'. Using 'auto' instead.")
+        if normalized_mode not in ["auto", "fast", "deep"]:
+            await ctx.warning(f"Invalid search mode: {mode}. Valid modes are 'auto', 'fast', and 'deep'. Using 'auto' instead.")
             normalized_mode = "auto"
 
         # Log the search attempt
