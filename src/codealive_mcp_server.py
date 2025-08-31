@@ -182,8 +182,7 @@ async def chat_completions(
         messages: List[Dict[str, str]] = None,
         data_sources: List[Dict[str, str]] = None,
         stream: bool = True,
-        conversation_id: Optional[str] = None,
-        debug: bool = False
+        conversation_id: Optional[str] = None
 ) -> str:
     """
     Streams chat completions from the CodeAlive API for code-aware conversations with knowledge of your codebase.
@@ -266,8 +265,7 @@ async def chat_completions(
     # Prepare the request payload
     request_data = {
         "messages": messages,
-        "stream": stream,
-        "debug": debug
+        "stream": stream
     }
 
     if conversation_id:
