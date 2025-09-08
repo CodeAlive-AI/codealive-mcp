@@ -48,7 +48,7 @@ This is a Model Context Protocol (MCP) server that provides AI clients with acce
 ### Core Components
 
 - **`codealive_mcp_server.py`**: Main server implementation using FastMCP framework
-- **Three main tools**: `chat_completions`, `search_code`, `get_data_sources`
+- **Three main tools**: `ask_question`, `search_code`, `get_data_sources`
 - **CodeAliveContext**: Manages HTTP client and API credentials
 - **Async lifespan management**: Handles client setup/teardown
 
@@ -63,7 +63,7 @@ This is a Model Context Protocol (MCP) server that provides AI clients with acce
 ### Data Flow
 
 1. AI client connects to MCP server via stdio/SSE transport
-2. Client calls tools (`get_data_sources` → `search_code` → `chat_completions`)
+2. Client calls tools (`get_data_sources` → `search_code` → `ask_question`)
 3. MCP server translates tool calls to CodeAlive API requests
 4. CodeAlive API returns semantic search results or chat completions
 5. Server formats and returns results to AI client

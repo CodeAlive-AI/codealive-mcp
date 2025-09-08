@@ -1,15 +1,14 @@
-import os
-import json
-import httpx
+import argparse
 import asyncio
-import ssl
-from urllib.parse import urlparse, urljoin
-from typing import Dict, List, Optional, Any, AsyncIterator, Union
+import json
+import os
+import sys
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from typing import List, AsyncIterator
+
+import httpx
 from dotenv import load_dotenv
-import argparse
-import sys
 
 # Load environment variables from .env file
 # Use the actual script directory to find .env file
@@ -122,46 +121,22 @@ async def codealive_lifespan(server: FastMCP) -> AsyncIterator[CodeAliveContext]
 mcp = FastMCP(
     name="CodeAlive MCP Server",
     instructions="""
-    This server provides access to the CodeAlive API for AI-powered code assistance and code understanding.
+    CodeAlive MCP lets you search and chat over indexed codebases.
     
-    CodeAlive enables you to:
-    - Analyze code repositories and workspaces
-    - Search through code using natural language
-    - Understand code structure, dependencies, and patterns
-    - Answer questions about code implementation details
-    - Integrate with local git repositories for seamless code exploration
+    Quick start
+    1) get_data_sources — list repositories/workspaces you can query.
+    2) search_code — semantic search; start with mode="auto", then refine.
+    3) ask_question — ask natural-language questions about code. Always use this tool for user's questions or code understanding.
     
-    When working with a codebase:
-    1. First use `get_data_sources` to identify available repositories and workspaces
-    2. Then use `search_code` to find relevant files and code snippets
-    3. Finally, use `chat_completions` for in-depth analysis of the code
+    Examples:
+    - search_code(query="What is the auth flow?", data_source_ids=["1234567890"])
+    - ask_question(question="How do services communicate with the billing API?", data_source_id="1234567890")
     
-    For effective code exploration:
-    - Start with broad queries to understand the overall structure
-    - Use specific function/class names when looking for particular implementations
-    - Combine natural language with code patterns in your queries
-    - Always use "auto" search mode by default; it intelligently selects the appropriate search depth
-    - IMPORTANT: Only use "deep" search mode for very complex conceptual queries as it's resource-intensive
-    - Remember that context from previous messages is maintained in the same conversation
-    
-    Flexible data source usage:
-    - You can use a workspace ID as a single data source to search or chat across all its repositories at once
-    - Alternatively, you can use specific repository IDs for more targeted searches
-    - For complex queries, you can combine multiple repository IDs from different workspaces
-    - Choose between workspace-level or repository-level access based on the scope of the query
-    
-    Repository integration:
-    - CodeAlive can connect to repositories you've indexed in the system
-    - If a user is working within a git repository that matches a CodeAlive-indexed repository (by URL), 
-      you can suggest using CodeAlive's search and chat to understand the codebase
-    - Data sources include repository URLs to help match with local git repositories
-    - Workspaces include a list of repository IDs, allowing you to understand their composition
-    - You can use repository IDs from workspaces to search or chat about specific repositories within a workspace
-    
-    When analyzing search results:
-    - Pay attention to file paths to understand the project structure
-    - Look for patterns across multiple matching files
-    - Consider the relationships between different code components
+    Tips
+    - Use workspace IDs to search across many repos; repo IDs for precision.
+    - Reserve mode="deep" for tough, cross-cutting queries (it’s slower).
+    - Read file paths/line ranges to understand structure and relationships.
+    - You can pass a single workspace ID to search all its repositories.
     """,
     lifespan=codealive_lifespan
 )
@@ -177,72 +152,27 @@ async def health_check(request: Request) -> JSONResponse:
     })
 
 @mcp.tool()
-async def chat_completions(
+async def ask_question(
         ctx: Context,
-        messages: List[Dict[str, str]] = None,
-        data_sources: List[Dict[str, str]] = None,
-        stream: bool = True,
-        conversation_id: Optional[str] = None
+        question: str,
+        data_source_id: str|None = None,
 ) -> str:
     """
-    Streams chat completions from the CodeAlive API for code-aware conversations with knowledge of your codebase.
-    
+    Ask natural-language questions about a codebase using CodeAlive chat.
+
     Args:
-        messages: List of message objects with "role" and "content" fields
-                 Example: [
-                   {"role": "system", "content": "Analyze the authentication flow"},
-                   {"role": "user", "content": "How does the login process work?"}
-                 ]
-        
-        data_sources: List of data source objects to include in the context
-                     Can include workspace IDs (to chat about all repositories in the workspace)
-                     or specific repository IDs for more focused analysis.
-                     Example: [
-                       {"type": "repository", "id": "67f664fd4c2a00698a52bb6f"},
-                       {"type": "workspace", "id": "5e8f9a2c1d3b7e4a6c9d0f8e"}
-                     ]
-        
-        stream: Whether to stream the response (must be true, non-streaming is not supported)
-               Default: true
-        
-        conversation_id: Optional ID to continue a previous conversation
-                        Example: "conv_6789f123a456b789c123d456"
-        
-        debug: Whether to include debug information in the response
-               Default: false
-        
+      question: Your question about the code.
+      data_source_id: Optional repository/workspace ID. If omitted and your API key
+                      has exactly one data source, that one is used.
+
     Returns:
-        The generated completion text with code understanding from specified repositories/workspaces.
-        The response will incorporate knowledge from the specified code repositories.
-        
-    Examples:
-        1. Start a new conversation about authentication using a specific repository:
-           chat_completions(
-             messages=[{"role": "user", "content": "Explain the authentication flow in this code"}],
-             data_sources=[{"type": "repository", "id": "67f664fd4c2a00698a52bb6f"}]
-           )
-           
-        2. Start a new conversation using an entire workspace:
-           chat_completions(
-             messages=[{"role": "user", "content": "How do the microservices communicate with each other?"}],
-             data_sources=[{"type": "workspace", "id": "5e8f9a2c1d3b7e4a6c9d0f8e"}]
-           )
-        
-        3. Continue an existing conversation:
-           chat_completions(
-             messages=[{"role": "user", "content": "How is password hashing implemented?"}],
-             conversation_id="conv_6789f123a456b789c123d456"
-           )
-    
+      The model’s answer grounded in the selected data source.
+
+    Example:
+      ask_question("Where is OAuth callback handled?", data_source_id="1234567890")
         
     Note:
-        - Either conversation_id OR data_sources is typically provided
-        - When creating a new conversation, data_sources is optional if the API key has exactly one assigned data source
-        - When continuing a conversation, conversation_id is required
-        - The conversation maintains context across multiple messages
-        - Messages should be in chronological order with the newest message last
-        - Choose between workspace-level access (for broader context) or repository-level access 
-          (for targeted analysis) based on your query needs
+        - data_source_id is optional if the API key has exactly one assigned data source
         - If a user is working in a local git repository that matches one of the indexed repositories
           in CodeAlive (by URL), you can leverage this integration for enhanced code understanding
     """
@@ -250,107 +180,164 @@ async def chat_completions(
     context: CodeAliveContext = ctx.request_context.lifespan_context
 
     # Validate inputs
-    if not messages or len(messages) == 0:
-        return "Error: No messages provided. Please include at least one message with 'role' and 'content' fields."
+    if not question or len(question) == 0:
+        return "Error: No question provided. Please provide a natural language question."
 
     # Validate that either conversation_id or data_sources is provided
-    if not conversation_id and (not data_sources or len(data_sources) == 0):
-        await ctx.info("No data sources provided. If the API key has exactly one assigned data source, that will be used as default.")
+    if not data_source_id or len(data_source_id) == 0:
+        await ctx.info("No data source provided. If the API key has exactly one assigned data source, that will be used as default.")
 
-    # Validate that each message has the required fields
-    for msg in messages:
-        if not msg.get("role") or not msg.get("content"):
-            return "Error: Each message must have 'role' and 'content' fields. Valid roles are 'system', 'user', and 'assistant'."
-
-    # Prepare the request payload
+    stream = True
     request_data = {
-        "messages": messages,
+        "messages": [
+            {"role": "system", "content": ""},
+            {"role": "user", "content": question}
+        ],
         "stream": stream
     }
 
-    if conversation_id:
-        request_data["conversationId"] = conversation_id
-
-    if data_sources:
-        # Validate each data source
-        valid_data_sources = []
-        for ds in data_sources:
-            if ds and ds.get("id") and ds.get("type"):
-                valid_data_sources.append(ds)
-            else:
-                await ctx.warning(f"Skipping invalid data source: {ds}. Each data source must have 'type' and 'id' fields.")
-
-        request_data["dataSources"] = valid_data_sources
+    if data_source_id is not None:
+        # TODO: COD-448. type: "auto"
+        request_data["dataSources"] = [{"type": "repository", "id": data_source_id}]
 
     try:
         # Get API key based on transport mode
         api_key = get_api_key_from_context(ctx)
-        
-        # Log the attempt
-        await ctx.info(f"Requesting chat completion with {len(messages)} messages" +
-                       (f" in conversation {conversation_id}" if conversation_id else " in a new conversation"))
+
+        await ctx.info(f"Asking question: '{question}' using data source: '{data_source_id or 'default from API key'}'")
 
         # Create headers with authorization
-        headers = {"Authorization": f"Bearer {api_key}"}
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "X-App": "codealive-mcp-server/1.0",
+        }
         
         # Make API request
-        response = await context.client.post(
-            "/api/chat/completions",
-            json=request_data,
-            headers=headers
-        )
+        # ---- streaming with retries + graceful EOF ----
+        MAX_RETRIES = 2
+        BASE_BACKOFF = 0.5  # seconds
+        full_response = ""
+        got_any_content = False
 
-        # Check for errors
-        response.raise_for_status()
+        async def process_event(data_str: str) -> bool:
+            """Return True to continue, False to stop (on [DONE])."""
+            nonlocal full_response, got_any_content
+            if data_str.strip() == "[DONE]":
+                return False
+            try:
+                obj = json.loads(data_str)
+            except json.JSONDecodeError:
+                await ctx.debug("Skipping non-JSON SSE data chunk")
+                return True
 
-        # For streaming response, we need to concatenate the chunks
-        if stream:
-            full_response = ""
-            async for line in response.aiter_lines():
-                if not line:
+            if "choices" in obj and obj["choices"]:
+                delta = obj["choices"][0].get("delta", {})
+                content = delta.get("content")
+                if content:
+                    full_response += content
+                    got_any_content = True
+            return True
+
+        # steady progress during stream
+        PROGRESS_START, PROGRESS_CAP, STEP = 0.10, 0.95, 0.01
+        chunk_count = 0
+
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                await ctx.report_progress(0.10, 1.0, "Sending request to CodeAlive")
+                # Ensure we’re using a true streaming response
+                timeout = httpx.Timeout(connect=10.0, read=180.0, write=30.0, pool=10.0)
+                async with context.client.stream(
+                        "POST",
+                        "/api/chat/completions",
+                        json=request_data,
+                        headers=headers,
+                        timeout=timeout,
+                ) as response:
+                    await ctx.report_progress(0.35, 1.0, "Request sent; awaiting response")
+                    response.raise_for_status()
+
+                    await ctx.report_progress(0.40, 1.0, "Streaming started")
+
+                    # Minimal SSE parser: collect 'data:' lines until a blank line
+                    data_buf: list[str] = []
+                    async for line in response.aiter_lines():
+                        if line is None:
+                            # keep-alive from some servers; ignore
+                            continue
+                        line = line.rstrip("\n")
+
+                        if line == "":
+                            if data_buf:
+                                data_str = "\n".join(data_buf)
+                                data_buf.clear()
+                                # process one SSE event
+                                cont = await process_event(data_str)
+                                if got_any_content:
+                                    chunk_count += 1
+                                    if chunk_count % 3 == 0:
+                                        p = min(PROGRESS_START + STEP * chunk_count, PROGRESS_CAP)
+                                        await ctx.report_progress(p, 1.0, f"Receiving content… ({chunk_count} chunks)")
+                                if not cont:
+                                    break
+                            continue
+
+                        if line.startswith(":"):
+                            # comment/heartbeat; ignore
+                            continue
+
+                        if line.startswith("data:"):
+                            data_buf.append(line[5:].lstrip())
+                        else:
+                            # tolerate other SSE fields (event:, id:, retry:) by ignoring
+                            continue
+
+                    # flush any trailing buffered data at EOF
+                    if data_buf:
+                        data_str = "\n".join(data_buf)
+                        await process_event(data_str)
+
+                # success or graceful EOF
+                break
+
+            except (httpx.ReadError, httpx.RemoteProtocolError, httpx.ProtocolError) as e:
+                # This is where incomplete chunked reads land.
+                if got_any_content:
+                    await ctx.warning(f"Stream ended early ({type(e).__name__}); using partial content")
+                    break  # treat as success with partial content
+                if attempt < MAX_RETRIES:
+                    backoff = BASE_BACKOFF * (2 ** attempt)
+                    await ctx.warning(f"Stream error ({type(e).__name__}): {e}. Retrying in {backoff:.1f}s…")
+                    await asyncio.sleep(backoff)
                     continue
+                else:
+                    await ctx.error(f"Stream failed after {MAX_RETRIES + 1} attempts: {e}")
+                    await ctx.report_progress(0.99, 1.0, "Failed")
+                    return f"Error: streaming failed due to a network/proxy interruption ({type(e).__name__}). Please try again."
 
-                if line.startswith("data: "):
-                    data = line[6:]  # Remove "data: " prefix
-                    if data == "[DONE]":
-                        break
-                    try:
-                        chunk = json.loads(data)
-                        if "choices" in chunk and len(chunk["choices"]) > 0:
-                            delta = chunk["choices"][0].get("delta", {})
-                            if delta and "content" in delta and delta["content"] is not None:
-                                full_response += delta["content"]
-                    except json.JSONDecodeError:
-                        pass
-            return full_response or "No content returned from the API. Please check that your data sources are accessible and try again."
-        else:
-            # For non-streaming response, just return the content
-            data = response.json()
-            if "choices" in data and len(data["choices"]) > 0:
-                return data["choices"][0].get("message", {}).get("content", "")
-            return "No content in response. Please check that your data sources are accessible and try again."
+        await ctx.report_progress(1.0, 1.0, "Completed")
+        return full_response or "No content returned from the API. Please check that your data sources are accessible and try again."
 
     except httpx.HTTPStatusError as e:
         error_code = e.response.status_code
         error_detail = e.response.text
-
-        # Provide more helpful error messages based on status codes
         if error_code == 401:
-            error_msg = f"Authentication error (401): Invalid API key or insufficient permissions"
+            error_msg = "Authentication error (401): Invalid API key or insufficient permissions"
         elif error_code == 404:
-            error_msg = f"Not found error (404): The requested resource could not be found, check your conversation_id or data_source_ids"
+            error_msg = "Not found error (404): The requested resource could not be found, check your conversation_id or data_source_ids"
         elif error_code == 429:
-            error_msg = f"Rate limit exceeded (429): Too many requests, please try again later"
+            error_msg = "Rate limit exceeded (429): Too many requests, please try again later"
         elif error_code >= 500:
             error_msg = f"Server error ({error_code}): The CodeAlive service encountered an issue"
         else:
             error_msg = f"HTTP error: {error_code} - {error_detail}"
-
         await ctx.error(error_msg)
+        await ctx.report_progress(0.99, 1.0, "Failed")
         return f"Error: {error_msg}"
     except Exception as e:
         error_msg = f"Error during chat completion: {str(e)}"
         await ctx.error(error_msg)
+        await ctx.report_progress(0.99, 1.0, "Failed")
         return f"Error: {error_msg}. Please check your input parameters and try again."
 
 @mcp.tool()
@@ -396,7 +383,7 @@ async def get_data_sources(
         For workspaces, the repositoryIds can be used to identify and work with 
         individual repositories that make up the workspace.
         
-        Use the returned data source IDs with the search_code and chat_completions functions.
+        Use the returned data source IDs with the search_code and ask_question functions.
     """
     # Get context
     context: CodeAliveContext = ctx.request_context.lifespan_context
@@ -429,7 +416,7 @@ async def get_data_sources(
         result = f"Available data sources:\n{formatted_data}"
 
         # Add usage hint
-        result += "\n\nYou can use these data source IDs with the search_code and chat_completions functions."
+        result += "\n\nYou can use these data source IDs with the search_code and ask_question functions."
 
         return result
 
@@ -636,7 +623,7 @@ async def search_code(
         # Add usage hint
         usage_hint = (
             "\nTo explore these results further:\n"
-            "1. Use chat_completions() to ask detailed questions about specific files\n"
+            "1. Use ask_question() to ask detailed questions about specific files\n"
             "2. Try a different search mode for more or fewer results\n"
             "3. Refine your query with more specific terms"
         )
