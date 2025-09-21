@@ -117,8 +117,14 @@ async def codebase_consultant(
 
         # Process streaming response - we always stream internally for efficiency
         full_response = ""
+        conversation_metadata = {}
+
         async for line in response.aiter_lines():
             if not line:
+                continue
+
+            # Handle metadata events
+            if line.startswith("event: message"):
                 continue
 
             if line.startswith("data: "):
@@ -127,12 +133,26 @@ async def codebase_consultant(
                     break
                 try:
                     chunk = json.loads(data)
+
+                    # Capture metadata with conversation ID
+                    if chunk.get("event") == "metadata" and "conversationId" in chunk:
+                        conversation_metadata = chunk
+                        await ctx.info(f"Conversation ID: {chunk['conversationId']}")
+                        continue
+
+                    # Process content chunks
                     if "choices" in chunk and len(chunk["choices"]) > 0:
                         delta = chunk["choices"][0].get("delta", {})
                         if delta and "content" in delta and delta["content"] is not None:
                             full_response += delta["content"]
                 except json.JSONDecodeError:
                     pass
+
+        # Append conversation ID info to the response if we got one and it's a new conversation
+        if conversation_metadata.get("conversationId") and not conversation_id:
+            conversation_id_note = f"\n\n---\n**Conversation ID:** `{conversation_metadata['conversationId']}`\n*Use this ID in the `conversation_id` parameter to continue this conversation.*"
+            full_response += conversation_id_note
+
         return full_response or "No content returned from the API. Please check that your data sources are accessible and try again."
 
     except (httpx.HTTPStatusError, Exception) as e:
