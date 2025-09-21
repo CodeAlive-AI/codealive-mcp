@@ -52,7 +52,7 @@ After setup, try these commands with your AI assistant:
 
 ## 🚀 Quick Start (Remote)
 
-**The fastest way to get started** - no installation required! Our remote MCP server at `https://mcp.codealive.ai/api/` provides instant access to CodeAlive's capabilities.
+**The fastest way to get started** - no installation required! Our remote MCP server at `https://mcp.codealive.ai/api` provides instant access to CodeAlive's capabilities.
 
 ### Step 1: Get Your API Key
 
@@ -72,7 +72,7 @@ Select your preferred AI client below for instant setup:
 **One command setup:**
 
 ```bash
-claude mcp add --transport http codealive https://mcp.codealive.ai/api/ --header "Authorization: Bearer YOUR_API_KEY_HERE"
+claude mcp add --transport http codealive https://mcp.codealive.ai/api --header "Authorization: Bearer YOUR_API_KEY_HERE"
 ```
 
 Replace `YOUR_API_KEY_HERE` with your actual API key. That's it! 🎉
@@ -88,7 +88,7 @@ Replace `YOUR_API_KEY_HERE` with your actual API key. That's it! 🎉
 {
   "mcpServers": {
     "codealive": {
-      "url": "https://mcp.codealive.ai/api/",
+      "url": "https://mcp.codealive.ai/api",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY_HERE"
       }
@@ -108,7 +108,7 @@ Replace `YOUR_API_KEY_HERE` with your actual API key. That's it! 🎉
 mcpServers:
   - name: CodeAlive
     type: streamable-http
-    url: https://mcp.codealive.ai/api/
+    url: https://mcp.codealive.ai/api 
     requestOptions:
       headers:
         Authorization: "Bearer YOUR_API_KEY_HERE"
@@ -128,7 +128,7 @@ mcpServers:
   "servers": {
     "codealive": {
       "type": "http",
-      "url": "https://mcp.codealive.ai/api/",
+      "url": "https://mcp.codealive.ai/api",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY_HERE"
       }
@@ -153,7 +153,7 @@ mcpServers:
 {
   "mcpServers": {
     "codealive": {
-      "url": "https://mcp.codealive.ai/api/",
+      "url": "https://mcp.codealive.ai/api",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY_HERE"
       }
