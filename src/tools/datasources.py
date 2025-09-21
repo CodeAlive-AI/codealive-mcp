@@ -48,7 +48,7 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
         For workspaces, the repositoryIds can be used to identify and work with
         individual repositories that make up the workspace.
 
-        Use the returned data source IDs with the search_code and chat_completions functions.
+        Use the returned data source IDs with the codebase_search and chat_completions functions.
     """
     context: CodeAliveContext = ctx.request_context.lifespan_context
 
@@ -84,7 +84,7 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
         result = f"Available data sources:\n{formatted_data}"
 
         # Add usage hint
-        result += "\n\nYou can use these data source IDs with the search_code and chat_completions functions."
+        result += "\n\nYou can use these data source IDs with the codebase_search and chat_completions functions."
 
         return result
 

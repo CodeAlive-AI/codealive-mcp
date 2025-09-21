@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 # Import core components
 from core import codealive_lifespan, setup_debug_logging
-from tools import chat_completions, get_data_sources, search_code
+from tools import chat_completions, get_data_sources, codebase_search
 
 # Initialize FastMCP server with lifespan and enhanced system instructions
 mcp = FastMCP(
@@ -42,7 +42,7 @@ mcp = FastMCP(
 
     When working with a codebase:
     1. First use `get_data_sources` to identify available repositories and workspaces
-    2. Then use `search_code` to find relevant files and code snippets
+    2. Then use `codebase_search` to find relevant files and code snippets
     3. Finally, use `chat_completions` for in-depth analysis of the code
 
     For effective code exploration:
@@ -90,7 +90,7 @@ async def health_check(request: Request) -> JSONResponse:
 # Register tools
 mcp.tool()(chat_completions)
 mcp.tool()(get_data_sources)
-mcp.tool()(search_code)
+mcp.tool()(codebase_search)
 
 
 def main():

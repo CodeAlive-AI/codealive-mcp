@@ -3,13 +3,13 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastmcp import Context
-from tools.search import search_code
+from tools.search import codebase_search
 
 
 @pytest.mark.asyncio
 @patch('tools.search.get_api_key_from_context')
-async def test_search_code_returns_dict(mock_get_api_key):
-    """Test that search_code returns a dictionary with structured_content."""
+async def test_codebase_search_returns_dict(mock_get_api_key):
+    """Test that codebase_search returns a dictionary with structured_content."""
     # Mock the API key function
     mock_get_api_key.return_value = "test_key"
 
@@ -47,8 +47,8 @@ async def test_search_code_returns_dict(mock_get_api_key):
     ctx.request_context.lifespan_context = mock_codealive_context
     ctx.request_context.headers = {"authorization": "Bearer test_key"}
 
-    # Call search_code
-    result = await search_code(
+    # Call codebase_search
+    result = await codebase_search(
         ctx=ctx,
         query="authenticate_user",
         data_source_ids=["test_id"],
@@ -57,7 +57,7 @@ async def test_search_code_returns_dict(mock_get_api_key):
     )
 
     # Verify result is a dictionary
-    assert isinstance(result, dict), "search_code should return a dictionary"
+    assert isinstance(result, dict), "codebase_search should return a dictionary"
 
     # Verify it has structured_content field
     assert "structured_content" in result, "Result should have structured_content field"

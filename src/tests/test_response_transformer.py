@@ -267,7 +267,7 @@ class TestXMLTransformer:
             "results": [
                 {
                     "kind": "Symbol",
-                    "identifier": "CodeAlive-AI/codealive-mcp::src/tools/search.py::search_code",
+                    "identifier": "CodeAlive-AI/codealive-mcp::src/tools/search.py::codebase_search",
                     "location": {
                         "path": "src/tools/search.py",
                         "range": {"start": {"line": 18}, "end": {"line": 168}}
@@ -317,13 +317,13 @@ class TestXMLTransformer:
             "results": [
                 {
                     "kind": "Symbol",
-                    "identifier": "CodeAlive-AI/codealive-mcp::src/tools/search.py::search_code",
+                    "identifier": "CodeAlive-AI/codealive-mcp::src/tools/search.py::codebase_search",
                     "location": {
                         "path": "src/tools/search.py",
                         "range": {"start": {"line": 18}, "end": {"line": 168}}
                     },
                     "score": 0.99,
-                    "content": "async def search_code(\n    ctx: Context,\n    query: str,\n    data_source_ids: Optional[List[str]] = None,\n    mode: str = \"auto\",\n    include_content: bool = False\n) -> Dict:",
+                    "content": "async def codebase_search(\n    ctx: Context,\n    query: str,\n    data_source_ids: Optional[List[str]] = None,\n    mode: str = \"auto\",\n    include_content: bool = False\n) -> Dict:",
                     "dataSource": {
                         "type": "repository",
                         "id": "685b21230e3822f4efa9d073",
@@ -369,7 +369,7 @@ class TestXMLTransformer:
         assert 'endLine="168"' in result
 
         # Verify content is included
-        assert "async def search_code" in result
+        assert "async def codebase_search" in result
         assert "include_content: Whether to include full file content" in result
         assert "This file provides guidance" in result
 

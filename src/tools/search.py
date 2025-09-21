@@ -10,7 +10,7 @@ from core import CodeAliveContext, get_api_key_from_context, log_api_request, lo
 from utils import transform_search_response_to_xml, handle_api_error
 
 
-async def search_code(
+async def codebase_search(
     ctx: Context,
     query: str,
     data_source_ids: Optional[List[str]] = None,
@@ -18,17 +18,30 @@ async def search_code(
     include_content: bool = False
 ) -> Dict:
     """
-    SEMANTIC search across your codebases.
+    Use `codebase_search` tool to search for code in the codebase.
 
-    This endpoint is optimized for **natural-language** questions and intent-driven queries
-    (not rigid templates). Ask it things like:
+    Semantic search (`codebase_search`) is your MAIN exploration tool for understanding the
+    indexed codebase (typically main/master branch or the specific branch shown in data sources).
+
+    ALWAYS prefer using `codebase_search` over grep/find for initial code exploration because:
+    - It's much faster and more efficient for discovering relevant code
+    - It understands semantic meaning, not just text patterns
+    - It searches the indexed repository state with full context
+
+    IMPORTANT: This searches the INDEXED version of repositories (check branch in get_data_sources),
+    NOT the current local files. Use grep when you specifically need to:
+    - Search uncommitted local changes
+    - Verify recent modifications
+    - Check files on a different branch than the indexed one
+
+    This tool excels at natural-language questions and intent-driven queries like:
       • "What is the authentication flow?"
       • "Where is the user registration logic implemented?"
       • "How do services communicate with the billing API?"
       • "Where is rate limiting handled?"
       • "Show me how we validate JWTs."
 
-    You can still include function/class names if you know them, but it's not required.
+    You can include function/class names for more targeted results.
 
     Args:
         query: A natural-language description of what you're looking for.
@@ -57,19 +70,19 @@ async def search_code(
 
     Examples:
         1. Natural-language question (recommended):
-           search_code(query="What is the auth flow?", data_source_ids=["repo123"])
+           codebase_search(query="What is the auth flow?", data_source_ids=["repo123"])
 
         2. Intent query:
-           search_code(query="Where is user registration logic?", data_source_ids=["repo123"])
+           codebase_search(query="Where is user registration logic?", data_source_ids=["repo123"])
 
         3. Workspace-wide question:
-           search_code(query="How do microservices talk to the billing API?", data_source_ids=["workspace456"])
+           codebase_search(query="How do microservices talk to the billing API?", data_source_ids=["workspace456"])
 
         4. Mixed query with a known identifier:
-           search_code(query="Where do we validate JWTs (AuthService)?", data_source_ids=["repo123"])
+           codebase_search(query="Where do we validate JWTs (AuthService)?", data_source_ids=["repo123"])
 
         5. Concise results without full file contents:
-           search_code(query="Where is password reset handled?", data_source_ids=["repo123"], include_content=false)
+           codebase_search(query="Where is password reset handled?", data_source_ids=["repo123"], include_content=false)
 
     Note:
         - At least one data_source_id must be provided
