@@ -10,14 +10,11 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends gcc libssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
-RUN pip install --no-cache-dir \
-    fastmcp>=2.0.0 \
-    httpx>=0.26.0 \
-    python-dotenv>=1.0.0
-
-# Copy application code
+# Copy application code first
 COPY . /app
+
+# Install the package using pyproject.toml
+RUN pip install --no-cache-dir -e .
 
 # Expose port for HTTP transport
 EXPOSE 8000

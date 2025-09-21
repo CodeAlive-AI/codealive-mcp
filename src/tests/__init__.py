@@ -1,0 +1,1 @@
+"""Tests for CodeAlive MCP server."""
