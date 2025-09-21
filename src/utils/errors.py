@@ -51,6 +51,55 @@ async def handle_api_error(
         return f"Error: {error_msg}. Please check your input parameters and try again."
 
 
+def normalize_data_source_ids(data_sources) -> list:
+    """
+    Normalize data source IDs from various Claude Desktop serialization formats.
+
+    Handles:
+    - Proper arrays: ["id1", "id2"]
+    - JSON-encoded strings: "[\"id1\", \"id2\"]"
+    - Plain strings: "id1"
+    - None/empty values
+
+    Args:
+        data_sources: Data sources in any format from Claude Desktop
+
+    Returns:
+        List of string IDs: ["id1", "id2"]
+    """
+    import json
+
+    if not data_sources:
+        return []
+
+    # Handle string inputs (Claude Desktop serialization issue)
+    if isinstance(data_sources, str):
+        # Handle JSON-encoded string
+        if data_sources.startswith('['):
+            try:
+                data_sources = json.loads(data_sources)
+            except json.JSONDecodeError:
+                # If parsing fails, treat as single ID
+                return [data_sources]
+        else:
+            # Single ID as string
+            return [data_sources]
+
+    # Handle non-list types
+    if not isinstance(data_sources, list):
+        return [str(data_sources)]
+
+    # Already a list - extract string IDs
+    result = []
+    for ds in data_sources:
+        if isinstance(ds, str):
+            result.append(ds)
+        elif isinstance(ds, dict) and ds.get("id"):
+            result.append(ds["id"])
+
+    return result
+
+
 def format_data_source_ids(data_sources: Optional[list]) -> list:
     """
     Convert various data source formats to the API's expected format.

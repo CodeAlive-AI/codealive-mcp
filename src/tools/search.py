@@ -1,19 +1,19 @@
 """Search tool implementation."""
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 from urllib.parse import urljoin
 
 import httpx
 from fastmcp import Context
 
 from core import CodeAliveContext, get_api_key_from_context, log_api_request, log_api_response
-from utils import transform_search_response_to_xml, handle_api_error
+from utils import transform_search_response_to_xml, handle_api_error, normalize_data_source_ids
 
 
 async def codebase_search(
     ctx: Context,
     query: str,
-    data_source_ids: Optional[List[str]] = None,
+    data_source_ids: Optional[Union[str, List[str]]] = None,
     mode: str = "auto",
     include_content: bool = False
 ) -> Dict:
@@ -93,6 +93,9 @@ async def codebase_search(
         - If you know precise symbols (functions/classes), include them to narrow scope.
     """
     context: CodeAliveContext = ctx.request_context.lifespan_context
+
+    # Normalize data source IDs (handles Claude Desktop serialization issues)
+    data_source_ids = normalize_data_source_ids(data_source_ids)
 
     # Validate inputs
     if not query or not query.strip():

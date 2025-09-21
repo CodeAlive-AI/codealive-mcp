@@ -1,20 +1,20 @@
 """Chat completions tool implementation."""
 
 import json
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 from urllib.parse import urljoin
 
 import httpx
 from fastmcp import Context
 
 from core import CodeAliveContext, get_api_key_from_context, log_api_request, log_api_response
-from utils import handle_api_error, format_data_source_ids
+from utils import handle_api_error, format_data_source_ids, normalize_data_source_ids
 
 
 async def codebase_consultant(
     ctx: Context,
     question: str,
-    data_sources: Optional[List[str]] = None,
+    data_sources: Optional[Union[str, List[str]]] = None,
     conversation_id: Optional[str] = None
 ) -> str:
     """
@@ -67,6 +67,9 @@ async def codebase_consultant(
         - Choose workspace IDs for broad architectural questions or repository IDs for specific implementation details
     """
     context: CodeAliveContext = ctx.request_context.lifespan_context
+
+    # Normalize data source IDs (handles Claude Desktop serialization issues)
+    data_sources = normalize_data_source_ids(data_sources)
 
     if not question or not question.strip():
         return "Error: No question provided. Please provide a question to ask the consultant."
