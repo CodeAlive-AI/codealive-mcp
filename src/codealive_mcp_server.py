@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 # Import core components
 from core import codealive_lifespan, setup_debug_logging
-from tools import chat_completions, get_data_sources, codebase_search
+from tools import codebase_consultant, get_data_sources, codebase_search
 
 # Initialize FastMCP server with lifespan and enhanced system instructions
 mcp = FastMCP(
@@ -88,7 +88,7 @@ async def health_check(request: Request) -> JSONResponse:
 
 
 # Register tools
-mcp.tool()(chat_completions)
+mcp.tool()(codebase_consultant)
 mcp.tool()(get_data_sources)
 mcp.tool()(codebase_search)
 

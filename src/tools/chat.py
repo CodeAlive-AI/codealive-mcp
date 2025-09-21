@@ -11,77 +11,72 @@ from core import CodeAliveContext, get_api_key_from_context, log_api_request, lo
 from utils import handle_api_error, format_data_source_ids
 
 
-async def chat_completions(
+async def codebase_consultant(
     ctx: Context,
-    messages: Optional[List[Dict[str, str]]] = None,
-    data_sources: Optional[List] = None,  # Accept both strings and dicts for compatibility
+    question: str,
+    data_sources: Optional[List[str]] = None,
     conversation_id: Optional[str] = None
 ) -> str:
     """
-    Streams chat completions from the CodeAlive API for code-aware conversations with knowledge of your codebase.
+    Consult with an AI expert about your codebase for insights, explanations, and architectural guidance.
+
+    This consultant understands your entire codebase and can help with:
+    - Architecture and design decisions
+    - Implementation strategies
+    - Code explanations and walkthroughs
+    - Best practices and optimization advice
+    - Debugging and problem-solving
 
     Args:
-        messages: List of message objects with "role" and "content" fields
-                 Example: [
-                   {"role": "system", "content": "Analyze the authentication flow"},
-                   {"role": "user", "content": "How does the login process work?"}
-                 ]
+        question: What you want to know about the codebase
+                 Example: "How does the authentication system work?"
 
-        data_sources: List of data source IDs (repository or workspace IDs).
+        data_sources: Repository or workspace IDs to analyze
                      Example: ["67f664fd4c2a00698a52bb6f", "5e8f9a2c1d3b7e4a6c9d0f8e"]
-                     Just pass the IDs directly as strings.
-        conversation_id: Optional ID to continue a previous conversation
+
+        conversation_id: Continue a previous consultation session
                         Example: "conv_6789f123a456b789c123d456"
 
-
     Returns:
-        The generated completion text with code understanding from specified repositories/workspaces.
-        The response will incorporate knowledge from the specified code repositories.
+        Expert analysis and explanation addressing your question.
 
     Examples:
-        1. Start a new conversation with simple ID format (recommended):
-           chat_completions(
-             messages=[{"role": "user", "content": "Explain the authentication flow in this code"}],
+        1. Ask about architecture:
+           codebase_consultant(
+             question="What's the best way to add caching to our API?",
              data_sources=["67f664fd4c2a00698a52bb6f"]
            )
 
-        2. Start a new conversation using multiple data sources:
-           chat_completions(
-             messages=[{"role": "user", "content": "How do the microservices communicate with each other?"}],
-             data_sources=["67f664fd4c2a00698a52bb6f", "5e8f9a2c1d3b7e4a6c9d0f8e"]
+        2. Understand implementation:
+           codebase_consultant(
+             question="How do the microservices communicate?",
+             data_sources=["workspace_123", "repo_456"]
            )
 
-        3. Continue an existing conversation:
-           chat_completions(
-             messages=[{"role": "user", "content": "How is password hashing implemented?"}],
+        3. Continue a consultation:
+           codebase_consultant(
+             question="What about error handling in that flow?",
              conversation_id="conv_6789f123a456b789c123d456"
            )
 
-
     Note:
         - Either conversation_id OR data_sources is typically provided
-        - When creating a new conversation, data_sources is optional if the API key has exactly one assigned data source
-        - When continuing a conversation, conversation_id is required
-        - The conversation maintains context across multiple messages
-        - Messages should be in chronological order with the newest message last
-        - Choose between workspace-level access (for broader context) or repository-level access
-          (for targeted analysis) based on your query needs
-        - If a user is working in a local git repository that matches one of the indexed repositories
-          in CodeAlive (by URL), you can leverage this integration for enhanced code understanding
+        - When creating a new conversation, data_sources is optional if your API key has exactly one assigned data source
+        - When continuing a conversation, conversation_id is required to maintain context
+        - The consultant maintains full conversation history for follow-up questions
+        - Choose workspace IDs for broad architectural questions or repository IDs for specific implementation details
     """
     context: CodeAliveContext = ctx.request_context.lifespan_context
 
-    if not messages or len(messages) == 0:
-        return "Error: No messages provided. Please include at least one message with 'role' and 'content' fields."
+    if not question or not question.strip():
+        return "Error: No question provided. Please provide a question to ask the consultant."
 
     # Validate that either conversation_id or data_sources is provided
     if not conversation_id and (not data_sources or len(data_sources) == 0):
         await ctx.info("No data sources provided. If the API key has exactly one assigned data source, that will be used as default.")
 
-    # Validate that each message has the required fields
-    for msg in messages:
-        if not msg.get("role") or not msg.get("content"):
-            return "Error: Each message must have 'role' and 'content' fields. Valid roles are 'system', 'user', and 'assistant'."
+    # Transform simple question into message format internally
+    messages = [{"role": "user", "content": question}]
 
     # Prepare the request payload
     request_data = {
@@ -99,8 +94,8 @@ async def chat_completions(
         api_key = get_api_key_from_context(ctx)
 
         # Log the attempt
-        await ctx.info(f"Requesting chat completion with {len(messages)} messages" +
-                       (f" in conversation {conversation_id}" if conversation_id else " in a new conversation"))
+        await ctx.info(f"Consulting about: '{question[:100]}...'" if len(question) > 100 else f"Consulting about: '{question}'" +
+                       (f" (continuing conversation {conversation_id})" if conversation_id else ""))
 
         headers = {"Authorization": f"Bearer {api_key}"}
 

@@ -1,16 +1,16 @@
-"""Test suite for chat completions tool."""
+"""Test suite for codebase consultant tool."""
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import json
 from fastmcp import Context
-from tools.chat import chat_completions
+from tools.chat import codebase_consultant
 
 
 @pytest.mark.asyncio
 @patch('tools.chat.get_api_key_from_context')
-async def test_chat_with_simple_ids(mock_get_api_key):
-    """Test chat completions with simple string IDs."""
+async def test_consultant_with_simple_ids(mock_get_api_key):
+    """Test codebase consultant with simple string IDs."""
     mock_get_api_key.return_value = "test_key"
 
     ctx = MagicMock(spec=Context)
@@ -40,9 +40,9 @@ async def test_chat_with_simple_ids(mock_get_api_key):
     ctx.request_context.lifespan_context = mock_codealive_context
 
     # Test with simple string IDs
-    result = await chat_completions(
+    result = await codebase_consultant(
         ctx=ctx,
-        messages=[{"role": "user", "content": "Test question"}],
+        question="Test question",
         data_sources=["repo123", "repo456"]
     )
 
@@ -61,8 +61,8 @@ async def test_chat_with_simple_ids(mock_get_api_key):
 
 @pytest.mark.asyncio
 @patch('tools.chat.get_api_key_from_context')
-async def test_chat_with_dict_ids(mock_get_api_key):
-    """Test chat completions with dictionary format IDs."""
+async def test_consultant_preserves_string_ids(mock_get_api_key):
+    """Test codebase consultant preserves string IDs."""
     mock_get_api_key.return_value = "test_key"
 
     ctx = MagicMock(spec=Context)
@@ -88,14 +88,11 @@ async def test_chat_with_dict_ids(mock_get_api_key):
 
     ctx.request_context.lifespan_context = mock_codealive_context
 
-    # Test with dict format (backward compatibility)
-    result = await chat_completions(
+    # Test with string IDs
+    result = await codebase_consultant(
         ctx=ctx,
-        messages=[{"role": "user", "content": "Test"}],
-        data_sources=[
-            {"type": "repository", "id": "repo123"},
-            {"id": "repo456"}
-        ]
+        question="Test",
+        data_sources=["repo123", "repo456"]
     )
 
     call_args = mock_client.post.call_args
@@ -112,8 +109,8 @@ async def test_chat_with_dict_ids(mock_get_api_key):
 
 @pytest.mark.asyncio
 @patch('tools.chat.get_api_key_from_context')
-async def test_chat_with_conversation_id(mock_get_api_key):
-    """Test chat completions with existing conversation ID."""
+async def test_consultant_with_conversation_id(mock_get_api_key):
+    """Test codebase consultant with existing conversation ID."""
     mock_get_api_key.return_value = "test_key"
 
     ctx = MagicMock(spec=Context)
@@ -137,9 +134,9 @@ async def test_chat_with_conversation_id(mock_get_api_key):
 
     ctx.request_context.lifespan_context = mock_codealive_context
 
-    result = await chat_completions(
+    result = await codebase_consultant(
         ctx=ctx,
-        messages=[{"role": "user", "content": "Follow up"}],
+        question="Follow up",
         conversation_id="conv_123"
     )
 
@@ -156,51 +153,29 @@ async def test_chat_with_conversation_id(mock_get_api_key):
 
 @pytest.mark.asyncio
 @patch('tools.chat.get_api_key_from_context')
-async def test_chat_empty_messages_validation(mock_get_api_key):
-    """Test validation of empty messages."""
+async def test_consultant_empty_question_validation(mock_get_api_key):
+    """Test validation of empty question."""
     mock_get_api_key.return_value = "test_key"
 
     ctx = MagicMock(spec=Context)
     ctx.request_context.lifespan_context = MagicMock()
 
-    # Test with no messages
-    result = await chat_completions(ctx=ctx, messages=None)
-    assert "Error: No messages provided" in result
+    # Test with empty question
+    result = await codebase_consultant(ctx=ctx, question="")
+    assert "Error: No question provided" in result
 
-    # Test with empty list
-    result = await chat_completions(ctx=ctx, messages=[])
-    assert "Error: No messages provided" in result
+    # Test with whitespace only
+    result = await codebase_consultant(ctx=ctx, question="   ")
+    assert "Error: No question provided" in result
 
 
-@pytest.mark.asyncio
-@patch('tools.chat.get_api_key_from_context')
-async def test_chat_invalid_message_format(mock_get_api_key):
-    """Test validation of message format."""
-    mock_get_api_key.return_value = "test_key"
-
-    ctx = MagicMock(spec=Context)
-    ctx.request_context.lifespan_context = MagicMock()
-
-    # Test with missing role
-    result = await chat_completions(
-        ctx=ctx,
-        messages=[{"content": "Test"}]
-    )
-    assert "Error: Each message must have 'role' and 'content'" in result
-
-    # Test with missing content
-    result = await chat_completions(
-        ctx=ctx,
-        messages=[{"role": "user"}]
-    )
-    assert "Error: Each message must have 'role' and 'content'" in result
 
 
 @pytest.mark.asyncio
 @patch('tools.chat.get_api_key_from_context')
 @patch('tools.chat.handle_api_error')
-async def test_chat_error_handling(mock_handle_error, mock_get_api_key):
-    """Test error handling in chat completions."""
+async def test_consultant_error_handling(mock_handle_error, mock_get_api_key):
+    """Test error handling in codebase consultant."""
     mock_get_api_key.return_value = "test_key"
     mock_handle_error.return_value = "Error: Authentication failed"
 
@@ -216,9 +191,9 @@ async def test_chat_error_handling(mock_handle_error, mock_get_api_key):
 
     ctx.request_context.lifespan_context = mock_codealive_context
 
-    result = await chat_completions(
+    result = await codebase_consultant(
         ctx=ctx,
-        messages=[{"role": "user", "content": "Test"}],
+        question="Test",
         data_sources=["repo123"]
     )
 

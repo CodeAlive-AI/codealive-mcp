@@ -23,7 +23,7 @@ Once connected, you'll have access to these powerful tools:
 
 1. **`get_data_sources`** - List your indexed repositories and workspaces
 2. **`codebase_search`** - Semantic code search across your indexed codebase (main/master branch)  
-3. **`chat_completions`** - AI chat with full project context
+3. **`codebase_consultant`** - AI consultant with full project expertise
 
 ## 🎯 Usage Examples
 
@@ -31,7 +31,7 @@ After setup, try these commands with your AI assistant:
 
 - *"Show me all available repositories"* → Uses `get_data_sources`
 - *"Find authentication code in the user service"* → Uses `codebase_search`
-- *"Explain how the payment flow works in this codebase"* → Uses `chat_completions`
+- *"Explain how the payment flow works in this codebase"* → Uses `codebase_consultant`
 
 ## Table of Contents
 
