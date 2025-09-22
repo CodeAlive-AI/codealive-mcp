@@ -1,0 +1,82 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-16/server.schema.json",
+  "name": "io.github.codealive-ai/codealive-mcp",
+  "version": "0.2.0",
+  "description": "Connect AI assistants to CodeAlive's semantic code search and analysis platform. Accelerates AI code agents with comprehensive knowledge graphs and deep understanding of code relationships across all programming languages and multi-repository content.",
+  "keywords": [
+    "context-engineering",
+    "agent-knowledge",
+    "knowledge-graph",
+    "code-search",
+    "semantic-search",
+    "multi-repository",
+    "codebase-analysis",
+    "ai-code-agent",
+    "context-augmentation",
+    "code-relationships",
+    "enterprise-codebase",
+    "model-context-protocol",
+    "code-review",
+    "developer-tools"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "CodeAlive AI",
+    "url": "https://github.com/CodeAlive-AI"
+  },
+  "homepage": "https://github.com/CodeAlive-AI/codealive-mcp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CodeAlive-AI/codealive-mcp.git"
+  },
+  "packages": [
+    {
+      "registryType": "oci",
+      "registryBaseUrl": "https://ghcr.io",
+      "identifier": "codealive-ai/codealive-mcp",
+      "version": "0.2.0",
+      "transport": {
+        "type": "stdio",
+        "command": "docker",
+        "args": [
+          "run",
+          "--rm",
+          "-i",
+          "-e",
+          "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
+          "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
+        ]
+      }
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.codealive.ai/api",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer <Your CodeAlive API key from https://app.codealive.ai>",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ]
+    }
+  ],
+  "capabilities": {
+    "tools": [
+      {
+        "name": "get_data_sources",
+        "description": "Retrieve all available repositories and workspaces indexed in your CodeAlive account. Use this first to discover what codebases you can search and analyze."
+      },
+      {
+        "name": "codebase_search",
+        "description": "Search across your entire codebase using natural language queries. Find functions, classes, patterns, and implementations with semantic understanding that goes beyond simple text matching."
+      },
+      {
+        "name": "codebase_consultant",
+        "description": "Get comprehensive AI-powered analysis, explanations, and insights about your codebase. Ask complex questions about architecture, patterns, dependencies, and implementation details."
+      }
+    ]
+  }
+}

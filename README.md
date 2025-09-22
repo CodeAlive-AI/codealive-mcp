@@ -1,5 +1,7 @@
 # CodeAlive MCP: Deep Context for your project (especially for large codebases)
 
+<!-- MCP Server Name: io.github.codealive-ai.codealive-mcp -->
+
 [![CodeAlive Logo](https://app.codealive.ai/images/logos/dark-logo.svg)](https://www.codealive.ai/)
 
 [![smithery badge](https://smithery.ai/badge/@CodeAlive-AI/codealive-mcp)](https://smithery.ai/server/@CodeAlive-AI/codealive-mcp)
@@ -188,7 +190,7 @@ For local development or if you prefer Docker over the remote service:
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:main"
+        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
       ]
     }
   }
@@ -207,7 +209,7 @@ For local development or if you prefer Docker over the remote service:
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:main"
+        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
       ]
     }
   }
@@ -227,7 +229,7 @@ mcpServers:
       - -i
       - -e
       - CODEALIVE_API_KEY=YOUR_API_KEY_HERE
-      - ghcr.io/codealive-ai/codealive-mcp:main
+      - ghcr.io/codealive-ai/codealive-mcp:v0.2.0
 ```
 
 ### VS Code with Docker
@@ -242,7 +244,7 @@ Create `.vscode/mcp.json` in your workspace:
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:main"
+        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
       ]
     }
   }
@@ -263,7 +265,7 @@ Create `.vscode/mcp.json` in your workspace:
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:main"
+        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
       ]
     }
   }

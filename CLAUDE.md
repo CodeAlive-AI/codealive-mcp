@@ -90,3 +90,24 @@ The server is designed to integrate with:
 - Any MCP-compatible AI client
 
 Key integration consideration: AI clients should use `get_data_sources` first to discover available repositories/workspaces, then use those IDs for targeted search and chat operations.
+
+## Publishing and Releases
+
+### Version Management
+When making significant changes, consider incrementing the version in `pyproject.toml`:
+```toml
+version = "0.3.0"  # Increment for new features, bug fixes, or breaking changes
+```
+
+### Automated Publishing
+The project uses automated publishing:
+- **Trigger**: Push version change to `main` branch
+- **Process**: Tests → Build → Docker → MCP Registry → GitHub Release
+- **Result**: Available at `io.github.codealive-ai/codealive-mcp` in MCP Registry
+
+### Version Guidelines
+- **Patch** (0.2.0 → 0.2.1): Bug fixes, minor improvements
+- **Minor** (0.2.0 → 0.3.0): New features, enhancements
+- **Major** (0.2.0 → 1.0.0): Breaking changes, major releases
+
+When implementing features or fixes, evaluate if they warrant a version bump for users to benefit from the changes through the MCP Registry.
