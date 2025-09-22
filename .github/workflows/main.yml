@@ -137,61 +137,69 @@ jobs:
         if: steps.version-check.outputs.version_changed == 'true' && github.ref == 'refs/heads/main'
         run: |
           python - <<'PY'
-import json
-import sys
-import urllib.request
-from jsonschema import ValidationError, validate
+          from textwrap import dedent
 
-schema_url = "https://static.modelcontextprotocol.io/schemas/2025-09-16/server.schema.json"
+          exec(
+              dedent(
+                  """
+                  import json
+                  import sys
+                  import urllib.request
+                  from jsonschema import ValidationError, validate
 
-try:
-    with urllib.request.urlopen(schema_url, timeout=30) as response:
-        schema = json.load(response)
-except Exception as exc:
-    print(f"✗ Unable to download server.json schema: {exc}")
-    sys.exit(1)
+                  schema_url = "https://static.modelcontextprotocol.io/schemas/2025-09-16/server.schema.json"
 
-try:
-    with open('server.json', 'r') as f:
-        data = json.load(f)
-except Exception as exc:
-    print(f"✗ Failed to load server.json: {exc}")
-    sys.exit(1)
+                  try:
+                      with urllib.request.urlopen(schema_url, timeout=30) as response:
+                          schema = json.load(response)
+                  except Exception as exc:
+                      print(f"✗ Unable to download server.json schema: {exc}")
+                      sys.exit(1)
 
-try:
-    validate(instance=data, schema=schema)
-    print('✓ server.json schema validation passed')
-except ValidationError as exc:
-    print(f"✗ server.json schema validation failed: {exc.message}")
-    sys.exit(1)
+                  try:
+                      with open('server.json', 'r') as f:
+                          data = json.load(f)
+                  except Exception as exc:
+                      print(f"✗ Failed to load server.json: {exc}")
+                      sys.exit(1)
 
-has_packages = 'packages' in data and len(data['packages']) > 0
-has_remotes = 'remotes' in data and len(data['remotes']) > 0
+                  try:
+                      validate(instance=data, schema=schema)
+                      print('✓ server.json schema validation passed')
+                  except ValidationError as exc:
+                      print(f"✗ server.json schema validation failed: {exc.message}")
+                      sys.exit(1)
 
-if not (has_packages or has_remotes):
-    print('✗ Must have either packages or remotes configured')
-    sys.exit(1)
+                  has_packages = 'packages' in data and len(data['packages']) > 0
+                  has_remotes = 'remotes' in data and len(data['remotes']) > 0
 
-if has_packages:
-    for idx, pkg in enumerate(data['packages']):
-        registry_type = pkg.get('registryType')
-        identifier = pkg.get('identifier')
-        if registry_type not in ['npm', 'pypi', 'nuget', 'oci', 'mcpb']:
-            print(f"✗ Package {idx}: Invalid registry type '{registry_type}'")
-            sys.exit(1)
-        print(f"✓ Package {idx}: {registry_type.upper()} -> {identifier}")
+                  if not (has_packages or has_remotes):
+                      print('✗ Must have either packages or remotes configured')
+                      sys.exit(1)
 
-if has_remotes:
-    for idx, remote in enumerate(data['remotes']):
-        remote_type = remote.get('type')
-        url = remote.get('url')
-        if remote_type not in ['sse', 'streamable-http']:
-            print(f"✗ Remote {idx}: Invalid transport type '{remote_type}'")
-            sys.exit(1)
-        print(f"✓ Remote {idx}: {remote_type} -> {url}")
+                  if has_packages:
+                      for idx, pkg in enumerate(data['packages']):
+                          registry_type = pkg.get('registryType')
+                          identifier = pkg.get('identifier')
+                          if registry_type not in ['npm', 'pypi', 'nuget', 'oci', 'mcpb']:
+                              print(f"✗ Package {idx}: Invalid registry type '{registry_type}'")
+                              sys.exit(1)
+                          print(f"✓ Package {idx}: {registry_type.upper()} -> {identifier}")
 
-print('✓ server.json validation passed (hybrid deployment)')
-PY
+                  if has_remotes:
+                      for idx, remote in enumerate(data['remotes']):
+                          remote_type = remote.get('type')
+                          url = remote.get('url')
+                          if remote_type not in ['sse', 'streamable-http']:
+                              print(f"✗ Remote {idx}: Invalid transport type '{remote_type}'")
+                              sys.exit(1)
+                          print(f"✓ Remote {idx}: {remote_type} -> {url}")
+
+                  print('✓ server.json validation passed (hybrid deployment)')
+                  """
+              )
+          )
+          PY
 
       - name: Install MCP Publisher CLI
         if: steps.version-check.outputs.version_changed == 'true' && github.ref == 'refs/heads/main'
