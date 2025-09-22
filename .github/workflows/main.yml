@@ -204,18 +204,17 @@ jobs:
       - name: Install MCP Publisher CLI
         if: steps.version-check.outputs.version_changed == 'true' && github.ref == 'refs/heads/main'
         run: |
-          curl -L "https://github.com/modelcontextprotocol/registry/releases/download/v1.0.0/mcp-publisher_1.0.0_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
-          chmod +x mcp-publisher
+          npm install -g @modelcontextprotocol/publisher
 
       - name: Login to MCP Registry (GitHub OIDC)
         if: steps.version-check.outputs.version_changed == 'true' && github.ref == 'refs/heads/main'
         run: |
-          ./mcp-publisher login github-oidc
+          mcp-publisher login github-oidc
 
       - name: Publish to MCP Registry
         if: steps.version-check.outputs.version_changed == 'true' && github.ref == 'refs/heads/main'
         run: |
-          ./mcp-publisher publish server.json
+          mcp-publisher publish server.json
 
       - name: Create GitHub Release
         if: steps.version-check.outputs.version_changed == 'true' && github.ref == 'refs/heads/main'
