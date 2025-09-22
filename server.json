@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-16/server.schema.json",
   "name": "io.github.codealive-ai/codealive-mcp",
   "version": "0.2.0",
-  "description": "Connect AI assistants to CodeAlive's semantic code search and analysis platform. Accelerates AI code agents with comprehensive knowledge graphs and deep understanding of code relationships across all programming languages and multi-repository content.",
+  "description": "Semantic code search and analysis from CodeAlive for AI assistants and agents.",
   "keywords": [
     "context-engineering",
     "agent-knowledge",
@@ -27,7 +27,8 @@
   "homepage": "https://github.com/CodeAlive-AI/codealive-mcp",
   "repository": {
     "type": "git",
-    "url": "https://github.com/CodeAlive-AI/codealive-mcp.git"
+    "url": "https://github.com/CodeAlive-AI/codealive-mcp.git",
+    "source": "github"
   },
   "packages": [
     {
