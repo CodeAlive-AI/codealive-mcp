@@ -50,20 +50,6 @@
       }
     }
   ],
-  "remotes": [
-    {
-      "type": "streamable-http",
-      "url": "https://mcp.codealive.ai/api",
-      "headers": [
-        {
-          "name": "Authorization",
-          "description": "Bearer <Your CodeAlive API key from https://app.codealive.ai>",
-          "isRequired": true,
-          "isSecret": true
-        }
-      ]
-    }
-  ],
   "capabilities": {
     "tools": [
       {
