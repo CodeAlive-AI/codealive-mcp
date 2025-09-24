@@ -3,7 +3,7 @@
 FROM python:3.11-slim AS base
 
 # MCP Server validation label for Docker registry
-LABEL io.modelcontextprotocol.server.name="io.github.codealive-ai/codealive-mcp"
+LABEL io.modelcontextprotocol.server.name="io.github.CodeAlive-AI/codealive-mcp"
 
 # Set working directory
 WORKDIR /app
