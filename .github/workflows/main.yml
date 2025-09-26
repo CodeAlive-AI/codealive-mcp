@@ -189,7 +189,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: |
             ${{ steps.meta.outputs.labels }}
-            io.modelcontextprotocol.server.name=io.github.codealive-ai/codealive-mcp
+            io.modelcontextprotocol.server.name=io.github.CodeAlive-AI/codealive-mcp
           cache-from: type=gha
           cache-to: type=gha
 
