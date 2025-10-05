@@ -8,7 +8,7 @@
 
 **Connect your AI assistant to CodeAlive's powerful code understanding platform in seconds!**
 
-This MCP (Model Context Protocol) server enables AI clients like Claude Code, Cursor, Claude Desktop, Continue, VS Code (GitHub Copilot), and Cline to access CodeAlive's advanced semantic code search and codebase interaction features.
+This MCP (Model Context Protocol) server enables AI clients like Claude Code, Cursor, Claude Desktop, Continue, VS Code (GitHub Copilot), Cline, Codex, OpenCode, Qwen Code, and Gemini CLI to access CodeAlive's advanced semantic code search and codebase interaction features.
 
 ## What is CodeAlive?
 
@@ -47,8 +47,13 @@ After setup, try these commands with your AI assistant:
     *   [Visual Studio Code with GitHub Copilot](#visual-studio-code-with-github-copilot)
     *   [Claude Desktop](#claude-desktop)
     *   [Cline](#cline)
+    *   [Codex](#codex)
+    *   [OpenCode](#opencode)
+    *   [Qwen Code](#qwen-code)
+    *   [Gemini CLI](#gemini-cli)
 *   [Alternative: Docker Setup](#-alternative-docker-setup)
 *   [Advanced: Local Development](#-advanced-local-development)
+*   [Community Plugins](#-community-plugins)
 *   [Available Tools](#-available-tools)
 *   [Usage Examples](#-usage-examples)
 *   [Troubleshooting](#-troubleshooting)
@@ -167,6 +172,103 @@ mcpServers:
 ```
 
 4. Save and restart VS Code
+
+### Codex
+
+OpenAI Codex CLI supports MCP via `~/.codex/config.toml`. Remote HTTP MCP is still evolving; the most reliable way today is to launch CodeAlive via Docker (stdio).
+
+**`~/.codex/config.toml` (Docker stdio – recommended)**
+```toml
+[mcp_servers.codealive]
+command = "docker"
+args = ["run", "--rm", "-i",
+        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
+        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"]
+```
+
+> If your Codex version advertises support for remote/HTTP transports, you can try an experimental config (may not work on all versions):
+```toml
+# Experimental; if supported by your Codex build
+[mcp_servers.codealive]
+url = "https://mcp.codealive.ai/api"
+headers = { Authorization = "Bearer YOUR_API_KEY_HERE" }
+```
+
+### OpenCode
+
+Add CodeAlive as a **remote** MCP server in your `opencode.json`.
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "codealive": {
+      "type": "remote",
+      "url": "https://mcp.codealive.ai/api",
+      "enabled": true,
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY_HERE"
+      }
+    }
+  }
+}
+```
+
+### Qwen Code
+
+Qwen Code supports MCP via `mcpServers` in its `settings.json` and multiple transports (stdio/SSE/streamable-http). Use **streamable-http** when available; otherwise use Docker (stdio).
+
+**`~/.qwen/settings.json` (Streamable HTTP)**
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "type": "streamable-http",
+      "url": "https://mcp.codealive.ai/api",
+      "requestOptions": {
+        "headers": {
+          "Authorization": "Bearer YOUR_API_KEY_HERE"
+        }
+      }
+    }
+  }
+}
+```
+
+**Fallback: Docker (stdio)**
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "type": "stdio",
+      "command": "docker",
+      "args": ["run", "--rm", "-i",
+               "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
+               "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"]
+    }
+  }
+}
+```
+
+### Gemini CLI
+
+Gemini CLI has first-class MCP support via `~/.gemini/settings.json` (or workspace `.gemini/settings.json`). Add CodeAlive as a **streamable-http** server.
+
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "type": "streamable-http",
+      "url": "https://mcp.codealive.ai/api",
+      "requestOptions": {
+        "headers": {
+          "Authorization": "Bearer YOUR_API_KEY_HERE"
+        }
+      }
+    }
+  }
+}
+```
 
 ---
 
@@ -341,6 +443,34 @@ Auto-install for Claude Desktop via [Smithery](https://smithery.ai/server/@CodeA
 
 ```bash
 npx -y @smithery/cli install @CodeAlive-AI/codealive-mcp --client claude
+```
+
+---
+
+## 🌐 Community Plugins
+
+### Gemini CLI — CodeAlive Extension
+
+**Repo:** https://github.com/akolotov/gemini-cli-codealive-extension
+
+Gemini CLI extension that wires CodeAlive into your terminal with prebuilt slash commands and MCP config. It includes:
+- `GEMINI.md` guidance so Gemini knows how to use CodeAlive tools effectively
+- Slash commands: `/codealive:chat`, `/codealive:find`, `/codealive:search`
+- Easy setup via Gemini CLI's extension system
+
+**Install**
+```bash
+gemini extensions install https://github.com/akolotov/gemini-cli-codealive-extension
+```
+
+**Configure**
+```bash
+# Option 1: .env next to where you run `gemini`
+CODEALIVE_API_KEY="your_codealive_api_key_here"
+
+# Option 2: environment variable
+export CODEALIVE_API_KEY="your_codealive_api_key_here"
+gemini
 ```
 
 ---
