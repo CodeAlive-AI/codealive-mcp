@@ -1,4 +1,4 @@
-# CodeAlive MCP: Deep Context for your project (especially for large codebases)
+# CodeAlive MCP: Deepest Context Engine for your projects (especially for large codebases)
 
 <!-- MCP Server Name: io.github.codealive-ai.codealive-mcp -->
 
@@ -12,7 +12,7 @@ This MCP (Model Context Protocol) server enables AI clients like Claude Code, Cu
 
 The most accurate and comprehensive Context Engine as a service, optimized for large codebases, powered by advanced GraphRAG and accessible via MCP. It enriches the context for AI agents like Cursor, Claude Code, Codex, etc., making them 35% more efficient and up to 84% faster.
 
-It's like a Context7, but for your (large) codebases.
+It's like Context7, but for your (large) codebases.
 
 It allows AI-Coding Agents to:
 
