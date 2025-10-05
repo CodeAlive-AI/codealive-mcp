@@ -4,8 +4,6 @@
 
 [![CodeAlive Logo](https://app.codealive.ai/images/logos/dark-logo.svg)](https://www.codealive.ai/)
 
-[![smithery badge](https://smithery.ai/badge/@CodeAlive-AI/codealive-mcp)](https://smithery.ai/server/@CodeAlive-AI/codealive-mcp)
-
 **Connect your AI assistant to CodeAlive's powerful code understanding platform in seconds!**
 
 This MCP (Model Context Protocol) server enables AI clients like Claude Code, Cursor, Claude Desktop, Continue, VS Code (GitHub Copilot), Cline, Codex, OpenCode, Qwen Code, and Gemini CLI to access CodeAlive's advanced semantic code search and codebase interaction features.
