@@ -12,7 +12,9 @@ This MCP (Model Context Protocol) server enables AI clients like Claude Code, Cu
 
 The most accurate and comprehensive Context Engine as a service, optimized for large codebases, powered by advanced GraphRAG and accessible via MCP. It enriches the context for AI agents like Cursor, Claude Code, Codex, etc., making them 35% more efficient and up to 84% faster.
 
-It allows AI-Coding Agents toL
+It's like a Context7, but for your (large) codebases.
+
+It allows AI-Coding Agents to:
 
 *   **Find relevant code faster** with semantic search
 *   **Understand the bigger picture** beyond isolated files  
