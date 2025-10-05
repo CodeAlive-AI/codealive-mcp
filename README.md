@@ -6,7 +6,7 @@
 
 **Connect your AI assistant to CodeAlive's powerful code understanding platform in seconds!**
 
-This MCP (Model Context Protocol) server enables AI clients like Claude Code, Cursor, Claude Desktop, Continue, VS Code (GitHub Copilot), Cline, Codex, OpenCode, Qwen Code, and Gemini CLI to access CodeAlive's advanced semantic code search and codebase interaction features.
+This MCP (Model Context Protocol) server enables AI clients like Claude Code, Cursor, Claude Desktop, Continue, VS Code (GitHub Copilot), Cline, Codex, OpenCode, Qwen Code, Gemini CLI, Roo Code, Goose, Kilo Code, Windsurf, Kiro, Qoder, and Amazon Q Developer to access CodeAlive's advanced semantic code search and codebase interaction features.
 
 ## What is CodeAlive?
 
@@ -287,6 +287,274 @@ Qwen Code supports MCP via `mcpServers` in its `settings.json` and multiple tran
   }
 }
 ```
+
+</details>
+
+<details>
+<summary><b>Roo Code</b></summary>
+
+Roo Code reads a JSON settings file similar to Cline.
+
+**Global config:** `mcp_settings.json` (Roo) or `cline_mcp_settings.json` (Cline-style)
+
+**Option A — Remote HTTP**
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "type": "http",
+      "url": "https://mcp.codealive.ai/api",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY_HERE"
+      }
+    }
+  }
+}
+```
+
+**Option B — Docker (STDIO)**
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
+        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
+      ]
+    }
+  }
+}
+```
+
+> **Tip:** If your Roo build doesn't honor HTTP headers, use the Docker/STDIO option.
+
+</details>
+
+<details>
+<summary><b>Goose</b></summary>
+
+**UI path:** Settings → MCP Servers → Add → choose Streamable HTTP
+
+**Streamable HTTP configuration:**
+- **Name:** `codealive`
+- **Endpoint URL:** `https://mcp.codealive.ai/api`
+- **Headers:** `Authorization: Bearer YOUR_API_KEY_HERE`
+
+**Docker (STDIO) alternative:**
+
+Add a STDIO extension with:
+- **Command:** `docker`
+- **Args:** `run --rm -i -e CODEALIVE_API_KEY=YOUR_API_KEY_HERE ghcr.io/codealive-ai/codealive-mcp:v0.2.0`
+
+</details>
+
+<details>
+<summary><b>Kilo Code</b></summary>
+
+**UI path:** Manage → Integrations → Model Context Protocol (MCP) → Add Server
+
+**HTTP**
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "type": "http",
+      "url": "https://mcp.codealive.ai/api",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY_HERE"
+      }
+    }
+  }
+}
+```
+
+**STDIO (Docker)**
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
+        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
+      ]
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Windsurf (Codeium)</b></summary>
+
+**File:** `~/.codeium/windsurf/mcp_config.json`
+
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "type": "http",
+      "serverUrl": "https://mcp.codealive.ai/api",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY_HERE"
+      }
+    }
+  }
+}
+```
+
+> **Note:** Product name is Windsurf.
+
+</details>
+
+<details>
+<summary><b>Kiro</b></summary>
+
+**UI path:** Settings → MCP → Add Server
+
+**Global file:** `~/.kiro/settings/mcp.json`
+**Workspace file:** `.kiro/settings/mcp.json`
+
+**HTTP**
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "type": "http",
+      "url": "https://mcp.codealive.ai/api",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY_HERE"
+      }
+    }
+  }
+}
+```
+
+**STDIO (Docker)**
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
+        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
+      ]
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Qoder</b></summary>
+
+**UI path:** User icon → Qoder Settings → MCP → My Servers → + Add (Agent mode)
+
+**SSE (remote HTTP)**
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "type": "sse",
+      "url": "https://mcp.codealive.ai/api",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY_HERE"
+      }
+    }
+  }
+}
+```
+
+**STDIO (Docker)**
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
+        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
+      ]
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Amazon Q Developer (CLI & IDE)</b></summary>
+
+**Q Developer CLI**
+
+**Config file:** `~/.aws/amazonq/mcp.json` or workspace `.amazonq/mcp.json`
+
+**HTTP server**
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "type": "http",
+      "url": "https://mcp.codealive.ai/api",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY_HERE"
+      }
+    }
+  }
+}
+```
+
+**STDIO (Docker)**
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "type": "stdio",
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
+        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
+      ]
+    }
+  }
+}
+```
+
+**Q Developer IDE (VS Code / JetBrains)**
+
+**Global:** `~/.aws/amazonq/agents/default.json`
+**Local (workspace):** `.aws/amazonq/agents/default.json`
+
+**Minimal entry (HTTP):**
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "type": "http",
+      "url": "https://mcp.codealive.ai/api",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY_HERE"
+      },
+      "timeout": 60000
+    }
+  }
+}
+```
+
+Use the IDE UI: Q panel → Chat → tools icon → Add MCP Server → choose http or stdio.
 
 </details>
 
