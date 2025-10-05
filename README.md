@@ -63,6 +63,19 @@ After setup, try these commands with your AI assistant:
 
 Select your preferred AI client below for instant setup:
 
+## 🚀 Quick Start (Agentic Installation)
+
+You may ask your AI agent to install the CodeAlive MCP server for you.
+
+1. Copy-Paste the following prompt into your AI agent (remember to insert your API key):
+```
+Here is CodeAlive API key: PASTE_YOUR_API_KEY_HERE
+Add the CodeAlive MCP server following an installation guide from `curl https://raw.githubusercontent.com/CodeAlive-AI/codealive-mcp/main/README.md`. If API key is not provided, help me to issue a CodeAlive API key and ask me to input it, then properly add CodeAlive MCP server, preferring the remote one.
+```
+Then allow execution.
+
+2. Restart your AI agent.
+
 ## 🤖 AI Client Integrations
 
 <details>
