@@ -155,23 +155,13 @@ headers = { Authorization = "Bearer YOUR_API_KEY_HERE" }
 <details>
 <summary><b>Gemini CLI</b></summary>
 
-Gemini CLI has first-class MCP support via `~/.gemini/settings.json` (or workspace `.gemini/settings.json`). Add CodeAlive as a **streamable-http** server.
+**One command setup:**
 
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "type": "streamable-http",
-      "url": "https://mcp.codealive.ai/api",
-      "requestOptions": {
-        "headers": {
-          "Authorization": "Bearer YOUR_API_KEY_HERE"
-        }
-      }
-    }
-  }
-}
+```bash
+gemini mcp add --transport http secure-http https://mcp.codealive.ai/api --header "Authorization: Bearer YOUR_API_KEY_HERE"
 ```
+
+Replace `YOUR_API_KEY_HERE` with your actual API key.
 
 </details>
 
