@@ -41,7 +41,6 @@ After setup, try these commands with your AI assistant:
 
 *   [Quick Start (Remote)](#-quick-start-remote)
 *   [AI Client Integrations](#-ai-client-integrations)
-*   [Alternative: Docker Setup](#-alternative-docker-setup)
 *   [Advanced: Local Development](#-advanced-local-development)
 *   [Community Plugins](#-community-plugins)
 *   [Available Tools](#-available-tools)
@@ -69,18 +68,26 @@ Select your preferred AI client below for instant setup:
 <details>
 <summary><b>Claude Code</b></summary>
 
-**One command setup:**
+**Option 1: Remote HTTP (Recommended)**
 
 ```bash
 claude mcp add --transport http codealive https://mcp.codealive.ai/api --header "Authorization: Bearer YOUR_API_KEY_HERE"
 ```
 
-Replace `YOUR_API_KEY_HERE` with your actual API key. That's it! 🎉
+**Option 2: Docker (STDIO)**
+
+```bash
+claude mcp add codealive-docker /usr/bin/docker run --rm -i -e CODEALIVE_API_KEY=YOUR_API_KEY_HERE ghcr.io/codealive-ai/codealive-mcp:v0.2.0
+```
+
+Replace `YOUR_API_KEY_HERE` with your actual API key.
 
 </details>
 
 <details>
 <summary><b>Cursor</b></summary>
+
+**Option 1: Remote HTTP (Recommended)**
 
 1. Open Cursor → Settings (`Cmd+,` or `Ctrl+,`)
 2. Navigate to **"MCP"** in the left panel
@@ -101,6 +108,23 @@ Replace `YOUR_API_KEY_HERE` with your actual API key. That's it! 🎉
 ```
 
 5. Save and restart Cursor
+
+**Option 2: Docker (STDIO)**
+
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
+        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
+      ]
+    }
+  }
+}
+```
 
 </details>
 
@@ -154,6 +178,8 @@ Gemini CLI has first-class MCP support via `~/.gemini/settings.json` (or workspa
 <details>
 <summary><b>Continue</b></summary>
 
+**Option 1: Remote HTTP (Recommended)**
+
 1. Create/edit `.continue/config.yaml` in your project or `~/.continue/config.yaml`
 2. Add this configuration:
 
@@ -169,10 +195,28 @@ mcpServers:
 
 3. Restart VS Code
 
+**Option 2: Docker (STDIO)**
+
+```yaml
+mcpServers:
+  - name: CodeAlive
+    type: stdio
+    command: docker
+    args:
+      - run
+      - --rm
+      - -i
+      - -e
+      - CODEALIVE_API_KEY=YOUR_API_KEY_HERE
+      - ghcr.io/codealive-ai/codealive-mcp:v0.2.0
+```
+
 </details>
 
 <details>
 <summary><b>Visual Studio Code with GitHub Copilot</b></summary>
+
+**Option 1: Remote HTTP (Recommended)**
 
 1. Open Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`)
 2. Run **"MCP: Add Server"**
@@ -195,17 +239,63 @@ mcpServers:
 
 5. Restart VS Code
 
+**Option 2: Docker (STDIO)**
+
+Create `.vscode/mcp.json` in your workspace:
+
+```json
+{
+  "servers": {
+    "codealive": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
+        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
+      ]
+    }
+  }
+}
+```
+
 </details>
 
 <details>
 <summary><b>Claude Desktop</b></summary>
 
-> **Note:** Claude Desktop remote MCP requires OAuth authentication. Use Docker option below for Bearer token support.
+> **Note:** Claude Desktop remote MCP requires OAuth authentication. Use Docker option for Bearer token support.
+
+**Docker (STDIO)**
+
+1. Edit your config file:
+   - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+   - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+2. Add this configuration:
+
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
+        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
+      ]
+    }
+  }
+}
+```
+
+3. Restart Claude Desktop
 
 </details>
 
 <details>
 <summary><b>Cline</b></summary>
+
+**Option 1: Remote HTTP (Recommended)**
 
 1. Open Cline extension in VS Code
 2. Click the MCP Servers icon to configure
@@ -225,6 +315,23 @@ mcpServers:
 ```
 
 4. Save and restart VS Code
+
+**Option 2: Docker (STDIO)**
+
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
+        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
+      ]
+    }
+  }
+}
+```
 
 </details>
 
@@ -555,127 +662,6 @@ Add a STDIO extension with:
 ```
 
 Use the IDE UI: Q panel → Chat → tools icon → Add MCP Server → choose http or stdio.
-
-</details>
-
----
-
-## 🐳 Alternative: Docker Setup
-
-If you prefer Docker over the remote service, use our Docker image:
-
-<details>
-<summary><b>Claude Desktop with Docker</b></summary>
-
-For local development or if you prefer Docker over the remote service:
-
-1. Edit your config file:
-   - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-
-2. Add this configuration:
-
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
-      ]
-    }
-  }
-}
-```
-
-3. Restart Claude Desktop
-
-</details>
-
-<details>
-<summary><b>Cursor with Docker</b></summary>
-
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
-      ]
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><b>Continue with Docker</b></summary>
-
-```yaml
-mcpServers:
-  - name: CodeAlive
-    type: stdio
-    command: docker
-    args:
-      - run
-      - --rm
-      - -i
-      - -e
-      - CODEALIVE_API_KEY=YOUR_API_KEY_HERE
-      - ghcr.io/codealive-ai/codealive-mcp:v0.2.0
-```
-
-</details>
-
-<details>
-<summary><b>VS Code with Docker</b></summary>
-
-Create `.vscode/mcp.json` in your workspace:
-
-```json
-{
-  "servers": {
-    "codealive": {
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
-      ]
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><b>Cline with Docker</b></summary>
-
-1. Open Cline extension in VS Code
-2. Click the MCP Servers icon to configure
-3. Add this Docker configuration:
-
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
-      ]
-    }
-  }
-}
-```
 
 </details>
 
