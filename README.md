@@ -12,7 +12,9 @@ This MCP (Model Context Protocol) server enables AI clients like Claude Code, Cu
 
 ## What is CodeAlive?
 
-[CodeAlive](https://www.codealive.ai/) analyzes your entire codebase to understand its structure, patterns, and logic. It creates a detailed internal map of your repositories, enabling AI assistants to:
+The most accurate and comprehensive Context Engine as a service, optimized for large codebases, powered by advanced GraphRAG and accessible via MCP. It enriches the context for AI agents like Cursor, Claude Code, Codex, etc., making them 35% more efficient and up to 84% faster.
+
+It allows AI-Coding Agents toL
 
 *   **Find relevant code faster** with semantic search
 *   **Understand the bigger picture** beyond isolated files  
