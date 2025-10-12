@@ -1,6 +1,6 @@
 """Search tool implementation."""
 
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 from urllib.parse import urljoin
 
 import httpx
@@ -16,7 +16,7 @@ async def codebase_search(
     data_source_ids: Optional[Union[str, List[str]]] = None,
     mode: str = "auto",
     include_content: bool = False
-) -> Dict:
+) -> Union[str, Dict[str, Any]]:
     """
     Use `codebase_search` tool to search for code in the codebase.
 
@@ -154,8 +154,8 @@ async def codebase_search(
         # Transform the response to XML format for better LLM processing
         xml_content = transform_search_response_to_xml(search_results, include_content)
 
-        # Return as a dictionary with structured_content field for MCP compatibility
-        return {"structured_content": xml_content}
+        # Return XML string directly
+        return xml_content
 
     except (httpx.HTTPStatusError, Exception) as e:
         error_msg = await handle_api_error(ctx, e, "code search")

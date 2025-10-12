@@ -8,8 +8,8 @@ from tools.search import codebase_search
 
 @pytest.mark.asyncio
 @patch('tools.search.get_api_key_from_context')
-async def test_codebase_search_returns_dict(mock_get_api_key):
-    """Test that codebase_search returns a dictionary with structured_content."""
+async def test_codebase_search_returns_xml_string(mock_get_api_key):
+    """Test that codebase_search returns an XML string directly."""
     # Mock the API key function
     mock_get_api_key.return_value = "test_key"
 
@@ -56,15 +56,9 @@ async def test_codebase_search_returns_dict(mock_get_api_key):
         include_content=False
     )
 
-    # Verify result is a dictionary
-    assert isinstance(result, dict), "codebase_search should return a dictionary"
-
-    # Verify it has structured_content field
-    assert "structured_content" in result, "Result should have structured_content field"
-
-    # Verify the structured_content is a string (XML)
-    assert isinstance(result["structured_content"], str), "structured_content should be a string"
+    # Verify result is a string (XML)
+    assert isinstance(result, str), "codebase_search should return an XML string"
 
     # Verify it contains expected XML structure
-    assert "<results>" in result["structured_content"], "Should contain results tag"
-    assert "<search_result" in result["structured_content"], "Should contain search_result tag"
+    assert "<results>" in result, "Should contain results tag"
+    assert "<search_result" in result, "Should contain search_result tag"
