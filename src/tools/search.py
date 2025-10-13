@@ -1,6 +1,6 @@
 """Search tool implementation."""
 
-from typing import Any, Dict, List, Optional, Union
+from typing import List, Optional, Union
 from urllib.parse import urljoin
 
 import httpx
@@ -16,7 +16,7 @@ async def codebase_search(
     data_source_ids: Optional[Union[str, List[str]]] = None,
     mode: str = "auto",
     include_content: bool = False
-) -> Union[str, Dict[str, Any]]:
+) -> str:
     """
     Use `codebase_search` tool to search for code in the codebase.
 
@@ -99,7 +99,7 @@ async def codebase_search(
 
     # Validate inputs
     if not query or not query.strip():
-        return {"error": "Query cannot be empty. Please provide a search term, function name, or description of the code you're looking for."}
+        return "<error>Query cannot be empty. Please provide a search term, function name, or description of the code you're looking for.</error>"
 
     if not data_source_ids or len(data_source_ids) == 0:
         await ctx.info("No data source IDs provided. If the API key has exactly one assigned data source, that will be used as default.")
@@ -161,4 +161,4 @@ async def codebase_search(
         error_msg = await handle_api_error(ctx, e, "code search")
         if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 404:
             error_msg = f"Error: Not found (404): One or more data sources could not be found. Check your data_source_ids."
-        return {"error": error_msg}
+        return f"<error>{error_msg}</error>"
