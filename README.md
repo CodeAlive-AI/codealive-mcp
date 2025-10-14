@@ -43,6 +43,7 @@ After setup, try these commands with your AI assistant:
 *   [AI Client Integrations](#-ai-client-integrations)
 *   [Advanced: Local Development](#-advanced-local-development)
 *   [Community Plugins](#-community-plugins)
+*   [HTTP Deployment (Self-Hosted & Cloud)](#-http-deployment-self-hosted--cloud)
 *   [Available Tools](#-available-tools)
 *   [Usage Examples](#-usage-examples)
 *   [Troubleshooting](#-troubleshooting)
@@ -772,6 +773,77 @@ CODEALIVE_API_KEY="your_codealive_api_key_here"
 export CODEALIVE_API_KEY="your_codealive_api_key_here"
 gemini
 ```
+
+---
+
+## 🚢 HTTP Deployment (Self-Hosted & Cloud)
+
+**Deploy the MCP server as an HTTP service for team-wide access or integration with self-hosted CodeAlive instances.**
+
+### Deployment Options
+
+The CodeAlive MCP server can be deployed as an HTTP service using Docker. This allows multiple AI clients to connect to a single shared instance, and enables integration with self-hosted CodeAlive deployments.
+
+### Docker Compose (Recommended)
+
+Create a `docker-compose.yml` file based on our example:
+
+```bash
+# Download the example
+curl -O https://raw.githubusercontent.com/CodeAlive-AI/codealive-mcp/main/docker-compose.example.yml
+mv docker-compose.example.yml docker-compose.yml
+
+# Edit configuration (see below)
+nano docker-compose.yml
+
+# Start the service
+docker compose up -d
+
+# Check health
+curl http://localhost:8000/health
+```
+
+**Configuration Options:**
+
+1. **For CodeAlive Cloud (default):**
+   - Remove `CODEALIVE_BASE_URL` environment variable (uses default `https://app.codealive.ai`)
+   - Clients must provide their API key via `Authorization: Bearer YOUR_KEY` header
+
+2. **For Self-Hosted CodeAlive:**
+   - Set `CODEALIVE_BASE_URL` to your CodeAlive instance URL (e.g., `https://codealive.yourcompany.com`)
+   - Clients must provide their API key via `Authorization: Bearer YOUR_KEY` header
+
+See `docker-compose.example.yml` for the complete configuration template.
+
+### Connecting AI Clients to Your Deployed Instance
+
+Once deployed, configure your AI clients to use your HTTP endpoint:
+
+**Claude Code:**
+```bash
+claude mcp add --transport http codealive http://your-server:8000/api --header "Authorization: Bearer YOUR_API_KEY_HERE"
+```
+
+**VS Code:**
+```bash
+code --add-mcp "{\"name\":\"codealive\",\"type\":\"http\",\"url\":\"http://your-server:8000/api\",\"headers\":{\"Authorization\":\"Bearer YOUR_API_KEY_HERE\"}}"
+```
+
+**Cursor / Other Clients:**
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "url": "http://your-server:8000/api",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY_HERE"
+      }
+    }
+  }
+}
+```
+
+Replace `your-server:8000` with your actual deployment URL and port.
 
 ---
 

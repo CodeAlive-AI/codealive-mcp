@@ -1,0 +1,132 @@
+version: '3.8'
+
+services:
+  codealive-mcp:
+    # Use the latest stable image from GitHub Container Registry
+    image: ghcr.io/codealive-ai/codealive-mcp:main
+
+    # Container name for easy reference
+    container_name: codealive-mcp-server
+
+    # Restart policy - automatically restart if container stops
+    restart: unless-stopped
+
+    # Port mapping - expose MCP server on port 8000
+    ports:
+      - "8000:8000"
+
+    # Environment variables
+    environment:
+      # ==========================================
+      # CONFIGURATION FOR SELF-HOSTED CODEALIVE
+      # ==========================================
+      # Uncomment and set this to your self-hosted CodeAlive instance URL
+      # REQUIRED for self-hosted deployments
+      # CODEALIVE_BASE_URL: "https://codealive.yourcompany.com"
+
+      # ==========================================
+      # CONFIGURATION FOR CODEALIVE CLOUD
+      # ==========================================
+      # For CodeAlive Cloud, comment out or remove CODEALIVE_BASE_URL above
+      # The server will use the default: https://app.codealive.ai
+
+      # ==========================================
+      # API KEY CONFIGURATION (IMPORTANT!)
+      # ==========================================
+      # In HTTP mode, API keys should be provided by clients via
+      # "Authorization: Bearer YOUR_KEY" headers, NOT environment variables.
+      #
+      # Do NOT set CODEALIVE_API_KEY here in production.
+      # Each client connection should provide their own API key.
+
+      # ==========================================
+      # OPTIONAL SETTINGS
+      # ==========================================
+      # Enable debug mode (verbose logging)
+      # DEBUG_MODE: "false"
+
+      # Disable SSL verification (only for development/testing)
+      # CODEALIVE_IGNORE_SSL: "false"
+
+    # Command to run the MCP server in HTTP mode
+    command: >
+      python src/codealive_mcp_server.py
+      --transport http
+      --host 0.0.0.0
+      --port 8000
+
+    # Health check configuration
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    # Resource limits (adjust based on your needs)
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+# ==========================================
+# USAGE INSTRUCTIONS
+# ==========================================
+#
+# 1. Copy this file to docker-compose.yml:
+#    cp docker-compose.example.yml docker-compose.yml
+#
+# 2. Edit docker-compose.yml:
+#    - For self-hosted: Uncomment and set CODEALIVE_BASE_URL
+#    - For cloud: Leave CODEALIVE_BASE_URL commented out
+#
+# 3. Start the service:
+#    docker compose up -d
+#
+# 4. Check health:
+#    curl http://localhost:8000/health
+#
+# 5. Connect AI clients using:
+#    - URL: http://your-server:8000/api
+#    - Header: Authorization: Bearer YOUR_API_KEY
+#
+# ==========================================
+# EXAMPLES
+# ==========================================
+#
+# Claude Code:
+#   claude mcp add --transport http codealive http://localhost:8000/api \
+#     --header "Authorization: Bearer YOUR_API_KEY"
+#
+# Cursor/Other Clients (JSON config):
+#   {
+#     "mcpServers": {
+#       "codealive": {
+#         "url": "http://localhost:8000/api",
+#         "headers": {
+#           "Authorization": "Bearer YOUR_API_KEY"
+#         }
+#       }
+#     }
+#   }
+#
+# ==========================================
+# TROUBLESHOOTING
+# ==========================================
+#
+# View logs:
+#   docker compose logs -f codealive-mcp
+#
+# Restart service:
+#   docker compose restart codealive-mcp
+#
+# Stop service:
+#   docker compose down
+#
+# Update to latest version:
+#   docker compose pull
+#   docker compose up -d
