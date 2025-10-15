@@ -57,7 +57,7 @@ async def codebase_search(
         data_sources: List of data source names to search in (required).
                       Can be workspace names (search all repositories in the workspace)
                       or individual repository names for targeted searches.
-                      Example: ["enterprise-platform", "workspace:payments-team"]
+                      Example: ["enterprise-platform", "payments-team"]
 
         mode: Search mode (case-insensitive):
               - "auto": (Default, recommended) Adaptive semantic search.
@@ -74,19 +74,19 @@ async def codebase_search(
 
     Examples:
         1. Natural-language question (recommended):
-           codebase_search(query="What is the auth flow?", data_sources=["repo-main"])
+           codebase_search(query="What is the auth flow?", data_sources=["repo123"])
 
         2. Intent query:
-           codebase_search(query="Where is user registration logic?", data_sources=["repo-main"])
+           codebase_search(query="Where is user registration logic?", data_sources=["repo123"])
 
         3. Workspace-wide question:
-           codebase_search(query="How do microservices talk to the billing API?", data_sources=["workspace:backend-team"])
+           codebase_search(query="How do microservices talk to the billing API?", data_sources=["backend-team"])
 
         4. Mixed query with a known identifier:
-           codebase_search(query="Where do we validate JWTs (AuthService)?", data_sources=["repo-main"])
+           codebase_search(query="Where do we validate JWTs (AuthService)?", data_sources=["repo123"])
 
         5. Concise results without full file contents:
-           codebase_search(query="Where is password reset handled?", data_sources=["repo-main"], include_content=false)
+           codebase_search(query="Where is password reset handled?", data_sources=["repo123"], include_content=false)
 
     Note:
         - At least one data source name must be provided

@@ -49,13 +49,13 @@ async def codebase_consultant(
         1. Ask about architecture:
            codebase_consultant(
              question="What's the best way to add caching to our API?",
-             data_sources=["repo-main"]
+             data_sources=["repo123"]
            )
 
         2. Understand implementation:
            codebase_consultant(
              question="How do the microservices communicate?",
-             data_sources=["workspace:platform", "repo:payments"]
+             data_sources=["platform", "payments"]
            )
 
         3. Continue a consultation:
