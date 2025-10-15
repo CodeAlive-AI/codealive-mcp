@@ -8,7 +8,11 @@ import httpx
 from fastmcp import Context
 
 from core import CodeAliveContext, get_api_key_from_context, log_api_request, log_api_response
-from utils import handle_api_error, format_data_source_ids, normalize_data_source_ids
+from utils import (
+    handle_api_error,
+    format_data_source_names,
+    normalize_data_source_names,
+)
 
 
 async def codebase_consultant(
@@ -31,8 +35,9 @@ async def codebase_consultant(
         question: What you want to know about the codebase
                  Example: "How does the authentication system work?"
 
-        data_sources: Repository or workspace IDs to analyze
-                     Example: ["67f664fd4c2a00698a52bb6f", "5e8f9a2c1d3b7e4a6c9d0f8e"]
+        data_sources: Repository or workspace names to analyze. These names are
+                      resolved to IDs on the server side.
+                      Example: ["enterprise-platform", "workspace:payments-team"]
 
         conversation_id: Continue a previous consultation session
                         Example: "conv_6789f123a456b789c123d456"
@@ -44,13 +49,13 @@ async def codebase_consultant(
         1. Ask about architecture:
            codebase_consultant(
              question="What's the best way to add caching to our API?",
-             data_sources=["67f664fd4c2a00698a52bb6f"]
+             data_sources=["repo-main"]
            )
 
         2. Understand implementation:
            codebase_consultant(
              question="How do the microservices communicate?",
-             data_sources=["workspace_123", "repo_456"]
+             data_sources=["workspace:platform", "repo:payments"]
            )
 
         3. Continue a consultation:
@@ -64,12 +69,12 @@ async def codebase_consultant(
         - When creating a new conversation, data_sources is optional if your API key has exactly one assigned data source
         - When continuing a conversation, conversation_id is required to maintain context
         - The consultant maintains full conversation history for follow-up questions
-        - Choose workspace IDs for broad architectural questions or repository IDs for specific implementation details
+        - Choose workspace names for broad architectural questions or repository names for specific implementation details
     """
     context: CodeAliveContext = ctx.request_context.lifespan_context
 
-    # Normalize data source IDs (handles Claude Desktop serialization issues)
-    data_sources = normalize_data_source_ids(data_sources)
+    # Normalize data source names (handles Claude Desktop serialization issues)
+    data_sources = normalize_data_source_names(data_sources)
 
     if not question or not question.strip():
         return "Error: No question provided. Please provide a question to ask the consultant."
@@ -91,7 +96,7 @@ async def codebase_consultant(
         request_data["conversationId"] = conversation_id
 
     if data_sources:
-        request_data["dataSources"] = format_data_source_ids(data_sources)
+        request_data["names"] = format_data_source_names(data_sources)
 
     try:
         api_key = get_api_key_from_context(ctx)
@@ -161,5 +166,5 @@ async def codebase_consultant(
     except (httpx.HTTPStatusError, Exception) as e:
         error_msg = await handle_api_error(ctx, e, "chat completion")
         if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 404:
-            return "Error: Not found (404): The requested resource could not be found. Check your conversation_id or data_source_ids."
+            return "Error: Not found (404): The requested resource could not be found. Check your conversation_id or data_sources."
         return error_msg

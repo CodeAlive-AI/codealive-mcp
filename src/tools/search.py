@@ -7,13 +7,17 @@ import httpx
 from fastmcp import Context
 
 from core import CodeAliveContext, get_api_key_from_context, log_api_request, log_api_response
-from utils import transform_search_response_to_xml, handle_api_error, normalize_data_source_ids
+from utils import (
+    transform_search_response_to_xml,
+    handle_api_error,
+    normalize_data_source_names,
+)
 
 
 async def codebase_search(
     ctx: Context,
     query: str,
-    data_source_ids: Optional[Union[str, List[str]]] = None,
+    data_sources: Optional[Union[str, List[str]]] = None,
     mode: str = "auto",
     include_content: bool = False
 ) -> str:
@@ -50,10 +54,10 @@ async def codebase_search(
                          "Where do we parse OAuth callbacks?",
                          "user registration controller"
 
-        data_source_ids: List of data source IDs to search in (required).
-                         Can be workspace IDs (search all repositories in the workspace)
-                         or individual repository IDs for targeted searches.
-                         Example: ["67f664fd4c2a00698a52bb6f", "5e8f9a2c1d3b7e4a6c9d0f8e"]
+        data_sources: List of data source names to search in (required).
+                      Can be workspace names (search all repositories in the workspace)
+                      or individual repository names for targeted searches.
+                      Example: ["enterprise-platform", "workspace:payments-team"]
 
         mode: Search mode (case-insensitive):
               - "auto": (Default, recommended) Adaptive semantic search.
@@ -70,22 +74,22 @@ async def codebase_search(
 
     Examples:
         1. Natural-language question (recommended):
-           codebase_search(query="What is the auth flow?", data_source_ids=["repo123"])
+           codebase_search(query="What is the auth flow?", data_sources=["repo-main"])
 
         2. Intent query:
-           codebase_search(query="Where is user registration logic?", data_source_ids=["repo123"])
+           codebase_search(query="Where is user registration logic?", data_sources=["repo-main"])
 
         3. Workspace-wide question:
-           codebase_search(query="How do microservices talk to the billing API?", data_source_ids=["workspace456"])
+           codebase_search(query="How do microservices talk to the billing API?", data_sources=["workspace:backend-team"])
 
         4. Mixed query with a known identifier:
-           codebase_search(query="Where do we validate JWTs (AuthService)?", data_source_ids=["repo123"])
+           codebase_search(query="Where do we validate JWTs (AuthService)?", data_sources=["repo-main"])
 
         5. Concise results without full file contents:
-           codebase_search(query="Where is password reset handled?", data_source_ids=["repo123"], include_content=false)
+           codebase_search(query="Where is password reset handled?", data_sources=["repo-main"], include_content=false)
 
     Note:
-        - At least one data_source_id must be provided
+        - At least one data source name must be provided
         - All data sources must be in "Alive" state
         - The API key must have access to the specified data sources
         - Prefer natural-language questions; templates are unnecessary.
@@ -94,15 +98,15 @@ async def codebase_search(
     """
     context: CodeAliveContext = ctx.request_context.lifespan_context
 
-    # Normalize data source IDs (handles Claude Desktop serialization issues)
-    data_source_ids = normalize_data_source_ids(data_source_ids)
+    # Normalize data source names (handles Claude Desktop serialization issues)
+    data_source_names = normalize_data_source_names(data_sources)
 
     # Validate inputs
     if not query or not query.strip():
         return "<error>Query cannot be empty. Please provide a search term, function name, or description of the code you're looking for.</error>"
 
-    if not data_source_ids or len(data_source_ids) == 0:
-        await ctx.info("No data source IDs provided. If the API key has exactly one assigned data source, that will be used as default.")
+    if not data_source_names or len(data_source_names) == 0:
+        await ctx.info("No data source names provided. If the API key has exactly one assigned data source, that will be used as default.")
 
     try:
         normalized_mode = mode.lower() if mode else "auto"
@@ -113,23 +117,23 @@ async def codebase_search(
             normalized_mode = "auto"
 
         # Log the search attempt
-        if data_source_ids and len(data_source_ids) > 0:
-            await ctx.info(f"Searching for '{query}' in {len(data_source_ids)} data source(s) using {normalized_mode} mode")
+        if data_source_names and len(data_source_names) > 0:
+            await ctx.info(f"Searching for '{query}' in {len(data_source_names)} data source(s) using {normalized_mode} mode")
         else:
             await ctx.info(f"Searching for '{query}' using API key's default data source with {normalized_mode} mode")
 
-        # Prepare query parameters as a list of tuples to support multiple values for DataSourceIds
+        # Prepare query parameters as a list of tuples to support multiple values for Names
         params = [
             ("Query", query),
             ("Mode", normalized_mode),
             ("IncludeContent", "true" if include_content else "false")
         ]
 
-        if data_source_ids and len(data_source_ids) > 0:
-            # Add each data source ID as a separate query parameter
-            for ds_id in data_source_ids:
-                if ds_id:  # Skip None or empty values
-                    params.append(("DataSourceIds", ds_id))
+        if data_source_names and len(data_source_names) > 0:
+            # Add each data source name as a separate query parameter
+            for ds_name in data_source_names:
+                if ds_name:  # Skip None or empty values
+                    params.append(("Names", ds_name))
         else:
             await ctx.info("Using API key's default data source (if available)")
 
@@ -160,5 +164,5 @@ async def codebase_search(
     except (httpx.HTTPStatusError, Exception) as e:
         error_msg = await handle_api_error(ctx, e, "code search")
         if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 404:
-            error_msg = f"Error: Not found (404): One or more data sources could not be found. Check your data_source_ids."
+            error_msg = f"Error: Not found (404): One or more data sources could not be found. Check your data_sources."
         return f"<error>{error_msg}</error>"

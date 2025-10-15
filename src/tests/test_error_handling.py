@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 import httpx
-from utils.errors import handle_api_error, format_data_source_ids
+from utils.errors import handle_api_error, format_data_source_names
 
 
 @pytest.mark.asyncio
@@ -109,36 +109,29 @@ async def test_handle_unknown_http_error():
     assert len(result) < 300
 
 
-def test_format_data_source_ids_strings():
-    """Test formatting simple string IDs."""
+def test_format_data_source_names_strings():
+    """Test formatting simple string names."""
     input_data = ["id1", "id2", "id3"]
-    result = format_data_source_ids(input_data)
+    result = format_data_source_names(input_data)
 
-    assert result == [
-        {"id": "id1"},
-        {"id": "id2"},
-        {"id": "id3"}
-    ]
+    assert result == ["id1", "id2", "id3"]
 
 
-def test_format_data_source_ids_dicts():
-    """Test formatting dictionary IDs."""
+def test_format_data_source_names_dicts():
+    """Test formatting dictionary inputs."""
     input_data = [
         {"id": "id1"},
         {"type": "repository", "id": "id2"},
+        {"name": "repo-name"},
         {"id": "id3", "extra": "field"}
     ]
-    result = format_data_source_ids(input_data)
+    result = format_data_source_names(input_data)
 
-    assert result == [
-        {"id": "id1"},
-        {"id": "id2"},
-        {"id": "id3"}
-    ]
+    assert result == ["id1", "id2", "repo-name", "id3"]
 
 
-def test_format_data_source_ids_mixed():
-    """Test formatting mixed format IDs."""
+def test_format_data_source_names_mixed():
+    """Test formatting mixed format inputs."""
     input_data = [
         "id1",
         {"id": "id2"},
@@ -146,20 +139,17 @@ def test_format_data_source_ids_mixed():
         "",  # Empty string - should be skipped
         None,  # None - should be skipped
         {"no_id": "field"},  # Missing id - should be skipped
+        {"name": "repo-name"},
         "id4"
     ]
-    result = format_data_source_ids(input_data)
+    result = format_data_source_names(input_data)
 
-    assert result == [
-        {"id": "id1"},
-        {"id": "id2"},
-        {"id": "id3"},
-        {"id": "id4"}
-    ]
+    assert result == ["id1", "id2", "id3", "repo-name", "id4"]
 
 
-def test_format_data_source_ids_empty():
+def test_format_data_source_names_empty():
     """Test formatting empty/None inputs."""
-    assert format_data_source_ids(None) == []
-    assert format_data_source_ids([]) == []
-    assert format_data_source_ids([None, "", {}]) == []
+    assert format_data_source_names(None) == []
+    assert format_data_source_names([]) == []
+    assert format_data_source_names([None, "", {}]) == []
+

@@ -25,6 +25,7 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
         A formatted list of available data sources with the following information for each:
         - id: Unique identifier for the data source, used in other API calls
         - name: Human-readable name of the repository or workspace
+        - description: Summary of the codebase contents to guide search and chat usage
         - type: The type of data source ("Repository" or "Workspace")
         - url: URL of the repository (for Repository type only)
         - repositoryIds: List of repository IDs included in the workspace (for Workspace type only)
@@ -48,7 +49,7 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
         For workspaces, the repositoryIds can be used to identify and work with
         individual repositories that make up the workspace.
 
-        Use the returned data source IDs with the codebase_search and codebase_consultant functions.
+        Use the returned data source names with the codebase_search and codebase_consultant functions.
     """
     context: CodeAliveContext = ctx.request_context.lifespan_context
 
@@ -84,7 +85,7 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
         result = f"Available data sources:\n{formatted_data}"
 
         # Add usage hint
-        result += "\n\nYou can use these data source IDs with the codebase_search and codebase_consultant functions."
+        result += "\n\nYou can use these data source names with the codebase_search and codebase_consultant functions."
 
         return result
 
