@@ -323,7 +323,7 @@ class TestXMLTransformer:
                         "range": {"start": {"line": 18}, "end": {"line": 168}}
                     },
                     "score": 0.99,
-                    "content": "async def codebase_search(\n    ctx: Context,\n    query: str,\n    data_source_ids: Optional[List[str]] = None,\n    mode: str = \"auto\",\n    include_content: bool = False\n) -> Dict:",
+                    "content": "async def codebase_search(\n    ctx: Context,\n    query: str,\n    data_sources: Optional[List[str]] = None,\n    mode: str = \"auto\",\n    include_content: bool = False\n) -> Dict:",
                     "dataSource": {
                         "type": "repository",
                         "id": "685b21230e3822f4efa9d073",

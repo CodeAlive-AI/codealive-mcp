@@ -9,8 +9,8 @@ from tools.chat import codebase_consultant
 
 @pytest.mark.asyncio
 @patch('tools.chat.get_api_key_from_context')
-async def test_consultant_with_simple_ids(mock_get_api_key):
-    """Test codebase consultant with simple string IDs."""
+async def test_consultant_with_simple_names(mock_get_api_key):
+    """Test codebase consultant with simple string names."""
     mock_get_api_key.return_value = "test_key"
 
     ctx = MagicMock(spec=Context)
@@ -39,7 +39,7 @@ async def test_consultant_with_simple_ids(mock_get_api_key):
 
     ctx.request_context.lifespan_context = mock_codealive_context
 
-    # Test with simple string IDs
+    # Test with simple string names
     result = await codebase_consultant(
         ctx=ctx,
         question="Test question",
@@ -50,10 +50,10 @@ async def test_consultant_with_simple_ids(mock_get_api_key):
     call_args = mock_client.post.call_args
     request_data = call_args.kwargs["json"]
 
-    # Should convert simple IDs to {"id": "..."} format
-    assert request_data["dataSources"] == [
-        {"id": "repo123"},
-        {"id": "repo456"}
+    # Should convert simple names to the backend names array
+    assert request_data["names"] == [
+        "repo123",
+        "repo456"
     ]
 
     assert result == "Hello world"
@@ -61,8 +61,8 @@ async def test_consultant_with_simple_ids(mock_get_api_key):
 
 @pytest.mark.asyncio
 @patch('tools.chat.get_api_key_from_context')
-async def test_consultant_preserves_string_ids(mock_get_api_key):
-    """Test codebase consultant preserves string IDs."""
+async def test_consultant_preserves_string_names(mock_get_api_key):
+    """Test codebase consultant preserves string names."""
     mock_get_api_key.return_value = "test_key"
 
     ctx = MagicMock(spec=Context)
@@ -88,7 +88,7 @@ async def test_consultant_preserves_string_ids(mock_get_api_key):
 
     ctx.request_context.lifespan_context = mock_codealive_context
 
-    # Test with string IDs
+    # Test with string names
     result = await codebase_consultant(
         ctx=ctx,
         question="Test",
@@ -98,10 +98,10 @@ async def test_consultant_preserves_string_ids(mock_get_api_key):
     call_args = mock_client.post.call_args
     request_data = call_args.kwargs["json"]
 
-    # Should extract just the ID
-    assert request_data["dataSources"] == [
-        {"id": "repo123"},
-        {"id": "repo456"}
+    # Should extract just the normalized names
+    assert request_data["names"] == [
+        "repo123",
+        "repo456"
     ]
 
     assert result == "Response"
@@ -145,8 +145,8 @@ async def test_consultant_with_conversation_id(mock_get_api_key):
 
     # Should include conversation ID
     assert request_data["conversationId"] == "conv_123"
-    # Should not have data sources when continuing conversation
-    assert "dataSources" not in request_data
+    # Should not have explicit names when continuing conversation
+    assert "names" not in request_data
 
     assert result == "Continued"
 

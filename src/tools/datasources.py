@@ -19,12 +19,13 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
 
     Args:
         alive_only: If True (default), returns only data sources in "Alive" state ready for use with chat.
-                   If False, returns all data sources regardless of processing state.
+                    If False, returns all data sources regardless of processing state.
 
     Returns:
         A formatted list of available data sources with the following information for each:
-        - id: Unique identifier for the data source, used in other API calls
-        - name: Human-readable name of the repository or workspace
+        - id: Unique identifier for the data source
+        - name: Human-readable name of the repository or workspace, used in other API calls
+        - description: Summary of the codebase contents to guide search and chat usage
         - type: The type of data source ("Repository" or "Workspace")
         - url: URL of the repository (for Repository type only)
         - state: The processing state of the data source (if alive_only=false)
@@ -44,7 +45,7 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
         For repositories, the URL can be used to match with local git repositories
         to provide enhanced context for code understanding.
 
-        Use the returned data source IDs with the codebase_search and codebase_consultant functions.
+        Use the returned data source names with the codebase_search and codebase_consultant functions.
     """
     context: CodeAliveContext = ctx.request_context.lifespan_context
 
@@ -85,7 +86,7 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
         result = f"Available data sources:\n{formatted_data}"
 
         # Add usage hint
-        result += "\n\nYou can use these data source IDs with the codebase_search and codebase_consultant functions."
+        result += "\n\nYou can use these data source names with the codebase_search and codebase_consultant functions."
 
         return result
 

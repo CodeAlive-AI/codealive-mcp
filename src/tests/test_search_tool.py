@@ -51,7 +51,7 @@ async def test_codebase_search_returns_xml_string(mock_get_api_key):
     result = await codebase_search(
         ctx=ctx,
         query="authenticate_user",
-        data_source_ids=["test_id"],
+        data_sources=["test-name"],
         mode="auto",
         include_content=False
     )
@@ -62,6 +62,11 @@ async def test_codebase_search_returns_xml_string(mock_get_api_key):
     # Verify it contains expected XML structure
     assert "<results>" in result, "Should contain results tag"
     assert "<search_result" in result, "Should contain search_result tag"
+
+    # Verify the request used the Names query parameter
+    call_args = mock_client.get.call_args
+    params = call_args.kwargs["params"]
+    assert ("Names", "test-name") in params
 
 
 @pytest.mark.asyncio
@@ -82,7 +87,7 @@ async def test_codebase_search_empty_query_returns_error_string():
     result = await codebase_search(
         ctx=ctx,
         query="",
-        data_source_ids=["test_id"],
+        data_sources=["test-name"],
         mode="auto",
         include_content=False
     )
@@ -138,7 +143,7 @@ async def test_codebase_search_api_error_returns_error_string(mock_get_api_key):
     result = await codebase_search(
         ctx=ctx,
         query="test query",
-        data_source_ids=["invalid_id"],
+        data_sources=["invalid-name"],
         mode="auto",
         include_content=False
     )

@@ -54,9 +54,9 @@ mcp = FastMCP(
     - Remember that context from previous messages is maintained in the same conversation
 
     Flexible data source usage:
-    - You can use a workspace ID as a single data source to search or chat across all its repositories at once
-    - Alternatively, you can use specific repository IDs for more targeted searches
-    - For complex queries, you can combine multiple repository IDs from different workspaces
+    - You can use a workspace name as a single data source to search or chat across all its repositories at once
+    - Alternatively, you can use specific repository names for more targeted searches
+    - For complex queries, you can combine multiple repository names from different workspaces
     - Choose between workspace-level or repository-level access based on the scope of the query
 
     Repository integration:

@@ -51,82 +51,63 @@ async def handle_api_error(
         return f"Error: {error_msg}. Please check your input parameters and try again."
 
 
-def normalize_data_source_ids(data_sources) -> list:
-    """
-    Normalize data source IDs from various Claude Desktop serialization formats.
-
-    Handles:
-    - Proper arrays: ["id1", "id2"]
-    - JSON-encoded strings: "[\"id1\", \"id2\"]"
-    - Plain strings: "id1"
-    - None/empty values
-
-    Args:
-        data_sources: Data sources in any format from Claude Desktop
-
-    Returns:
-        List of string IDs: ["id1", "id2"]
-    """
+def normalize_data_source_names(data_sources) -> list:
+    """Normalize data source names from various serialization formats."""
     import json
 
     if not data_sources:
         return []
 
-    # Handle string inputs (Claude Desktop serialization issue)
     if isinstance(data_sources, str):
-        # Handle JSON-encoded string
-        if data_sources.startswith('['):
+        stripped = data_sources.strip()
+        if stripped.startswith('['):
             try:
-                data_sources = json.loads(data_sources)
+                data_sources = json.loads(stripped)
             except json.JSONDecodeError:
-                # If parsing fails, treat as single ID
                 return [data_sources]
         else:
-            # Single ID as string
             return [data_sources]
 
-    # Handle non-list types
     if not isinstance(data_sources, list):
         return [str(data_sources)]
 
-    # Already a list - extract string IDs
     result = []
     for ds in data_sources:
         if isinstance(ds, str):
             result.append(ds)
-        elif isinstance(ds, dict) and ds.get("id"):
-            result.append(ds["id"])
+        elif isinstance(ds, dict):
+            if ds.get("name"):
+                result.append(ds["name"])
+            elif ds.get("id"):
+                # Backward compatibility with legacy ID payloads
+                result.append(ds["id"])
 
     return result
 
 
-def format_data_source_ids(data_sources: Optional[list]) -> list:
-    """
-    Convert various data source formats to the API's expected format.
-
-    Handles:
-    - Simple string IDs: ["id1", "id2"]
-    - Dict format: [{"id": "id1"}, {"type": "repository", "id": "id2"}]
-    - Mixed formats
-    - None/empty values
-
-    Args:
-        data_sources: List of data sources in various formats
-
-    Returns:
-        List of dicts with 'id' field: [{"id": "id1"}, {"id": "id2"}]
-    """
+def format_data_source_names(data_sources: Optional[list]) -> list:
+    """Convert various data source inputs to a simple list of data source names."""
     if not data_sources:
         return []
 
-    formatted = []
+    formatted: list[str] = []
+
     for ds in data_sources:
-        if isinstance(ds, str) and ds:
-            # Simple string ID
-            formatted.append({"id": ds})
-        elif isinstance(ds, dict) and ds.get("id"):
-            # Already has id field - extract just the id
-            formatted.append({"id": ds["id"]})
-        # Skip None/empty values
+        if isinstance(ds, str):
+            name = ds.strip()
+            if name:
+                formatted.append(name)
+        elif isinstance(ds, dict):
+            name = ds.get("name") or ds.get("id")
+            if isinstance(name, str):
+                name = name.strip()
+                if name:
+                    formatted.append(name)
+            elif name is not None:
+                formatted.append(str(name))
+        elif ds is not None:
+            # Fallback: cast other primitive types to string
+            formatted.append(str(ds))
 
     return formatted
+
