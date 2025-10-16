@@ -1,5 +1,5 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-16/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "io.github.CodeAlive-AI/codealive-mcp",
   "version": "0.2.0",
   "description": "Semantic code search and analysis from CodeAlive for AI assistants and agents.",
