@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "io.github.CodeAlive-AI/codealive-mcp",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "Semantic code search and analysis from CodeAlive for AI assistants and agents.",
   "keywords": [
     "context-engineering",
@@ -33,20 +33,20 @@
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/codealive-ai/codealive-mcp:v0.4.5",
-      "version": "0.4.5",
+      "identifier": "ghcr.io/codealive-ai/codealive-mcp:0.4.6",
+      "version": "0.4.6",
+      "runtimeHint": "docker",
       "transport": {
-        "type": "stdio",
-        "command": "docker",
-        "args": [
-          "run",
-          "--rm",
-          "-i",
-          "-e",
-          "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-          "ghcr.io/codealive-ai/codealive-mcp:v0.4.5"
-        ]
-      }
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "CODEALIVE_API_KEY",
+          "description": "Your CodeAlive API key. Get one at https://app.codealive.ai/ under MCP & API.",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ]
     }
   ],
   "capabilities": {

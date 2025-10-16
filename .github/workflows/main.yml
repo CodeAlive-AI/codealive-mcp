@@ -76,28 +76,25 @@ jobs:
           with open('server.json', 'r') as f:
               data = json.load(f)
           version = '${{ steps.version-check.outputs.current_version }}'
+
+          # Update top-level version
           data['version'] = version
+
+          # Update all packages
           if 'packages' in data:
               for package in data['packages']:
                   registry_type = package.get('registryType')
 
-                  # Per 2025-09-29 schema: version is required for ALL packages
+                  # Update version field (required for all packages in 2025-09-29)
                   package['version'] = version
 
-                  # For OCI packages: also update version in identifier
+                  # Update identifier with new version tag
                   if registry_type == 'oci':
                       identifier = package.get('identifier', '')
                       if ':' in identifier:
                           base = identifier.rsplit(':', 1)[0]
-                          package['identifier'] = f'{base}:v{version}'
+                          package['identifier'] = f'{base}:{version}'
 
-                  # Update Docker args with new version
-                  transport = package.get('transport', {})
-                  args = transport.get('args') if isinstance(transport, dict) else None
-                  if isinstance(args, list):
-                      for idx, arg in enumerate(args):
-                          if isinstance(arg, str) and 'ghcr.io/codealive-ai/codealive-mcp:' in arg:
-                              args[idx] = f'ghcr.io/codealive-ai/codealive-mcp:v{version}'
           with open('server.json', 'w') as f:
               json.dump(data, f, indent=2)
           "
