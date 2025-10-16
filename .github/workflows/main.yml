@@ -80,18 +80,15 @@ jobs:
           if 'packages' in data:
               for package in data['packages']:
                   registry_type = package.get('registryType')
-                  # For OCI packages: version is embedded in identifier (2025-10-11 schema)
+                  # Update version field for all package types
+                  package['version'] = version
+
+                  # For OCI packages: also update version in identifier
                   if registry_type == 'oci':
                       identifier = package.get('identifier', '')
-                      # Update identifier with new version tag
                       if ':' in identifier:
                           base = identifier.rsplit(':', 1)[0]
                           package['identifier'] = f'{base}:v{version}'
-                      # Remove separate version field if it exists (old schema)
-                      package.pop('version', None)
-                  else:
-                      # For npm, pypi, nuget: keep separate version field
-                      package['version'] = version
 
                   # Update Docker args with new version
                   transport = package.get('transport', {})
