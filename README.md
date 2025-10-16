@@ -56,7 +56,7 @@ After setup, try these commands with your AI assistant:
 ### Step 1: Get Your API Key
 
 1. Sign up at [https://app.codealive.ai/](https://app.codealive.ai/)
-2. Navigate to **API Keys** (under Organization)
+2. Navigate to **MCP & API**
 3. Click **"+ Create API Key"**
 4. Copy your API key immediately - you won't see it again!
 
