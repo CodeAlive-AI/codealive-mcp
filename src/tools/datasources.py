@@ -27,7 +27,6 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
         - name: Human-readable name of the repository or workspace
         - type: The type of data source ("Repository" or "Workspace")
         - url: URL of the repository (for Repository type only)
-        - repositoryIds: List of repository IDs included in the workspace (for Workspace type only)
         - state: The processing state of the data source (if alive_only=false)
 
     Examples:
@@ -44,9 +43,6 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
 
         For repositories, the URL can be used to match with local git repositories
         to provide enhanced context for code understanding.
-
-        For workspaces, the repositoryIds can be used to identify and work with
-        individual repositories that make up the workspace.
 
         Use the returned data source IDs with the codebase_search and codebase_consultant functions.
     """
@@ -78,6 +74,11 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
         # If no data sources found, return a helpful message
         if not data_sources or len(data_sources) == 0:
             return "No data sources found. Please add a repository or workspace to CodeAlive before using this API."
+
+        # Remove repositoryIds from workspace data sources
+        for data_source in data_sources:
+            if data_source.get("type") == "Workspace" and "repositoryIds" in data_source:
+                del data_source["repositoryIds"]
 
         # Format the response as a readable string
         formatted_data = json.dumps(data_sources, indent=2)
