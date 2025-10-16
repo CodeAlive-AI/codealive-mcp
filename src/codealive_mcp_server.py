@@ -64,8 +64,6 @@ mcp = FastMCP(
     - If a user is working within a git repository that matches a CodeAlive-indexed repository (by URL),
       you can suggest using CodeAlive's search and chat to understand the codebase
     - Data sources include repository URLs to help match with local git repositories
-    - Workspaces include a list of repository IDs, allowing you to understand their composition
-    - When searching or chatting, always use repository names from workspaces to target specific repositories
 
     When analyzing search results:
     - Pay attention to file paths to understand the project structure
