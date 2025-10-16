@@ -81,21 +81,15 @@ jobs:
               for package in data['packages']:
                   registry_type = package.get('registryType')
 
-                  # Per 2025-10-11 schema: version is optional for OCI/MCPB (embedded in identifier)
+                  # Per 2025-09-29 schema: version is required for ALL packages
+                  package['version'] = version
+
+                  # For OCI packages: also update version in identifier
                   if registry_type == 'oci':
-                      # Update version in identifier
                       identifier = package.get('identifier', '')
                       if ':' in identifier:
                           base = identifier.rsplit(':', 1)[0]
                           package['identifier'] = f'{base}:v{version}'
-                      # Remove separate version field (optional for OCI)
-                      package.pop('version', None)
-                  elif registry_type == 'mcpb':
-                      # MCPB uses direct download URLs, no version field needed
-                      package.pop('version', None)
-                  else:
-                      # For npm, pypi, nuget: version field is required
-                      package['version'] = version
 
                   # Update Docker args with new version
                   transport = package.get('transport', {})
@@ -122,7 +116,7 @@ jobs:
                   import urllib.request
                   from jsonschema import ValidationError, validate
 
-                  schema_url = "https://static.modelcontextprotocol.io/schemas/2025-10-11/server.schema.json"
+                  schema_url = "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json"
 
                   try:
                       with urllib.request.urlopen(schema_url, timeout=30) as response:
