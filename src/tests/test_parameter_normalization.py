@@ -50,14 +50,14 @@ class TestNormalizeDataSourceNames:
         assert result == ["repo1", "repo2", "repo3", "workspace1"]
 
     def test_dict_without_id(self):
-        """Test that dicts without 'id' field are skipped."""
+        """Test that dicts without 'id' field use 'name' field if present."""
         input_data = [
             "repo1",
-            {"name": "some-repo", "type": "repository"},  # No 'id' field
+            {"name": "some-repo", "type": "repository"},  # No 'id' field, but has 'name'
             "repo2"
         ]
         result = normalize_data_source_names(input_data)
-        assert result == ["repo1", "repo2"]
+        assert result == ["repo1", "some-repo", "repo2"]
 
     def test_empty_strings_preserved(self):
         """Test that empty strings in arrays are preserved (might be intentional)."""

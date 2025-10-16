@@ -33,14 +33,14 @@ async def codebase_consultant(
 
     Args:
         question: What you want to know about the codebase
-                 Example: "How does the authentication system work?"
+                  Example: "How does the authentication system work?"
 
         data_sources: Repository or workspace names to analyze. These names are
                       resolved to IDs on the server side.
                       Example: ["enterprise-platform", "workspace:payments-team"]
 
         conversation_id: Continue a previous consultation session
-                        Example: "conv_6789f123a456b789c123d456"
+                         Example: "conv_6789f123a456b789c123d456"
 
     Returns:
         Expert analysis and explanation addressing your question.

@@ -54,9 +54,9 @@ mcp = FastMCP(
     - Remember that context from previous messages is maintained in the same conversation
 
     Flexible data source usage:
-    - You can use a workspace ID as a single data source to search or chat across all its repositories at once
-    - Alternatively, you can use specific repository IDs for more targeted searches
-    - For complex queries, you can combine multiple repository IDs from different workspaces
+    - You can use a workspace name as a single data source to search or chat across all its repositories at once
+    - Alternatively, you can use specific repository names for more targeted searches
+    - For complex queries, you can combine multiple repository names from different workspaces
     - Choose between workspace-level or repository-level access based on the scope of the query
 
     Repository integration:
@@ -65,7 +65,7 @@ mcp = FastMCP(
       you can suggest using CodeAlive's search and chat to understand the codebase
     - Data sources include repository URLs to help match with local git repositories
     - Workspaces include a list of repository IDs, allowing you to understand their composition
-    - You can use repository IDs from workspaces to search or chat about specific repositories within a workspace
+    - When searching or chatting, always use repository names from workspaces to target specific repositories
 
     When analyzing search results:
     - Pay attention to file paths to understand the project structure
