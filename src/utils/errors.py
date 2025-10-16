@@ -111,7 +111,3 @@ def format_data_source_names(data_sources: Optional[list]) -> list:
 
     return formatted
 
-
-# Backward compatibility aliases for legacy imports
-normalize_data_source_ids = normalize_data_source_names
-format_data_source_ids = format_data_source_names

@@ -5,8 +5,6 @@ from .errors import (
     handle_api_error,
     format_data_source_names,
     normalize_data_source_names,
-    format_data_source_ids,
-    normalize_data_source_ids,
 )
 
 __all__ = [
@@ -14,6 +12,4 @@ __all__ = [
     'handle_api_error',
     'format_data_source_names',
     'normalize_data_source_names',
-    'format_data_source_ids',
-    'normalize_data_source_ids'
 ]
