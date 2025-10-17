@@ -677,6 +677,63 @@ Use the IDE UI: Q panel → Chat → tools icon → Add MCP Server → choose ht
 
 </details>
 
+<details>
+<summary><b>JetBrains AI Assistant</b></summary>
+
+> **Note:** JetBrains AI Assistant requires the `mcp-remote` workaround for connecting to remote HTTP MCP servers.
+
+**Prerequisites:**
+```bash
+npm install -g mcp-remote
+```
+
+**Config file:** Settings/Preferences → AI Assistant → Model Context Protocol → Configure
+
+Add this configuration:
+
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.codealive.ai/api",
+        "--header",
+        "Authorization: Bearer ${CODEALIVE_API_KEY}"
+      ],
+      "env": {
+        "CODEALIVE_API_KEY": "YOUR_API_KEY_HERE"
+      }
+    }
+  }
+}
+```
+
+**For self-hosted deployments**, replace the URL:
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "http://your-server:8000/api",
+        "--header",
+        "Authorization: Bearer ${CODEALIVE_API_KEY}"
+      ],
+      "env": {
+        "CODEALIVE_API_KEY": "YOUR_API_KEY_HERE"
+      }
+    }
+  }
+}
+```
+
+See [JetBrains MCP Documentation](https://www.jetbrains.com/help/ai-assistant/mcp.html#workaround-for-remote-servers) for more details.
+
+</details>
+
 ---
 
 ## 🔧 Advanced: Local Development
