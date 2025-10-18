@@ -24,13 +24,15 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
     Returns:
         A formatted list of available data sources with the following information for each:
         - id: Unique identifier for the data source
-        - name: Human-readable name of the repository or workspace, used in other API calls
-        - description: Summary of the codebase contents to guide search and chat usage
+        - name: Human-readable name - CRITICAL for matching with current working directory name
+        - description: Summary of codebase contents - CRITICAL for identifying if this matches your
+          current working codebase (compare tech stack, architecture, features you've observed)
         - type: The type of data source ("Repository" or "Workspace")
-        - url: URL of the repository (for Repository type only)
-          IMPORTANT: Use this URL to identify if a repository matches your current working directory.
-          Compare with your local git remote URL to determine if it's the current or external repo.
+        - url: Repository URL (for Repository type only) - useful for matching with git remote
         - state: The processing state of the data source (if alive_only=false)
+
+        Use name + description + url together to determine if a repository is the CURRENT one
+        you're working in versus an EXTERNAL repository.
 
     Examples:
         1. Get only ready-to-use data sources:
@@ -44,12 +46,30 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
         Other states include "New" (just added), "Processing" (being indexed),
         "Failed" (indexing failed), etc.
 
-        CRITICAL for optimizing include_content parameter:
-        - Compare repository URLs with your current git remote URL (git config --get remote.origin.url)
-        - If URLs match: This is your CURRENT repository
-          → Use include_content=false in codebase_search, then read files with Read tool
-        - If URLs don't match: This is an EXTERNAL repository
-          → Use include_content=true in codebase_search to get content directly
+        CRITICAL - Use ALL available information to identify CURRENT vs EXTERNAL repositories:
+
+        Heuristic signals to combine (in order of reliability):
+        1. **Name matching**: Does repo name match your current working directory name?
+           Example: In "/Users/bob/my-app" and repo name is "my-app" → CURRENT
+
+        2. **Description matching**: Does description match what you've observed in the codebase?
+           - Tech stack (Python, JavaScript, FastAPI, React, etc.)
+           - Architecture patterns (microservices, monolith, MCP server, etc.)
+           - Key features mentioned
+           Example: Description says "FastAPI MCP server" and you see FastAPI + MCP code → CURRENT
+
+        3. **User context**: What is the user asking about?
+           - "this repo", "our code", "my project" → CURRENT
+           - "the payments service", "external API" → EXTERNAL
+
+        4. **URL matching** (when available): Compare with git remote URL
+           Note: May have format differences (SSH vs HTTPS), but hostname + path should match
+
+        5. **Working history**: Have you been reading/editing files that align with this repo?
+
+        **Decision rule**:
+        - CURRENT repo → include_content=false in codebase_search (use Read tool for files)
+        - EXTERNAL repo → include_content=true in codebase_search (no file access)
 
         Use the returned data source names with the codebase_search and codebase_consultant functions.
     """

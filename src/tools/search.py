@@ -67,51 +67,94 @@ async def codebase_search(
 
         include_content: Whether to include full file content in results (default: false).
 
-                         IMPORTANT - When to include content:
-                         - For EXTERNAL repositories (not in your current working directory):
-                           SET TO TRUE - you don't have file access, so you need the content.
-                         - For CURRENT repository (the one you're working in):
-                           SET TO FALSE - you already have file access via Read tool, so just get
-                           file paths and read them directly for the latest content.
+                         CRITICAL RULE - When to include content:
+                         - CURRENT repository (user's working directory): include_content=false
+                           → You have file access via Read tool - get paths only, then read for latest content
+                         - EXTERNAL repositories (not in working directory): include_content=true
+                           → You cannot access files - must get content in search results
 
-                         How to identify current vs external repositories:
-                         - Compare repository URLs from get_data_sources with your current git repo URL
-                         - Current repo: Use include_content=false, then use Read tool on result paths
-                         - External repos: Use include_content=true to get the content directly
+                         How to identify CURRENT vs EXTERNAL repositories (use ALL available clues):
 
-                         Note: Indexed content may be from a different branch than your local state.
+                         1. **Repository name matching**:
+                            - Does the repo name match your current working directory name?
+                            - Example: Working in "/Users/bob/my-app" and repo name is "my-app" → likely CURRENT
+
+                         2. **Repository description analysis**:
+                            - Does the description match what you've observed in the codebase?
+                            - Check tech stack, architecture, features mentioned in description
+                            - Example: Description says "Python FastAPI server" and you see FastAPI files → likely CURRENT
+
+                         3. **User's question context**:
+                            - Does user say "this repo", "our code", "the current project", "my app"? → CURRENT
+                            - Does user reference "the X service", "external repo", "other project"? → EXTERNAL
+
+                         4. **URL matching** (when available):
+                            - Compare repo URL from get_data_sources with git remote URL
+                            - Note: May not always be available or matchable
+
+                         5. **Working context**:
+                            - Have you been reading/editing files that match this repo's structure?
+                            - Do file paths in your recent operations align with this repository?
+
+                         **Default heuristic when uncertain**:
+                         - If user is asking about code in their working directory → CURRENT (include_content=false)
+                         - If user is asking about a different/external service → EXTERNAL (include_content=true)
+                         - When truly ambiguous, prefer include_content=false for repos that seem related to current work
 
     Returns:
         Search results as JSON including source info, file paths, line numbers, and code snippets.
 
     Examples:
-        1. Search CURRENT repository (you have file access):
+        1. Search CURRENT repository (identified by directory name + context):
+           # Working in "/Users/bob/codealive-mcp"
+           # User asks: "Where is the search tool implemented in this project?"
+           # Repo name from get_data_sources: "codealive-mcp"
+           # → Name matches directory, user says "this project" → CURRENT
            codebase_search(
-               query="Where is user authentication handled?",
-               data_sources=["my-current-repo"],
-               include_content=false  # Get paths only, then use Read tool
+               query="Where is the search tool implemented?",
+               data_sources=["codealive-mcp"],
+               include_content=false  # Current repo - get paths, use Read tool
            )
-           # Then read the files: Read(file_path="/path/from/results")
+           # Then: Read(file_path="/Users/bob/codealive-mcp/src/tools/search.py")
 
-        2. Search EXTERNAL repository (no file access):
+        2. Search CURRENT repository (identified by description matching):
+           # Working in Python FastMCP project
+           # Description: "Python MCP server using FastMCP framework"
+           # You've been reading FastMCP code in this directory → CURRENT
            codebase_search(
-               query="How does the payment service validate cards?",
-               data_sources=["external-payments-repo"],
-               include_content=true  # Need content, can't read files directly
+               query="How is the lifespan context managed?",
+               data_sources=["my-mcp-server"],
+               include_content=false  # Description matches observed codebase
            )
 
-        3. Workspace-wide question across external repos:
+        3. Search EXTERNAL repository (different service):
+           # Working in "frontend-app"
+           # User asks: "How does the payments service handle refunds?"
+           # Repo: "payments-service" → Different service → EXTERNAL
            codebase_search(
-               query="How do microservices talk to the billing API?",
-               data_sources=["backend-team"],
-               include_content=true  # External workspace, include content
+               query="How are refunds processed?",
+               data_sources=["payments-service"],
+               include_content=true  # External service - need content
            )
 
-        4. Mixed query with known identifier:
+        4. Search EXTERNAL workspace (multiple external repos):
+           # User asks about backend services, but you're in frontend repo
            codebase_search(
-               query="Where do we validate JWTs (AuthService)?",
-               data_sources=["repo123"],
-               include_content=false  # Current repo, read files separately
+               query="How do microservices authenticate API calls?",
+               data_sources=["backend-workspace"],
+               include_content=true  # External workspace
+           )
+
+        5. Ambiguous case - use context:
+           # User: "Check how authentication works in our API"
+           # Working in "api-server" directory
+           # Repo name: "company-api" (slightly different but plausible match)
+           # Description: "REST API server with authentication"
+           # → User says "our API", description matches → Likely CURRENT
+           codebase_search(
+               query="authentication implementation",
+               data_sources=["company-api"],
+               include_content=false  # Context suggests current repo
            )
 
     Note:
@@ -121,6 +164,10 @@ async def codebase_search(
         - Prefer natural-language questions; templates are unnecessary.
         - Start with "auto" for best semantic results; escalate to "deep" only if needed.
         - If you know precise symbols (functions/classes), include them to narrow scope.
+
+        CRITICAL: Always call get_data_sources() first to get repository names, descriptions, and URLs.
+        Then use the heuristics above to determine include_content for each search.
+        The description field is especially valuable for matching repositories to your working context.
     """
     context: CodeAliveContext = ctx.request_context.lifespan_context
 

@@ -54,13 +54,21 @@ mcp = FastMCP(
     - Remember that context from previous messages is maintained in the same conversation
 
     CRITICAL - include_content parameter usage:
-    - For the CURRENT repository (user's working directory): Use include_content=false
-      * You already have file access via Read tool
-      * Get file paths from search, then read them directly for latest content
-    - For EXTERNAL repositories (not in working directory): Use include_content=true
-      * You cannot access these files directly
-      * Content must be included in search results
-    - Compare repository URLs from get_data_sources with current git repo to identify which is which
+    You MUST intelligently determine if searching CURRENT or EXTERNAL repositories:
+
+    - CURRENT repository (user's working directory): include_content=false
+      * You have file access → Get paths from search, then use Read tool for latest content
+    - EXTERNAL repositories (not in working directory): include_content=true
+      * No file access → Must include content in search results
+
+    Use these heuristics to identify CURRENT vs EXTERNAL (combine multiple signals):
+    1. Repository/directory name matching (e.g., working in "my-app", repo named "my-app")
+    2. Description matching observed codebase (tech stack, architecture, features)
+    3. User's language ("this repo", "our code" = CURRENT; "the X service" = EXTERNAL)
+    4. URL matching with git remote (when available)
+    5. Working context (files you've been reading/editing match this repo)
+
+    When uncertain, use context: Is user asking about their current work or a different service?
 
     Flexible data source usage:
     - You can use a workspace name as a single data source to search or chat across all its repositories at once
