@@ -28,6 +28,8 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
         - description: Summary of the codebase contents to guide search and chat usage
         - type: The type of data source ("Repository" or "Workspace")
         - url: URL of the repository (for Repository type only)
+          IMPORTANT: Use this URL to identify if a repository matches your current working directory.
+          Compare with your local git remote URL to determine if it's the current or external repo.
         - state: The processing state of the data source (if alive_only=false)
 
     Examples:
@@ -42,8 +44,12 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
         Other states include "New" (just added), "Processing" (being indexed),
         "Failed" (indexing failed), etc.
 
-        For repositories, the URL can be used to match with local git repositories
-        to provide enhanced context for code understanding.
+        CRITICAL for optimizing include_content parameter:
+        - Compare repository URLs with your current git remote URL (git config --get remote.origin.url)
+        - If URLs match: This is your CURRENT repository
+          → Use include_content=false in codebase_search, then read files with Read tool
+        - If URLs don't match: This is an EXTERNAL repository
+          → Use include_content=true in codebase_search to get content directly
 
         Use the returned data source names with the codebase_search and codebase_consultant functions.
     """

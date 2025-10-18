@@ -66,27 +66,53 @@ async def codebase_search(
                         cross-cutting questions.
 
         include_content: Whether to include full file content in results (default: false).
-                         Agents should proactively request content when needed by setting this to true.
-                         Note: File content may be outdated compared to current local state.
+
+                         IMPORTANT - When to include content:
+                         - For EXTERNAL repositories (not in your current working directory):
+                           SET TO TRUE - you don't have file access, so you need the content.
+                         - For CURRENT repository (the one you're working in):
+                           SET TO FALSE - you already have file access via Read tool, so just get
+                           file paths and read them directly for the latest content.
+
+                         How to identify current vs external repositories:
+                         - Compare repository URLs from get_data_sources with your current git repo URL
+                         - Current repo: Use include_content=false, then use Read tool on result paths
+                         - External repos: Use include_content=true to get the content directly
+
+                         Note: Indexed content may be from a different branch than your local state.
 
     Returns:
         Search results as JSON including source info, file paths, line numbers, and code snippets.
 
     Examples:
-        1. Natural-language question (recommended):
-           codebase_search(query="What is the auth flow?", data_sources=["repo123"])
+        1. Search CURRENT repository (you have file access):
+           codebase_search(
+               query="Where is user authentication handled?",
+               data_sources=["my-current-repo"],
+               include_content=false  # Get paths only, then use Read tool
+           )
+           # Then read the files: Read(file_path="/path/from/results")
 
-        2. Intent query:
-           codebase_search(query="Where is user registration logic?", data_sources=["repo123"])
+        2. Search EXTERNAL repository (no file access):
+           codebase_search(
+               query="How does the payment service validate cards?",
+               data_sources=["external-payments-repo"],
+               include_content=true  # Need content, can't read files directly
+           )
 
-        3. Workspace-wide question:
-           codebase_search(query="How do microservices talk to the billing API?", data_sources=["backend-team"])
+        3. Workspace-wide question across external repos:
+           codebase_search(
+               query="How do microservices talk to the billing API?",
+               data_sources=["backend-team"],
+               include_content=true  # External workspace, include content
+           )
 
-        4. Mixed query with a known identifier:
-           codebase_search(query="Where do we validate JWTs (AuthService)?", data_sources=["repo123"])
-
-        5. Concise results without full file contents:
-           codebase_search(query="Where is password reset handled?", data_sources=["repo123"], include_content=false)
+        4. Mixed query with known identifier:
+           codebase_search(
+               query="Where do we validate JWTs (AuthService)?",
+               data_sources=["repo123"],
+               include_content=false  # Current repo, read files separately
+           )
 
     Note:
         - At least one data source name must be provided

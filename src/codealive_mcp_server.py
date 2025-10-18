@@ -53,6 +53,15 @@ mcp = FastMCP(
     - IMPORTANT: Only use "deep" search mode for very complex conceptual queries as it's resource-intensive
     - Remember that context from previous messages is maintained in the same conversation
 
+    CRITICAL - include_content parameter usage:
+    - For the CURRENT repository (user's working directory): Use include_content=false
+      * You already have file access via Read tool
+      * Get file paths from search, then read them directly for latest content
+    - For EXTERNAL repositories (not in working directory): Use include_content=true
+      * You cannot access these files directly
+      * Content must be included in search results
+    - Compare repository URLs from get_data_sources with current git repo to identify which is which
+
     Flexible data source usage:
     - You can use a workspace name as a single data source to search or chat across all its repositories at once
     - Alternatively, you can use specific repository names for more targeted searches
