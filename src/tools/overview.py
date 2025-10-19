@@ -1,18 +1,18 @@
 """Repository overview tool for CodeAlive MCP server."""
 
 from typing import Optional
+from urllib.parse import urljoin
 from xml.etree import ElementTree as ET
 
-from mcp.server.fastmcp import Context
+import httpx
+from fastmcp import Context
 
-from core.config import get_api_key_from_context
-from core.logging import log_api_request, log_api_response, logger
-from utils.errors import (
+from core import CodeAliveContext, get_api_key_from_context, log_api_request, log_api_response
+from utils import (
     handle_api_error,
     normalize_data_source_names,
     format_data_source_names,
 )
-import httpx
 
 
 async def get_repo_overview(
@@ -66,32 +66,38 @@ async def get_repo_overview(
         #   </repository>
         # </repository_overviews>
     """
+    context: CodeAliveContext = ctx.request_context.lifespan_context
+
     try:
-        # Get context and API key
-        context = ctx.request_context.lifespan_context
         api_key = get_api_key_from_context(ctx)
 
-        # Normalize and format data_sources if provided
-        data_sources = normalize_data_source_names(data_sources)
+        # Normalize data_sources (handles Claude Desktop serialization issues)
+        data_source_names = normalize_data_source_names(data_sources)
 
-        # Build request URL and params
-        url = f"{context.base_url}/api/overview"
+        # Build request params
         params = {}
-
-        if data_sources:
-            formatted_names = format_data_source_names(data_sources)
+        if data_source_names and len(data_source_names) > 0:
+            formatted_names = format_data_source_names(data_source_names)
             params = formatted_names
 
-        # Log and execute GET request
-        log_api_request(logger, "GET", url, params)
-
+        # Prepare headers
         headers = {"Authorization": f"Bearer {api_key}"}
-        response = await context.client.get(url, headers=headers, params=params)
+
+        # Log the request
+        endpoint = "/api/overview"
+        full_url = urljoin(context.base_url, endpoint)
+        request_id = log_api_request("GET", full_url, headers, params=params)
+
+        # Make API request
+        response = await context.client.get(endpoint, headers=headers, params=params)
+
+        # Log the response
+        log_api_response(response, request_id)
+
         response.raise_for_status()
 
         # Parse JSON response
         overview_data = response.json()
-        log_api_response(logger, response.status_code, overview_data)
 
         # Transform to XML format
         root = ET.Element("repository_overviews")
@@ -108,7 +114,5 @@ async def get_repo_overview(
 
         return xml_string
 
-    except httpx.HTTPError as e:
-        return handle_api_error(ctx, e, "get repository overview")
-    except Exception as e:
-        return handle_api_error(ctx, e, "get repository overview")
+    except (httpx.HTTPStatusError, Exception) as e:
+        return await handle_api_error(ctx, e, "get repository overview")
