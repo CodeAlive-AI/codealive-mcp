@@ -1,19 +1,19 @@
-"""Tests for the get_repo_overview tool."""
+"""Tests for the get_overview tool."""
 
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 
 from mcp.server.fastmcp import Context
 
-from tools.overview import get_repo_overview
+from tools.overview import get_overview
 from core.client import CodeAliveContext
 import httpx
 
 
 @pytest.mark.asyncio
 @patch("tools.overview.get_api_key_from_context")
-async def test_get_repo_overview_success(mock_get_api_key):
-    """Test successful retrieval of repository overview."""
+async def test_get_overview_success(mock_get_api_key):
+    """Test successful retrieval of data source overview."""
     # Mock API key
     mock_get_api_key.return_value = "test-api-key"
 
@@ -40,7 +40,7 @@ async def test_get_repo_overview_success(mock_get_api_key):
     mock_ctx.request_context.lifespan_context = mock_context
 
     # Call tool
-    result = await get_repo_overview(mock_ctx, ["test-repo"])
+    result = await get_overview(mock_ctx, ["test-repo"])
 
     # Assertions
     assert '<repository name="test-repo">' in result
@@ -59,8 +59,8 @@ async def test_get_repo_overview_success(mock_get_api_key):
 
 @pytest.mark.asyncio
 @patch("tools.overview.get_api_key_from_context")
-async def test_get_repo_overview_multiple_repos(mock_get_api_key):
-    """Test retrieval of multiple repository overviews."""
+async def test_get_overview_multiple_repos(mock_get_api_key):
+    """Test retrieval of multiple data source overviews."""
     mock_get_api_key.return_value = "test-api-key"
 
     # Mock response with 3 repositories
@@ -82,7 +82,7 @@ async def test_get_repo_overview_multiple_repos(mock_get_api_key):
     mock_ctx = MagicMock(spec=Context)
     mock_ctx.request_context.lifespan_context = mock_context
 
-    result = await get_repo_overview(mock_ctx, ["repo-1", "repo-2", "repo-3"])
+    result = await get_overview(mock_ctx, ["repo-1", "repo-2", "repo-3"])
 
     # Verify 3 repository blocks
     assert result.count('<repository') == 3
@@ -96,8 +96,8 @@ async def test_get_repo_overview_multiple_repos(mock_get_api_key):
 
 @pytest.mark.asyncio
 @patch("tools.overview.get_api_key_from_context")
-async def test_get_repo_overview_no_data_sources(mock_get_api_key):
-    """Test retrieval without specifying data sources (all repos)."""
+async def test_get_overview_no_data_sources(mock_get_api_key):
+    """Test retrieval without specifying data sources (all data sources)."""
     mock_get_api_key.return_value = "test-api-key"
 
     mock_response = MagicMock()
@@ -117,7 +117,7 @@ async def test_get_repo_overview_no_data_sources(mock_get_api_key):
     mock_ctx = MagicMock(spec=Context)
     mock_ctx.request_context.lifespan_context = mock_context
 
-    result = await get_repo_overview(mock_ctx, None)
+    result = await get_overview(mock_ctx, None)
 
     # Verify API called without Names[] params
     mock_client.get.assert_called_once()
@@ -132,7 +132,7 @@ async def test_get_repo_overview_no_data_sources(mock_get_api_key):
 
 @pytest.mark.asyncio
 @patch("tools.overview.get_api_key_from_context")
-async def test_get_repo_overview_empty_result(mock_get_api_key):
+async def test_get_overview_empty_result(mock_get_api_key):
     """Test handling of empty API response."""
     mock_get_api_key.return_value = "test-api-key"
 
@@ -151,7 +151,7 @@ async def test_get_repo_overview_empty_result(mock_get_api_key):
     mock_ctx = MagicMock(spec=Context)
     mock_ctx.request_context.lifespan_context = mock_context
 
-    result = await get_repo_overview(mock_ctx, ["nonexistent"])
+    result = await get_overview(mock_ctx, ["nonexistent"])
 
     # Should return empty root element
     assert '<repository_overviews' in result
@@ -163,7 +163,7 @@ async def test_get_repo_overview_empty_result(mock_get_api_key):
 @pytest.mark.asyncio
 @patch("tools.overview.handle_api_error")
 @patch("tools.overview.get_api_key_from_context")
-async def test_get_repo_overview_api_error(mock_get_api_key, mock_handle_error):
+async def test_get_overview_api_error(mock_get_api_key, mock_handle_error):
     """Test handling of API errors."""
     mock_get_api_key.return_value = "test-api-key"
     mock_handle_error.return_value = "Error: API failed"
@@ -179,7 +179,7 @@ async def test_get_repo_overview_api_error(mock_get_api_key, mock_handle_error):
     mock_ctx = MagicMock(spec=Context)
     mock_ctx.request_context.lifespan_context = mock_context
 
-    result = await get_repo_overview(mock_ctx, ["test-repo"])
+    result = await get_overview(mock_ctx, ["test-repo"])
 
     # Verify error handling
     assert result == "Error: API failed"
@@ -193,7 +193,7 @@ async def test_get_repo_overview_api_error(mock_get_api_key, mock_handle_error):
 
 @pytest.mark.asyncio
 @patch("tools.overview.get_api_key_from_context")
-async def test_get_repo_overview_auth_header(mock_get_api_key):
+async def test_get_overview_auth_header(mock_get_api_key):
     """Test that Authorization header is correctly set."""
     mock_get_api_key.return_value = "my-secret-key"
 
@@ -211,7 +211,7 @@ async def test_get_repo_overview_auth_header(mock_get_api_key):
     mock_ctx = MagicMock(spec=Context)
     mock_ctx.request_context.lifespan_context = mock_context
 
-    await get_repo_overview(mock_ctx, ["test"])
+    await get_overview(mock_ctx, ["test"])
 
     # Verify correct Authorization header
     mock_client.get.assert_called_once()
@@ -222,7 +222,7 @@ async def test_get_repo_overview_auth_header(mock_get_api_key):
 @pytest.mark.asyncio
 @patch("tools.overview.normalize_data_source_names")
 @patch("tools.overview.get_api_key_from_context")
-async def test_get_repo_overview_data_source_normalization(mock_get_api_key, mock_normalize):
+async def test_get_overview_data_source_normalization(mock_get_api_key, mock_normalize):
     """Test that data sources are normalized (Claude Desktop serialization handling)."""
     mock_get_api_key.return_value = "test-api-key"
     # Simulate normalization converting string to list
@@ -243,7 +243,7 @@ async def test_get_repo_overview_data_source_normalization(mock_get_api_key, moc
     mock_ctx.request_context.lifespan_context = mock_context
 
     # Call with string (simulating Claude Desktop serialization issue)
-    await get_repo_overview(mock_ctx, "string-data-source")
+    await get_overview(mock_ctx, "string-data-source")
 
     # Verify normalize_data_source_names was called
     mock_normalize.assert_called_once_with("string-data-source")
@@ -251,7 +251,7 @@ async def test_get_repo_overview_data_source_normalization(mock_get_api_key, moc
 
 @pytest.mark.asyncio
 @patch("tools.overview.get_api_key_from_context")
-async def test_get_repo_overview_markdown_preservation(mock_get_api_key):
+async def test_get_overview_markdown_preservation(mock_get_api_key):
     """Test that markdown formatting is preserved in XML output."""
     mock_get_api_key.return_value = "test-api-key"
 
@@ -289,7 +289,7 @@ See [documentation](https://example.com) for more.
     mock_ctx = MagicMock(spec=Context)
     mock_ctx.request_context.lifespan_context = mock_context
 
-    result = await get_repo_overview(mock_ctx, ["rich-markdown-repo"])
+    result = await get_overview(mock_ctx, ["rich-markdown-repo"])
 
     # Verify all markdown formatting is preserved
     assert '# Purpose' in result
