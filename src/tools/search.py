@@ -24,6 +24,9 @@ async def codebase_search(
     """
     Use `codebase_search` tool to search for code in the codebase.
 
+    **PREREQUISITE**: You MUST call `get_data_sources` FIRST to discover available data source names,
+    UNLESS the user has explicitly provided specific data source names (e.g., "search in my-repo").
+
     Semantic search (`codebase_search`) is your MAIN exploration tool for understanding the
     indexed codebase (typically main/master branch or the specific branch shown in data sources).
 

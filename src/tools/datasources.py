@@ -12,7 +12,10 @@ from utils import handle_api_error
 
 async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
     """
-    Gets all available data sources (repositories and workspaces) for the user's account.
+    **CALL THIS FIRST**: Gets all available data sources (repositories and workspaces) for the user's account.
+
+    This tool MUST be called BEFORE using `codebase_search` or `codebase_consultant` to discover
+    available data source names, UNLESS the user has explicitly provided data source names.
 
     A data source is a code repository or workspace that has been indexed by CodeAlive
     and can be used for code search and chat completions.

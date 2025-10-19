@@ -24,6 +24,10 @@ async def codebase_consultant(
     """
     Consult with an AI expert about your codebase for insights, explanations, and architectural guidance.
 
+    **PREREQUISITE**: You MUST call `get_data_sources` FIRST to discover available data source names,
+    UNLESS the user has explicitly provided specific data source names OR you are continuing an
+    existing conversation with a `conversation_id`.
+
     This consultant understands your entire codebase and can help with:
     - Architecture and design decisions
     - Implementation strategies
