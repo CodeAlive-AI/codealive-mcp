@@ -15,15 +15,16 @@ from utils import (
 )
 
 
-async def get_repo_overview(
+async def get_overview(
     ctx: Context,
     data_sources: Optional[list[str]] = None
 ) -> str:
-    """Get high-level overview of repositories including purpose, responsibilities, ubiquitous language, and domain descriptions.
+    """Get high-level overview of data sources including purpose, responsibilities, ubiquitous language, and domain descriptions.
 
-    This tool retrieves domain-focused information about repositories to help users understand
-    the business context and vocabulary of codebases. It returns structured information including:
-    - Purpose: What the repository is for
+    This tool retrieves domain-focused information about data sources (repositories or workspaces) 
+    to help users understand the business context and vocabulary of codebases. It returns structured 
+    information including:
+    - Purpose: What the data source is for
     - Responsibilities: What it does
     - Ubiquitous Language: Domain-specific terminology and concepts
     - Domain(s): Business domains covered with their vocabulary
@@ -34,14 +35,14 @@ async def get_repo_overview(
                      overviews for all available data sources
 
     Returns:
-        XML formatted string containing repository overviews in markdown format
+        XML formatted string containing data source overviews in markdown format
 
     Example:
-        # Get overview for specific repositories
-        result = await get_repo_overview(ctx, ["my-backend-api", "frontend-app"])
+        # Get overview for specific data sources
+        result = await get_overview(ctx, ["my-backend-api", "frontend-app"])
 
-        # Get overviews for all repositories
-        result = await get_repo_overview(ctx)
+        # Get overviews for all data sources
+        result = await get_overview(ctx)
 
         # Example output structure:
         # <repository_overviews>
