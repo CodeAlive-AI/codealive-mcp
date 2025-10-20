@@ -421,7 +421,7 @@ Roo Code reads a JSON settings file similar to Cline.
 {
   "mcpServers": {
     "codealive": {
-      "type": "http",
+      "type": "streamable-http",
       "url": "https://mcp.codealive.ai/api",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY_HERE"
@@ -480,7 +480,7 @@ Add a STDIO extension with:
 {
   "mcpServers": {
     "codealive": {
-      "type": "http",
+      "type": "streamable-http",
       "url": "https://mcp.codealive.ai/api",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY_HERE"
