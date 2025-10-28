@@ -70,9 +70,23 @@ async def codebase_search(
 
         include_content: Whether to include full file content in results (default: false).
 
+                         ⚠️ CRITICAL TWO-STEP WORKFLOW ⚠️
+
+                         When include_content=false (CURRENT repository):
+                         Step 1: codebase_search returns RELEVANT file paths + line numbers
+                         Step 2: You MUST Read() those files at those line numbers
+
+                         ❌ COMMON MISTAKE: Receiving search results then NOT reading the files
+                         ✅ CORRECT BEHAVIOR: Search results are POINTERS - always follow up with Read
+
+                         Search results are HIGHLY RELEVANT matches found by semantic search.
+                         If you receive file paths and line numbers, you MUST read those locations
+                         to get the actual code content. DO NOT ignore or skip search results.
+
                          CRITICAL RULE - When to include content:
                          - CURRENT repository (user's working directory): include_content=false
                            → You have file access via Read tool - get paths only, then read for latest content
+                           → Search gives you WHERE to look, Read gives you WHAT is there
                          - EXTERNAL repositories (not in working directory): include_content=true
                            → You cannot access files - must get content in search results
 
@@ -108,27 +122,40 @@ async def codebase_search(
         Search results as JSON including source info, file paths, line numbers, and code snippets.
 
     Examples:
-        1. Search CURRENT repository (identified by directory name + context):
+        1. Search CURRENT repository (TWO-STEP workflow - ALWAYS follow search with Read):
            # Working in "/Users/bob/codealive-mcp"
            # User asks: "Where is the search tool implemented in this project?"
            # Repo name from get_data_sources: "codealive-mcp"
            # → Name matches directory, user says "this project" → CURRENT
+
+           # STEP 1: Get relevant file locations
            codebase_search(
                query="Where is the search tool implemented?",
                data_sources=["codealive-mcp"],
-               include_content=false  # Current repo - get paths, use Read tool
+               include_content=false  # Current repo - get paths only
            )
-           # Then: Read(file_path="/Users/bob/codealive-mcp/src/tools/search.py")
+           # Returns: {"results": [{"file": "src/tools/search.py", "line": 17, ...}]}
+
+           # STEP 2: MUST READ the files returned in search results
+           # ⚠️ DO NOT SKIP THIS STEP - search results are RELEVANT matches!
+           Read(file_path="/Users/bob/codealive-mcp/src/tools/search.py")
+           # Now you have the actual current content to answer the question
 
         2. Search CURRENT repository (identified by description matching):
            # Working in Python FastMCP project
            # Description: "Python MCP server using FastMCP framework"
            # You've been reading FastMCP code in this directory → CURRENT
+
+           # STEP 1: Search for relevant code
            codebase_search(
                query="How is the lifespan context managed?",
                data_sources=["my-mcp-server"],
                include_content=false  # Description matches observed codebase
            )
+           # Returns: [{"file": "src/server.py", "line": 45, ...}, ...]
+
+           # STEP 2: Read each relevant file from search results
+           Read(file_path="src/server.py")  # Get current content at the relevant lines
 
         3. Search EXTERNAL repository (different service):
            # Working in "frontend-app"
