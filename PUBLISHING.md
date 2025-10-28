@@ -45,7 +45,7 @@ Users can access your MCP server in two ways:
     "command": "docker",
     "args": [
       "run", "--rm", "-i", "-e", "CODEALIVE_API_KEY",
-      "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
+      "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"
     ]
   },
   "env": {
@@ -54,7 +54,7 @@ Users can access your MCP server in two ways:
 }
 ```
 
-> Replace `v0.2.0` with the version being published.
+> Replace `v0.3.0` with the version being published.
 
 ### Option 2: Remote HTTP Endpoint (Cloud)
 ```json

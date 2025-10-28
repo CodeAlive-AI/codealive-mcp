@@ -99,7 +99,7 @@ claude mcp add --transport http codealive https://mcp.codealive.ai/api --header 
 **Option 2: Docker (STDIO)**
 
 ```bash
-claude mcp add codealive-docker /usr/bin/docker run --rm -i -e CODEALIVE_API_KEY=YOUR_API_KEY_HERE ghcr.io/codealive-ai/codealive-mcp:v0.2.0
+claude mcp add codealive-docker /usr/bin/docker run --rm -i -e CODEALIVE_API_KEY=YOUR_API_KEY_HERE ghcr.io/codealive-ai/codealive-mcp:v0.3.0
 ```
 
 Replace `YOUR_API_KEY_HERE` with your actual API key.
@@ -141,7 +141,7 @@ Replace `YOUR_API_KEY_HERE` with your actual API key.
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
+        "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"
       ]
     }
   }
@@ -153,7 +153,7 @@ Replace `YOUR_API_KEY_HERE` with your actual API key.
 <details>
 <summary><b>Codex</b></summary>
 
-OpenAI Codex CLI supports MCP via `~/.codex/config.toml`. Remote HTTP MCP is still evolving; the most reliable way today is to launch CodeAlive via Docker (stdio).
+OpenAI Codex CLI supports MCP via `~/.codex/config.toml`.
 
 **`~/.codex/config.toml` (Docker stdio – recommended)**
 ```toml
@@ -161,12 +161,14 @@ OpenAI Codex CLI supports MCP via `~/.codex/config.toml`. Remote HTTP MCP is sti
 command = "docker"
 args = ["run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"]
+        "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"]
 ```
 
-> If your Codex version advertises support for remote/HTTP transports, you can try an experimental config (may not work on all versions):
+**Experimental: Streamable HTTP (requires experimental_use_rmcp_client)**
+
+> **Note:** Streamable HTTP support requires enabling the experimental Rust MCP client in your Codex configuration.
+
 ```toml
-# Experimental; if supported by your Codex build
 [mcp_servers.codealive]
 url = "https://mcp.codealive.ai/api"
 headers = { Authorization = "Bearer YOUR_API_KEY_HERE" }
@@ -220,7 +222,7 @@ mcpServers:
       - -i
       - -e
       - CODEALIVE_API_KEY=YOUR_API_KEY_HERE
-      - ghcr.io/codealive-ai/codealive-mcp:v0.2.0
+      - ghcr.io/codealive-ai/codealive-mcp:v0.3.0
 ```
 
 </details>
@@ -229,6 +231,8 @@ mcpServers:
 <summary><b>Visual Studio Code with GitHub Copilot</b></summary>
 
 **Option 1: Remote HTTP (Recommended)**
+
+> **Note:** VS Code supports both Streamable HTTP and SSE transports, with automatic fallback to SSE if Streamable HTTP fails.
 
 1. Open Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`)
 2. Run **"MCP: Add Server"**
@@ -263,7 +267,7 @@ Create `.vscode/mcp.json` in your workspace:
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
+        "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"
       ]
     }
   }
@@ -293,7 +297,7 @@ Create `.vscode/mcp.json` in your workspace:
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
+        "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"
       ]
     }
   }
@@ -338,7 +342,7 @@ Create `.vscode/mcp.json` in your workspace:
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
+        "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"
       ]
     }
   }
@@ -401,7 +405,7 @@ Qwen Code supports MCP via `mcpServers` in its `settings.json` and multiple tran
       "command": "docker",
       "args": ["run", "--rm", "-i",
                "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-               "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"]
+               "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"]
     }
   }
 }
@@ -441,7 +445,7 @@ Roo Code reads a JSON settings file similar to Cline.
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
+        "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"
       ]
     }
   }
@@ -466,7 +470,7 @@ Roo Code reads a JSON settings file similar to Cline.
 
 Add a STDIO extension with:
 - **Command:** `docker`
-- **Args:** `run --rm -i -e CODEALIVE_API_KEY=YOUR_API_KEY_HERE ghcr.io/codealive-ai/codealive-mcp:v0.2.0`
+- **Args:** `run --rm -i -e CODEALIVE_API_KEY=YOUR_API_KEY_HERE ghcr.io/codealive-ai/codealive-mcp:v0.3.0`
 
 </details>
 
@@ -500,7 +504,7 @@ Add a STDIO extension with:
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
+        "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"
       ]
     }
   }
@@ -518,7 +522,7 @@ Add a STDIO extension with:
 {
   "mcpServers": {
     "codealive": {
-      "type": "http",
+      "type": "streamable-http",
       "serverUrl": "https://mcp.codealive.ai/api",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY_HERE"
@@ -528,34 +532,45 @@ Add a STDIO extension with:
 }
 ```
 
-> **Note:** Product name is Windsurf.
-
 </details>
 
 <details>
 <summary><b>Kiro</b></summary>
+
+> **Note:** Kiro does not yet support remote MCP servers natively. Use the `mcp-remote` workaround to connect to remote HTTP servers.
+
+**Prerequisites:**
+```bash
+npm install -g mcp-remote
+```
 
 **UI path:** Settings → MCP → Add Server
 
 **Global file:** `~/.kiro/settings/mcp.json`
 **Workspace file:** `.kiro/settings/mcp.json`
 
-**HTTP**
+**Remote HTTP (via mcp-remote workaround)**
 ```json
 {
   "mcpServers": {
     "codealive": {
-      "type": "http",
-      "url": "https://mcp.codealive.ai/api",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY_HERE"
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.codealive.ai/api",
+        "--header",
+        "Authorization: Bearer ${CODEALIVE_API_KEY}"
+      ],
+      "env": {
+        "CODEALIVE_API_KEY": "YOUR_API_KEY_HERE"
       }
     }
   }
 }
 ```
 
-**STDIO (Docker)**
+**Docker (STDIO)**
 ```json
 {
   "mcpServers": {
@@ -565,7 +580,7 @@ Add a STDIO extension with:
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
+        "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"
       ]
     }
   }
@@ -604,7 +619,7 @@ Add a STDIO extension with:
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
+        "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"
       ]
     }
   }
@@ -645,7 +660,7 @@ Add a STDIO extension with:
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.2.0"
+        "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"
       ]
     }
   }
