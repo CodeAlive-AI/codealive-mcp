@@ -19,7 +19,7 @@ async def codebase_search(
     query: str,
     data_sources: Optional[Union[str, List[str]]] = None,
     mode: str = "auto",
-    include_content: bool = False
+    include_content: bool = False,
 ) -> str:
     """
     Use `codebase_search` tool to search for code in the codebase.

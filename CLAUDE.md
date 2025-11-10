@@ -41,6 +41,47 @@ docker build -t codealive-mcp .
 docker run --rm -i -e CODEALIVE_API_KEY=your_key_here codealive-mcp
 ```
 
+### Testing
+
+#### Quick Smoke Test
+After making local changes, quickly verify everything works:
+```bash
+# Using make (recommended)
+make smoke-test
+
+# Or directly
+python smoke_test.py
+
+# With valid API key for full testing
+CODEALIVE_API_KEY=your_key python smoke_test.py
+```
+
+The smoke test:
+- ✓ Verifies server starts and connects via stdio
+- ✓ Checks all tools are registered correctly
+- ✓ Tests each tool responds appropriately
+- ✓ Validates parameter handling
+- ✓ Runs in ~5 seconds
+
+#### Unit Tests
+Run comprehensive unit tests with pytest:
+```bash
+# Using make
+make unit-test
+
+# Or directly
+pytest src/tests/ -v
+
+# With coverage
+pytest src/tests/ -v --cov=src
+```
+
+#### All Tests
+Run both smoke tests and unit tests:
+```bash
+make test
+```
+
 ## Architecture
 
 This is a Model Context Protocol (MCP) server that provides AI clients with access to CodeAlive's semantic code search and analysis capabilities.
@@ -59,6 +100,7 @@ This is a Model Context Protocol (MCP) server that provides AI clients with acce
 3. **Streaming Support**: Implements streaming chat completions with proper chunk parsing
 4. **Environment Configuration**: Supports both .env files and command-line arguments with precedence
 5. **Error Handling**: Comprehensive HTTP status code handling with user-friendly error messages
+6. **N8N Middleware**: Strips extra parameters (sessionId, action, chatInput, toolCallId) from n8n tool calls before validation
 
 ### Data Flow
 
@@ -87,9 +129,12 @@ The server is designed to integrate with:
 - Cursor (via MCP settings panel)
 - VS Code with GitHub Copilot (via settings.json)
 - Continue (via config.yaml)
+- n8n (via AI Agent node with MCP tools)
 - Any MCP-compatible AI client
 
-Key integration consideration: AI clients should use `get_data_sources` first to discover available repositories/workspaces, then use those IDs for targeted search and chat operations.
+Key integration considerations:
+- AI clients should use `get_data_sources` first to discover available repositories/workspaces, then use those IDs for targeted search and chat operations
+- **n8n Integration**: The server includes middleware to automatically strip n8n's extra parameters (sessionId, action, chatInput, toolCallId) from tool calls, so n8n works out of the box without any special configuration
 
 ## Publishing and Releases
 

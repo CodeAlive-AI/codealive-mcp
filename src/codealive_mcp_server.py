@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 # Import core components
 from core import codealive_lifespan, setup_debug_logging
+from middleware import N8NRemoveParametersMiddleware
 from tools import codebase_consultant, get_data_sources, codebase_search
 
 # Initialize FastMCP server with lifespan and enhanced system instructions
@@ -89,6 +90,10 @@ mcp = FastMCP(
     """,
     lifespan=codealive_lifespan
 )
+
+# Register middleware to handle n8n extra parameters
+# This must be registered BEFORE tools to intercept tool calls
+mcp.add_middleware(N8NRemoveParametersMiddleware())
 
 
 # Add health check endpoint for AWS ALB

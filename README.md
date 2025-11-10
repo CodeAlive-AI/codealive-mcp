@@ -6,7 +6,7 @@
 
 **Connect your AI assistant to CodeAlive's powerful code understanding platform in seconds!**
 
-This MCP (Model Context Protocol) server enables AI clients like Claude Code, Cursor, Claude Desktop, Continue, VS Code (GitHub Copilot), Cline, Codex, OpenCode, Qwen Code, Gemini CLI, Roo Code, Goose, Kilo Code, Windsurf, Kiro, Qoder, and Amazon Q Developer to access CodeAlive's advanced semantic code search and codebase interaction features.
+This MCP (Model Context Protocol) server enables AI clients like Claude Code, Cursor, Claude Desktop, Continue, VS Code (GitHub Copilot), Cline, Codex, OpenCode, Qwen Code, Gemini CLI, Roo Code, Goose, Kilo Code, Windsurf, Kiro, Qoder, n8n, and Amazon Q Developer to access CodeAlive's advanced semantic code search and codebase interaction features.
 
 ## What is CodeAlive?
 
@@ -749,6 +749,33 @@ See [JetBrains MCP Documentation](https://www.jetbrains.com/help/ai-assistant/mc
 
 </details>
 
+<details>
+<summary><b>n8n</b></summary>
+
+**Using AI Agent Node with MCP Tools**
+
+1. Add an **AI Agent** node to your workflow
+2. Configure the agent with MCP tools:
+   ```
+   Server URL: https://mcp.codealive.ai/api
+   Authorization Header: Bearer YOUR_API_KEY_HERE
+   ```
+
+3. The server automatically handles n8n's extra parameters (sessionId, action, chatInput, toolCallId)
+4. Use the three available tools:
+   - `get_data_sources` - List available repositories
+   - `codebase_search` - Search code semantically
+   - `codebase_consultant` - Ask questions about code
+
+**Example Workflow:**
+```
+Trigger → AI Agent (with CodeAlive MCP tools) → Process Response
+```
+
+**Note:** n8n middleware is built-in, so no special configuration is needed. The server will automatically strip n8n's extra parameters before processing tool calls.
+
+</details>
+
 ---
 
 ## 🔧 Advanced: Local Development
@@ -809,6 +836,34 @@ python src/codealive_mcp_server.py --transport http --host localhost --port 8000
 # Test health endpoint
 curl http://localhost:8000/health
 ```
+
+### Testing Your Local Installation
+
+After making changes, quickly verify everything works:
+
+```bash
+# Quick smoke test (recommended)
+make smoke-test
+
+# Or run directly
+python smoke_test.py
+
+# With your API key for full testing
+CODEALIVE_API_KEY=your_key python smoke_test.py
+
+# Run unit tests
+make unit-test
+
+# Run all tests
+make test
+```
+
+The smoke test verifies:
+- Server starts and connects correctly
+- All tools are registered
+- Each tool responds appropriately
+- Parameter validation works
+- Runs in ~5 seconds
 
 ### Smithery Installation
 

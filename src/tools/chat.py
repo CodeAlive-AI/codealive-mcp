@@ -19,7 +19,7 @@ async def codebase_consultant(
     ctx: Context,
     question: str,
     data_sources: Optional[Union[str, List[str]]] = None,
-    conversation_id: Optional[str] = None
+    conversation_id: Optional[str] = None,
 ) -> str:
     """
     Consult with an AI expert about your codebase for insights, explanations, and architectural guidance.
