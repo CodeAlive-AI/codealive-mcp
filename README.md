@@ -47,6 +47,7 @@ After setup, try these commands with your AI assistant:
 *   [Available Tools](#-available-tools)
 *   [Usage Examples](#-usage-examples)
 *   [Troubleshooting](#-troubleshooting)
+*   [Publishing to MCP Registry](#-publishing-to-mcp-registry)
 *   [License](#-license)
 
 ## 🚀 Quick Start (Remote)
@@ -1001,6 +1002,12 @@ Replace `your-server:8000` with your actual deployment URL and port.
 
 - 📧 Email: support@codealive.ai
 - 🐛 Issues: [GitHub Issues](https://github.com/CodeAlive-AI/codealive-mcp/issues)
+
+---
+
+## 📦 Publishing to MCP Registry
+
+For maintainers: see [DEPLOYMENT.md](DEPLOYMENT.md) for instructions on publishing new versions to the MCP Registry.
 
 ---
 

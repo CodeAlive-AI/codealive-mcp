@@ -1,5 +1,5 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.CodeAlive-AI/codealive-mcp",
   "version": "0.4.7",
   "description": "Semantic code search and analysis from CodeAlive for AI assistants and agents.",
@@ -33,8 +33,7 @@
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/codealive-ai/codealive-mcp:0.4.6",
-      "version": "0.4.6",
+      "identifier": "ghcr.io/codealive-ai/codealive-mcp:0.4.7",
       "runtimeHint": "docker",
       "transport": {
         "type": "stdio"
