@@ -30,6 +30,7 @@ async def handle_api_error(
             401: "Authentication error (401): Invalid API key or insufficient permissions",
             403: "Authorization error (403): You don't have permission to access this resource",
             404: "Not found error (404): The requested resource could not be found",
+            422: "Data source not ready (422): The requested data source is being processed. Please try again later.",
             429: "Rate limit exceeded (429): Too many requests, please try again later",
             500: f"Server error (500): The CodeAlive service encountered an issue",
             502: "Bad gateway (502): The CodeAlive service is temporarily unavailable",
