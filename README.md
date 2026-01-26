@@ -683,7 +683,7 @@ npm install -g mcp-remote
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY_HERE"
       },
-      "timeout": 60000
+      "timeout": 310000
     }
   }
 }

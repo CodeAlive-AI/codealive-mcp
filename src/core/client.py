@@ -68,7 +68,7 @@ async def codealive_lifespan(server: FastMCP) -> AsyncIterator[CodeAliveContext]
                 "Authorization": f"Bearer {config.api_key}",
                 "Content-Type": "application/json",
             },
-            timeout=60.0,
+            timeout=300.0,
             verify=config.verify_ssl,
         )
     else:
@@ -78,7 +78,7 @@ async def codealive_lifespan(server: FastMCP) -> AsyncIterator[CodeAliveContext]
             headers={
                 "Content-Type": "application/json",
             },
-            timeout=60.0,
+            timeout=300.0,
             verify=config.verify_ssl,
         )
 
