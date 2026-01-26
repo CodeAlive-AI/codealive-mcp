@@ -4,6 +4,8 @@ from typing import Optional
 import httpx
 from fastmcp import Context
 
+from core.config import REQUEST_TIMEOUT_SECONDS
+
 
 async def handle_api_error(
     ctx: Context,
@@ -21,6 +23,16 @@ async def handle_api_error(
     Returns:
         User-friendly error message string
     """
+    # Handle timeout errors first
+    if isinstance(error, httpx.TimeoutException):
+        timeout_minutes = int(REQUEST_TIMEOUT_SECONDS // 60)
+        error_msg = (
+            f"Request timeout during {operation}: The CodeAlive service did not respond within {timeout_minutes} minutes. "
+            "This may happen due to temporarily overloaded LLMs. Please try again later."
+        )
+        await ctx.error(error_msg)
+        return f"Error: {error_msg}"
+
     if isinstance(error, httpx.HTTPStatusError):
         error_code = error.response.status_code
         error_detail = error.response.text

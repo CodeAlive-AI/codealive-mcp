@@ -1,7 +1,7 @@
 """Core components for CodeAlive MCP server."""
 
 from .client import CodeAliveContext, get_api_key_from_context, codealive_lifespan
-from .config import Config
+from .config import Config, REQUEST_TIMEOUT_SECONDS
 from .logging import setup_debug_logging, log_api_request, log_api_response
 
 __all__ = [
@@ -9,6 +9,7 @@ __all__ = [
     'get_api_key_from_context',
     'codealive_lifespan',
     'Config',
+    'REQUEST_TIMEOUT_SECONDS',
     'setup_debug_logging',
     'log_api_request',
     'log_api_response',

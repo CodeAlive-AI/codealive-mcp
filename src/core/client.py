@@ -9,7 +9,7 @@ import httpx
 from fastmcp import Context, FastMCP
 from fastmcp.server.dependencies import get_http_headers
 
-from .config import Config
+from .config import Config, REQUEST_TIMEOUT_SECONDS
 
 
 @dataclass
@@ -68,7 +68,7 @@ async def codealive_lifespan(server: FastMCP) -> AsyncIterator[CodeAliveContext]
                 "Authorization": f"Bearer {config.api_key}",
                 "Content-Type": "application/json",
             },
-            timeout=300.0,
+            timeout=REQUEST_TIMEOUT_SECONDS,
             verify=config.verify_ssl,
         )
     else:
@@ -78,7 +78,7 @@ async def codealive_lifespan(server: FastMCP) -> AsyncIterator[CodeAliveContext]
             headers={
                 "Content-Type": "application/json",
             },
-            timeout=300.0,
+            timeout=REQUEST_TIMEOUT_SECONDS,
             verify=config.verify_ssl,
         )
 

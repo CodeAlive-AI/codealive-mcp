@@ -4,6 +4,9 @@ import os
 from dataclasses import dataclass
 from typing import Optional
 
+# Request timeout in seconds (5 minutes)
+REQUEST_TIMEOUT_SECONDS = 300.0
+
 
 @dataclass
 class Config:
