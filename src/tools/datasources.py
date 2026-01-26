@@ -9,7 +9,7 @@ from fastmcp import Context
 from core import CodeAliveContext, get_api_key_from_context, log_api_request, log_api_response
 from utils import handle_api_error
 
-
+# alive_only refers to ready_only. leaved as is for backward compatibility.
 async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
     """
     **CALL THIS FIRST**: Gets all available data sources (repositories and workspaces) for the user's account.
@@ -21,7 +21,7 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
     and can be used for code search and chat completions.
 
     Args:
-        alive_only: If True (default), returns only data sources in "Alive" state ready for use with chat.
+        alive_only: If True (default), returns only data sources that are fully processed and ready for use.
                     If False, returns all data sources regardless of processing state.
 
     Returns:
@@ -45,7 +45,7 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
            get_data_sources(alive_only=false)
 
     Note:
-        Data sources in "Alive" state are fully processed and ready for search and chat.
+        Ready data sources are fully processed and available for search and chat.
         Other states include "New" (just added), "Processing" (being indexed),
         "Failed" (indexing failed), etc.
 
@@ -81,8 +81,8 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
     try:
         api_key = get_api_key_from_context(ctx)
 
-        # Determine the endpoint based on alive_only flag
-        endpoint = "/api/datasources/alive" if alive_only else "/api/datasources/all"
+        # Determine the endpoint based on ready_only flag
+        endpoint = "/api/datasources/ready" if alive_only else "/api/datasources/all"
 
         headers = {"Authorization": f"Bearer {api_key}"}
 

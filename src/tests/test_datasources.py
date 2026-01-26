@@ -74,7 +74,7 @@ async def test_get_data_sources_removes_repository_ids_from_workspaces(mock_get_
 
     # Verify API was called correctly
     mock_client.get.assert_called_once_with(
-        "/api/datasources/alive",
+        "/api/datasources/ready",
         headers={"Authorization": "Bearer test-key"}
     )
 
