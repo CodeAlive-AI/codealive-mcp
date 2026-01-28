@@ -96,7 +96,7 @@ class SmokeTest:
 
         # Prepare server parameters
         server_params = StdioServerParameters(
-            command="python",
+            command=sys.executable,
             args=[server_script],
             env={
                 **os.environ,

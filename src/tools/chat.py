@@ -131,34 +131,42 @@ async def codebase_consultant(
         full_response = ""
         conversation_metadata = {}
 
-        async for line in response.aiter_lines():
-            if not line:
-                continue
+        try:
+            async for line in response.aiter_lines():
+                if not line:
+                    continue
 
-            # Handle metadata events
-            if line.startswith("event: message"):
-                continue
+                # Handle metadata events
+                if line.startswith("event: message"):
+                    continue
 
-            if line.startswith("data: "):
-                data = line[6:]  # Remove "data: " prefix
-                if data == "[DONE]":
-                    break
-                try:
-                    chunk = json.loads(data)
+                if line.startswith("data: "):
+                    data = line[6:]  # Remove "data: " prefix
+                    if data == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data)
 
-                    # Capture metadata with conversation ID
-                    if chunk.get("event") == "metadata" and "conversationId" in chunk:
-                        conversation_metadata = chunk
-                        await ctx.info(f"Conversation ID: {chunk['conversationId']}")
-                        continue
+                        # Capture metadata with conversation ID and message ID
+                        if chunk.get("event") == "metadata":
+                            conv_id = chunk.get("conversationId")
+                            msg_id = chunk.get("messageId")
+                            if conv_id or msg_id:
+                                conversation_metadata = chunk
+                                await ctx.info(f"Conversation ID: {conv_id}, Message ID: {msg_id}")
+                            continue
 
-                    # Process content chunks
-                    if "choices" in chunk and len(chunk["choices"]) > 0:
-                        delta = chunk["choices"][0].get("delta", {})
-                        if delta and "content" in delta and delta["content"] is not None:
-                            full_response += delta["content"]
-                except json.JSONDecodeError:
-                    pass
+                        # Process content chunks
+                        if "choices" in chunk and len(chunk["choices"]) > 0:
+                            delta = chunk["choices"][0].get("delta", {})
+                            if delta and "content" in delta and delta["content"] is not None:
+                                full_response += delta["content"]
+                    except json.JSONDecodeError:
+                        pass
+        except Exception as streaming_error:
+            # Include conversation and message IDs in streaming error response
+            error_context = _format_metadata_context(conversation_metadata)
+            return f"Error during streaming: {str(streaming_error)} {error_context}"
 
         # Append conversation ID info to the response if we got one and it's a new conversation
         if conversation_metadata.get("conversationId") and not conversation_id:
@@ -172,3 +180,19 @@ async def codebase_consultant(
         if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 404:
             return "Error: Not found (404): The requested resource could not be found. Check your conversation_id or data_sources."
         return error_msg
+
+
+def _format_metadata_context(metadata: Dict) -> str:
+    """Format conversation metadata for error messages."""
+    if not metadata:
+        return ""
+
+    parts = []
+    if metadata.get("conversationId"):
+        parts.append(f"Conversation ID: {metadata['conversationId']}")
+    if metadata.get("messageId"):
+        parts.append(f"Message ID: {metadata['messageId']}")
+
+    if parts:
+        return f"\n\n---\n**Debug Info:**\n" + "\n".join(f"- {p}" for p in parts)
+    return ""
