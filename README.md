@@ -41,11 +41,18 @@ After setup, try these commands with your AI assistant:
 
 For an even better experience, install the [CodeAlive Agent Skill](https://github.com/CodeAlive-AI/codealive-skills) alongside the MCP server. The MCP server gives your agent access to CodeAlive's tools; the skill teaches it the best workflows and query patterns to use them effectively.
 
+**For most agents** (Cursor, Copilot, Gemini CLI, Codex, and [30+ others](https://agentskills.io/)) — install the skill:
+
 ```bash
 npx skills add CodeAlive-AI/codealive-skills@codealive-context-engine
 ```
 
-Works with Claude Code, Cursor, GitHub Copilot, Gemini CLI, Codex, and [30+ other agents](https://agentskills.io/).
+**For Claude Code** — install the plugin (recommended), which includes the skill plus Claude-specific enhancements:
+
+```
+/plugin marketplace add CodeAlive-AI/codealive-skills
+/plugin install codealive@codealive-marketplace
+```
 
 ## Table of Contents
 
