@@ -37,8 +37,19 @@ After setup, try these commands with your AI assistant:
 - *"Find authentication code in the user service"* → Uses `codebase_search`
 - *"Explain how the payment flow works in this codebase"* → Uses `codebase_consultant`
 
+## 📚 Agent Skill
+
+For an even better experience, install the [CodeAlive Agent Skill](https://github.com/CodeAlive-AI/codealive-skills) alongside the MCP server. The MCP server gives your agent access to CodeAlive's tools; the skill teaches it the best workflows and query patterns to use them effectively.
+
+```bash
+npx skills add CodeAlive-AI/codealive-skills@codealive-context-engine
+```
+
+Works with Claude Code, Cursor, GitHub Copilot, Gemini CLI, Codex, and [30+ other agents](https://agentskills.io/).
+
 ## Table of Contents
 
+*   [Agent Skill](#-agent-skill)
 *   [Quick Start (Remote)](#-quick-start-remote)
 *   [AI Client Integrations](#-ai-client-integrations)
 *   [Advanced: Local Development](#-advanced-local-development)
