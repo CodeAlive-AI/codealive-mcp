@@ -33,7 +33,7 @@
   "packages": [
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/codealive-ai/codealive-mcp:0.5.1",
+      "identifier": "ghcr.io/codealive-ai/codealive-mcp:latest",
       "runtimeHint": "docker",
       "transport": {
         "type": "stdio"
