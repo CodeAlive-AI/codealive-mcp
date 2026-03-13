@@ -19,185 +19,54 @@ async def codebase_search(
     query: str,
     data_sources: Optional[Union[str, List[str]]] = None,
     mode: str = "auto",
-    include_content: bool = False,
+    description_detail: str = "short",
 ) -> str:
     """
-    Use `codebase_search` tool to search for code in the codebase.
+    Semantic code search across indexed repositories. Returns file paths, descriptions, and identifiers.
 
-    **PREREQUISITE**: You MUST call `get_data_sources` FIRST to discover available data source names,
-    UNLESS the user has explicitly provided specific data source names (e.g., "search in my-repo").
+    **PREREQUISITE**: Call `get_data_sources` FIRST to discover data source names,
+    UNLESS the user has explicitly provided specific names (e.g., "search in my-repo").
 
-    Semantic search (`codebase_search`) is your MAIN exploration tool for understanding the
-    indexed codebase (typically main/master branch or the specific branch shown in data sources).
+    **WORKFLOW** (search → review → get content):
+      1. Call `codebase_search` → returns XML with paths, descriptions, identifiers
+      2. Review descriptions to decide which results matter
+      3. Get full content:
+         - Local repos (in your working directory): use `Read()` on the file paths
+         - External repos (not locally accessible): use `fetch_artifacts` with identifiers
 
-    ALWAYS prefer using `codebase_search` over grep/find for initial code exploration because:
-    - It's much faster and more efficient for discovering relevant code
-    - It understands semantic meaning, not just text patterns
-    - It searches the indexed repository state with full context
-
-    IMPORTANT: This searches the INDEXED version of repositories (check branch in get_data_sources),
-    NOT the current local files. Use grep when you specifically need to:
-    - Search uncommitted local changes
-    - Verify recent modifications
-    - Check files on a different branch than the indexed one
-
-    This tool excels at natural-language questions and intent-driven queries like:
-      • "What is the authentication flow?"
-      • "Where is the user registration logic implemented?"
-      • "How do services communicate with the billing API?"
-      • "Where is rate limiting handled?"
-      • "Show me how we validate JWTs."
-
-    You can include function/class names for more targeted results.
+    **WHEN TO USE vs local tools:**
+      USE `codebase_search`: natural-language questions, semantic exploration, cross-repo patterns
+      USE grep/find: uncommitted local changes, exact keyword match, non-indexed branches
 
     Args:
-        query: A natural-language description of what you're looking for.
-               Prefer questions/phrases over template strings.
+        query: Natural-language description of what you're looking for.
                Examples: "What initializes the database connection?",
                          "Where do we parse OAuth callbacks?",
                          "user registration controller"
 
-        data_sources: List of data source names to search in (required).
-                      Can be workspace names (search all repositories in the workspace)
-                      or individual repository names for targeted searches.
+        data_sources: Data source names to search (from `get_data_sources`).
+                      Can be workspace names or individual repository names.
                       Example: ["enterprise-platform", "payments-team"]
 
         mode: Search mode (case-insensitive):
               - "auto": (Default, recommended) Adaptive semantic search.
-              - "fast": Lightweight/lexical pass; quickest for obvious matches.
+              - "fast": Lightweight lexical pass; for known terms/exact names.
               - "deep": Exhaustive semantic exploration; use sparingly for hard,
                         cross-cutting questions.
 
-        include_content: Whether to include full file content in results (default: false).
-
-                         ⚠️ CRITICAL TWO-STEP WORKFLOW ⚠️
-
-                         When include_content=false (CURRENT repository):
-                         Step 1: codebase_search returns RELEVANT file paths + line numbers
-                         Step 2: You MUST Read() those files at those line numbers
-
-                         ❌ COMMON MISTAKE: Receiving search results then NOT reading the files
-                         ✅ CORRECT BEHAVIOR: Search results are POINTERS - always follow up with Read
-
-                         Search results are HIGHLY RELEVANT matches found by semantic search.
-                         If you receive file paths and line numbers, you MUST read those locations
-                         to get the actual code content. DO NOT ignore or skip search results.
-
-                         CRITICAL RULE - When to include content:
-                         - CURRENT repository (user's working directory): include_content=false
-                           → You have file access via Read tool - get paths only, then read for latest content
-                           → Search gives you WHERE to look, Read gives you WHAT is there
-                         - EXTERNAL repositories (not in working directory): include_content=true
-                           → You cannot access files - must get content in search results
-
-                         How to identify CURRENT vs EXTERNAL repositories (use ALL available clues):
-
-                         1. **Repository name matching**:
-                            - Does the repo name match your current working directory name?
-                            - Example: Working in "/Users/bob/my-app" and repo name is "my-app" → likely CURRENT
-
-                         2. **Repository description analysis**:
-                            - Does the description match what you've observed in the codebase?
-                            - Check tech stack, architecture, features mentioned in description
-                            - Example: Description says "Python FastAPI server" and you see FastAPI files → likely CURRENT
-
-                         3. **User's question context**:
-                            - Does user say "this repo", "our code", "the current project", "my app"? → CURRENT
-                            - Does user reference "the X service", "external repo", "other project"? → EXTERNAL
-
-                         4. **URL matching** (when available):
-                            - Compare repo URL from get_data_sources with git remote URL
-                            - Note: May not always be available or matchable
-
-                         5. **Working context**:
-                            - Have you been reading/editing files that match this repo's structure?
-                            - Do file paths in your recent operations align with this repository?
-
-                         **Default heuristic when uncertain**:
-                         - If user is asking about code in their working directory → CURRENT (include_content=false)
-                         - If user is asking about a different/external service → EXTERNAL (include_content=true)
-                         - When truly ambiguous, prefer include_content=false for repos that seem related to current work
+        description_detail: Detail level for result descriptions (default: "short").
+                            - "short": Brief summary of each result.
+                            - "full": Richer description — use when deciding which results to fetch.
 
     Returns:
-        Search results as JSON including source info, file paths, line numbers, and code snippets.
-
-    Examples:
-        1. Search CURRENT repository (TWO-STEP workflow - ALWAYS follow search with Read):
-           # Working in "/Users/bob/codealive-mcp"
-           # User asks: "Where is the search tool implemented in this project?"
-           # Repo name from get_data_sources: "codealive-mcp"
-           # → Name matches directory, user says "this project" → CURRENT
-
-           # STEP 1: Get relevant file locations
-           codebase_search(
-               query="Where is the search tool implemented?",
-               data_sources=["codealive-mcp"],
-               include_content=false  # Current repo - get paths only
-           )
-           # Returns: {"results": [{"file": "src/tools/search.py", "line": 17, ...}]}
-
-           # STEP 2: MUST READ the files returned in search results
-           # ⚠️ DO NOT SKIP THIS STEP - search results are RELEVANT matches!
-           Read(file_path="/Users/bob/codealive-mcp/src/tools/search.py")
-           # Now you have the actual current content to answer the question
-
-        2. Search CURRENT repository (identified by description matching):
-           # Working in Python FastMCP project
-           # Description: "Python MCP server using FastMCP framework"
-           # You've been reading FastMCP code in this directory → CURRENT
-
-           # STEP 1: Search for relevant code
-           codebase_search(
-               query="How is the lifespan context managed?",
-               data_sources=["my-mcp-server"],
-               include_content=false  # Description matches observed codebase
-           )
-           # Returns: [{"file": "src/server.py", "line": 45, ...}, ...]
-
-           # STEP 2: Read each relevant file from search results
-           Read(file_path="src/server.py")  # Get current content at the relevant lines
-
-        3. Search EXTERNAL repository (different service):
-           # Working in "frontend-app"
-           # User asks: "How does the payments service handle refunds?"
-           # Repo: "payments-service" → Different service → EXTERNAL
-           codebase_search(
-               query="How are refunds processed?",
-               data_sources=["payments-service"],
-               include_content=true  # External service - need content
-           )
-
-        4. Search EXTERNAL workspace (multiple external repos):
-           # User asks about backend services, but you're in frontend repo
-           codebase_search(
-               query="How do microservices authenticate API calls?",
-               data_sources=["backend-workspace"],
-               include_content=true  # External workspace
-           )
-
-        5. Ambiguous case - use context:
-           # User: "Check how authentication works in our API"
-           # Working in "api-server" directory
-           # Repo name: "company-api" (slightly different but plausible match)
-           # Description: "REST API server with authentication"
-           # → User says "our API", description matches → Likely CURRENT
-           codebase_search(
-               query="authentication implementation",
-               data_sources=["company-api"],
-               include_content=false  # Context suggests current repo
-           )
+        XML with search results. Each result includes path, line numbers, kind, identifier,
+        contentByteSize, and description. Use identifiers with `fetch_artifacts` to get
+        full content for external repos, or `Read()` for local files.
 
     Note:
-        - At least one data source name must be provided
-        - All data sources must be in "Alive" state
-        - The API key must have access to the specified data sources
-        - Prefer natural-language questions; templates are unnecessary.
-        - Start with "auto" for best semantic results; escalate to "deep" only if needed.
-        - If you know precise symbols (functions/classes), include them to narrow scope.
-
-        CRITICAL: Always call get_data_sources() first to get repository names, descriptions, and URLs.
-        Then use the heuristics above to determine include_content for each search.
-        The description field is especially valuable for matching repositories to your working context.
+        - Searches the INDEXED version of repositories, NOT local files
+        - Start with "auto" mode; escalate to "deep" only if needed
+        - Always call get_data_sources() first to get available repository names
     """
     context: CodeAliveContext = ctx.request_context.lifespan_context
 
@@ -225,11 +94,18 @@ async def codebase_search(
         else:
             await ctx.info(f"Searching for '{query}' using API key's default data source with {normalized_mode} mode")
 
+        # Map description_detail to API enum values
+        detail_map = {"short": "Short", "full": "Full"}
+        normalized_detail = detail_map.get(
+            (description_detail or "short").lower(), "Short"
+        )
+
         # Prepare query parameters as a list of tuples to support multiple values for Names
         params = [
             ("Query", query),
             ("Mode", normalized_mode),
-            ("IncludeContent", "true" if include_content else "false")
+            ("IncludeContent", "false"),
+            ("DescriptionDetail", normalized_detail),
         ]
 
         if data_source_names and len(data_source_names) > 0:
@@ -259,7 +135,7 @@ async def codebase_search(
         search_results = response.json()
 
         # Transform the response to XML format for better LLM processing
-        xml_content = transform_search_response_to_xml(search_results, include_content)
+        xml_content = transform_search_response_to_xml(search_results)
 
         # Return XML string directly
         return xml_content

@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 # Import core components
 from core import codealive_lifespan, setup_debug_logging
 from middleware import N8NRemoveParametersMiddleware
-from tools import codebase_consultant, get_data_sources, codebase_search
+from tools import codebase_consultant, get_data_sources, fetch_artifacts, codebase_search
 
 # Initialize FastMCP server with lifespan and enhanced system instructions
 mcp = FastMCP(
@@ -41,10 +41,13 @@ mcp = FastMCP(
     - Answer questions about code implementation details
     - Integrate with local git repositories for seamless code exploration
 
-    When working with a codebase:
+    When working with a codebase, follow this workflow:
     1. First use `get_data_sources` to identify available repositories and workspaces
-    2. Then use `codebase_search` to find relevant files and code snippets
-    3. Finally, use `chat_completions` for in-depth analysis of the code
+    2. Use `codebase_search` to find relevant files — returns paths, descriptions, and identifiers
+    3. To get full content:
+       - For repos in your working directory: use `Read()` on the local files
+       - For external repos: use `fetch_artifacts` with identifiers from search results
+    4. Use `codebase_consultant` for in-depth analysis and synthesized answers
 
     For effective code exploration:
     - Start with broad queries to understand the overall structure
@@ -52,24 +55,8 @@ mcp = FastMCP(
     - Combine natural language with code patterns in your queries
     - Always use "auto" search mode by default; it intelligently selects the appropriate search depth
     - IMPORTANT: Only use "deep" search mode for very complex conceptual queries as it's resource-intensive
+    - Use `description_detail="full"` in search when you need richer descriptions before fetching content
     - Remember that context from previous messages is maintained in the same conversation
-
-    CRITICAL - include_content parameter usage:
-    You MUST intelligently determine if searching CURRENT or EXTERNAL repositories:
-
-    - CURRENT repository (user's working directory): include_content=false
-      * You have file access → Get paths from search, then use Read tool for latest content
-    - EXTERNAL repositories (not in working directory): include_content=true
-      * No file access → Must include content in search results
-
-    Use these heuristics to identify CURRENT vs EXTERNAL (combine multiple signals):
-    1. Repository/directory name matching (e.g., working in "my-app", repo named "my-app")
-    2. Description matching observed codebase (tech stack, architecture, features)
-    3. User's language ("this repo", "our code" = CURRENT; "the X service" = EXTERNAL)
-    4. URL matching with git remote (when available)
-    5. Working context (files you've been reading/editing match this repo)
-
-    When uncertain, use context: Is user asking about their current work or a different service?
 
     Flexible data source usage:
     - You can use a workspace name as a single data source to search or chat across all its repositories at once
@@ -111,6 +98,7 @@ async def health_check(request: Request) -> JSONResponse:
 mcp.tool()(codebase_consultant)
 mcp.tool()(get_data_sources)
 mcp.tool()(codebase_search)
+mcp.tool()(fetch_artifacts)
 
 
 def main():

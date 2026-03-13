@@ -133,7 +133,7 @@ class SmokeTest:
             result = await self.session.list_tools()
             tools = result.tools
 
-            expected_tools = {"codebase_consultant", "get_data_sources", "codebase_search"}
+            expected_tools = {"codebase_consultant", "get_data_sources", "codebase_search", "fetch_artifacts"}
             actual_tools = {tool.name for tool in tools}
 
             if expected_tools == actual_tools:
@@ -187,7 +187,7 @@ class SmokeTest:
                 "query": "test query",
                 "data_sources": ["test-repo"],
                 "mode": "auto",
-                "include_content": False
+                "description_detail": "short"
             })
 
             if result.isError:
@@ -248,7 +248,7 @@ class SmokeTest:
                 "query": "",  # Empty query should fail
                 "data_sources": ["test"],
                 "mode": "auto",
-                "include_content": False
+                "description_detail": "short"
             })
 
             # Should get an error about empty query

@@ -20,20 +20,22 @@ class TestXMLTransformer:
                         "path": "path/auth.py",
                         "range": {"start": {"line": 10}, "end": {"line": 25}}
                     },
-                    "content": "def authenticate_user(username, password):\n    # Auth logic\n    return True"
+                    "description": "Authenticates a user with username and password",
+                    "contentByteSize": 1234
                 },
                 {
                     "kind": "Chunk",
                     "identifier": "owner/repo::path/auth.py::chunk1",
                     "score": 0.85,
                     "location": {"path": "path/auth.py"},
-                    "snippet": "# Authentication module"
+                    "description": "Authentication module header"
                 },
                 {
                     "kind": "File",
                     "identifier": "owner/repo::path/auth.py",
                     "score": 0.75,
-                    "location": {"path": "path/auth.py"}
+                    "location": {"path": "path/auth.py"},
+                    "contentByteSize": 5678
                 },
                 {
                     "kind": "Symbol",
@@ -43,7 +45,8 @@ class TestXMLTransformer:
                         "path": "config/security.py",
                         "range": {"start": {"line": 5}, "end": {"line": 8}}
                     },
-                    "content": "AUTH_PROVIDERS = [\n    'local',\n    'oauth2'\n]"
+                    "description": "List of configured authentication providers",
+                    "contentByteSize": 456
                 },
                 {
                     "kind": "Folder",
@@ -55,22 +58,14 @@ class TestXMLTransformer:
         }
 
     def test_xml_without_content(self, sample_search_response):
-        """Test XML optimization without content."""
-        result = transform_search_response_to_xml(sample_search_response, include_content=False)
+        """Test XML output with descriptions, identifiers, and contentByteSize."""
+        result = transform_search_response_to_xml(sample_search_response)
 
-        # Should return valid XML string
         assert isinstance(result, str)
         assert result.startswith("<results>")
         assert result.endswith("</results>")
 
-        # Should have search_result elements
         assert "<search_result" in result
-
-        # Should NOT have content inside tags (but names in attributes are OK)
-        assert "def authenticate_user" not in result
-
-        # Should have self-closing tags for no content
-        assert "/>" in result
 
         # Should include path, line numbers, kind attributes
         assert 'path="path/auth.py"' in result
@@ -78,38 +73,100 @@ class TestXMLTransformer:
         assert 'endLine="25"' in result
         assert 'kind="Symbol"' in result
 
-        # No name attributes at all - redundant information
-        assert 'name=' not in result
+        # Should include identifier attributes
+        assert 'identifier="owner/repo::path/auth.py::authenticate_user"' in result
+        assert 'identifier="owner/repo::config/security.py::AUTH_PROVIDERS"' in result
+
+        # Should include contentByteSize attributes
+        assert 'contentByteSize="1234"' in result
+        assert 'contentByteSize="456"' in result
+
+        # Should include description as child element
+        assert "<description>" in result
+        assert "Authenticates a user with username and password" in result
+        assert "List of configured authentication providers" in result
 
         # Should NOT include folders
-        assert 'auth/' not in result
+        assert 'auth/' not in result or 'identifier="owner/repo::path/auth.py' in result
         assert 'kind="Folder"' not in result
 
-        # Should be more compact than JSON
-        assert len(result) < 400  # Much smaller than JSON version
+    def test_description_renders_as_child_element(self):
+        """Test that description is rendered as a child element, not self-closing."""
+        response = {
+            "results": [
+                {
+                    "kind": "Symbol",
+                    "identifier": "owner/repo::file.py::func",
+                    "location": {
+                        "path": "file.py",
+                        "range": {"start": {"line": 1}, "end": {"line": 5}}
+                    },
+                    "description": "A helper function",
+                    "contentByteSize": 200
+                }
+            ]
+        }
 
-    def test_xml_with_content(self, sample_search_response):
-        """Test XML optimization with content."""
-        result = transform_search_response_to_xml(sample_search_response, include_content=True)
+        result = transform_search_response_to_xml(response)
 
-        # Should return valid XML string
-        assert isinstance(result, str)
-        assert result.startswith("<results>")
-        assert result.endswith("</results>")
+        # Should have opening and closing search_result tags (not self-closing)
+        assert "<search_result " in result
+        assert "</search_result>" in result
+        assert "<description>A helper function</description>" in result
 
-        # Should have content between tags
-        assert "def authenticate_user" in result
-        assert "AUTH_PROVIDERS" in result
+    def test_no_description_uses_self_closing_tag(self):
+        """Test that results without description use self-closing tags."""
+        response = {
+            "results": [
+                {
+                    "kind": "Symbol",
+                    "identifier": "owner/repo::file.py::func",
+                    "location": {
+                        "path": "file.py",
+                        "range": {"start": {"line": 1}, "end": {"line": 5}}
+                    }
+                }
+            ]
+        }
 
-        # Should have proper line numbers in content
-        assert "10|def authenticate_user" in result or "def authenticate_user" in result
+        result = transform_search_response_to_xml(response)
 
-        # Should group multiple results from same file
-        # Path should appear fewer times than original results
-        assert result.count('path="path/auth.py"') == 1  # All auth.py results grouped
+        assert "/>" in result
+        assert "<description>" not in result
 
-        # Should handle snippets for chunks
-        assert "# Authentication module" in result
+    def test_identifier_in_attributes(self):
+        """Test that identifier is included as an XML attribute."""
+        response = {
+            "results": [
+                {
+                    "kind": "Symbol",
+                    "identifier": "CodeAlive-AI/backend::src/auth.py::login",
+                    "location": {
+                        "path": "src/auth.py",
+                        "range": {"start": {"line": 10}, "end": {"line": 20}}
+                    }
+                }
+            ]
+        }
+
+        result = transform_search_response_to_xml(response)
+        assert 'identifier="CodeAlive-AI/backend::src/auth.py::login"' in result
+
+    def test_content_byte_size_in_attributes(self):
+        """Test that contentByteSize is included as an XML attribute."""
+        response = {
+            "results": [
+                {
+                    "kind": "File",
+                    "identifier": "owner/repo::large_file.py",
+                    "location": {"path": "large_file.py"},
+                    "contentByteSize": 98765
+                }
+            ]
+        }
+
+        result = transform_search_response_to_xml(response)
+        assert 'contentByteSize="98765"' in result
 
     def test_xml_escaping(self):
         """Test that XML special characters are properly escaped."""
@@ -122,27 +179,27 @@ class TestXMLTransformer:
                     "path": "file.py",
                     "range": {"start": {"line": 1}, "end": {"line": 3}}
                 },
-                "content": 'def func():\n    return "<value>" & "other"'
+                "description": 'Returns "<value>" & "other"'
             }]
         }
 
-        result = transform_search_response_to_xml(response, include_content=True)
+        result = transform_search_response_to_xml(response)
 
-        # XML special chars should be escaped
-        assert "&lt;value&gt;" in result or "&#60;value&#62;" in result
-        assert "&amp;" in result or "&#38;" in result
+        # XML special chars should be escaped in description
+        assert "&lt;value&gt;" in result
+        assert "&amp;" in result
         # But structural XML should not be escaped
         assert "<search_result" in result
         assert "</results>" in result
 
     def test_empty_response(self):
         """Test handling of empty search results."""
-        result = transform_search_response_to_xml({"results": []}, include_content=False)
+        result = transform_search_response_to_xml({"results": []})
 
         assert result == "<results></results>" or result == "<results/>"
 
     def test_multiple_symbols_same_file(self):
-        """Test grouping multiple symbols from the same file."""
+        """Test multiple symbols from the same file produce separate entries."""
         response = {
             "results": [
                 {
@@ -152,7 +209,7 @@ class TestXMLTransformer:
                         "path": "utils.py",
                         "range": {"start": {"line": 10}, "end": {"line": 20}}
                     },
-                    "content": "def func1(): pass"
+                    "description": "First function"
                 },
                 {
                     "kind": "Symbol",
@@ -161,27 +218,20 @@ class TestXMLTransformer:
                         "path": "utils.py",
                         "range": {"start": {"line": 25}, "end": {"line": 35}}
                     },
-                    "content": "def func2(): pass"
+                    "description": "Second function"
                 }
             ]
         }
 
-        result_without = transform_search_response_to_xml(response, include_content=False)
-        result_with = transform_search_response_to_xml(response, include_content=True)
+        result = transform_search_response_to_xml(response)
 
-        # Without content: should have two separate search_result tags
-        assert result_without.count("<search_result") == 2
-        # No names anymore - we removed them
-        assert 'name=' not in result_without
-
-        # With content: should group into one search_result with combined content
-        assert result_with.count('path="utils.py"') == 1
-        assert "func1" in result_with
-        assert "func2" in result_with
+        # Should have two separate search_result tags
+        assert result.count("<search_result") == 2
+        assert "First function" in result
+        assert "Second function" in result
 
     def test_performance_large_response(self):
-        """Test that XML format is more compact than JSON for large responses."""
-        # Generate a large response
+        """Test that XML format is compact for large responses."""
         large_response = {
             "results": [
                 {
@@ -192,27 +242,24 @@ class TestXMLTransformer:
                         "path": f"file{i}.py",
                         "range": {"start": {"line": i*10}, "end": {"line": i*10 + 5}}
                     },
-                    "content": f"def function{i}():\n    pass"
+                    "description": f"Function {i} description"
                 }
                 for i in range(20)
             ]
         }
 
-        xml_result = transform_search_response_to_xml(large_response, include_content=False)
+        xml_result = transform_search_response_to_xml(large_response)
 
-        # XML should be very compact
-        assert len(xml_result) < 2000  # Should be much smaller
         assert xml_result.count("<search_result") == 20
 
     def test_preserves_server_order(self):
         """Test that the transformer preserves the order from the server."""
         response = {
             "results": [
-                # Server sends these in relevance order (highest score first)
                 {
                     "kind": "Symbol",
                     "identifier": "owner/repo::important.py::critical_function",
-                    "score": 0.95,  # Highest score - most relevant
+                    "score": 0.95,
                     "location": {
                         "path": "important.py",
                         "range": {"start": {"line": 10}, "end": {"line": 20}}
@@ -221,7 +268,7 @@ class TestXMLTransformer:
                 {
                     "kind": "Symbol",
                     "identifier": "owner/repo::less_important.py::helper",
-                    "score": 0.75,  # Lower score
+                    "score": 0.75,
                     "location": {
                         "path": "less_important.py",
                         "range": {"start": {"line": 5}, "end": {"line": 10}}
@@ -230,7 +277,7 @@ class TestXMLTransformer:
                 {
                     "kind": "Symbol",
                     "identifier": "owner/repo::another.py::utility",
-                    "score": 0.60,  # Even lower
+                    "score": 0.60,
                     "location": {
                         "path": "another.py",
                         "range": {"start": {"line": 1}, "end": {"line": 5}}
@@ -239,12 +286,10 @@ class TestXMLTransformer:
             ]
         }
 
-        result = transform_search_response_to_xml(response, include_content=False)
+        result = transform_search_response_to_xml(response)
 
-        # Check that files appear in the original order (by first occurrence)
         lines = result.split('\n')
 
-        # Find line numbers for each path
         important_line = None
         less_important_line = None
         another_line = None
@@ -257,12 +302,11 @@ class TestXMLTransformer:
             if 'path="another.py"' in line and another_line is None:
                 another_line = i
 
-        # Verify order is preserved (most relevant first)
-        assert important_line < less_important_line, "Most relevant result should appear first"
-        assert less_important_line < another_line, "Results should maintain server order"
+        assert important_line < less_important_line
+        assert less_important_line < another_line
 
     def test_data_preservation_without_content(self):
-        """Test that all essential data is preserved when include_content=False."""
+        """Test that all essential data is preserved."""
         response = {
             "results": [
                 {
@@ -273,6 +317,8 @@ class TestXMLTransformer:
                         "range": {"start": {"line": 18}, "end": {"line": 168}}
                     },
                     "score": 0.99,
+                    "description": "Main search function",
+                    "contentByteSize": 8500,
                     "dataSource": {
                         "type": "repository",
                         "id": "685b21230e3822f4efa9d073",
@@ -284,7 +330,7 @@ class TestXMLTransformer:
                     "identifier": "CodeAlive-AI/codealive-mcp::README.md::chunk1",
                     "location": {"path": "README.md"},
                     "score": 0.85,
-                    "snippet": "include_content parameter documentation",
+                    "description": "Search documentation section",
                     "dataSource": {
                         "type": "repository",
                         "id": "685b21230e3822f4efa9d073",
@@ -294,115 +340,26 @@ class TestXMLTransformer:
             ]
         }
 
-        result = transform_search_response_to_xml(response, include_content=False)
+        result = transform_search_response_to_xml(response)
 
-        # Verify all paths are preserved
+        # Verify paths
         assert 'path="src/tools/search.py"' in result
         assert 'path="README.md"' in result
 
-        # Verify line numbers are preserved for Symbol
+        # Verify line numbers
         assert 'startLine="18"' in result
         assert 'endLine="168"' in result
 
-        # Verify kinds are preserved
+        # Verify kinds
         assert 'kind="Symbol"' in result
         assert 'kind="Chunk"' in result
 
-        # Verify no content is included
-        assert "include_content parameter documentation" not in result
+        # Verify identifiers
+        assert 'identifier="CodeAlive-AI/codealive-mcp::src/tools/search.py::codebase_search"' in result
 
-    def test_data_preservation_with_content(self):
-        """Test that all data including content is preserved when include_content=True."""
-        response = {
-            "results": [
-                {
-                    "kind": "Symbol",
-                    "identifier": "CodeAlive-AI/codealive-mcp::src/tools/search.py::codebase_search",
-                    "location": {
-                        "path": "src/tools/search.py",
-                        "range": {"start": {"line": 18}, "end": {"line": 168}}
-                    },
-                    "score": 0.99,
-                    "content": "async def codebase_search(\n    ctx: Context,\n    query: str,\n    data_sources: Optional[List[str]] = None,\n    mode: str = \"auto\",\n    include_content: bool = False\n) -> Dict:",
-                    "dataSource": {
-                        "type": "repository",
-                        "id": "685b21230e3822f4efa9d073",
-                        "name": "codealive-mcp"
-                    }
-                },
-                {
-                    "kind": "Chunk",
-                    "identifier": "CodeAlive-AI/codealive-mcp::README.md::chunk1",
-                    "location": {"path": "README.md"},
-                    "score": 0.85,
-                    "snippet": "include_content: Whether to include full file content",
-                    "dataSource": {
-                        "type": "repository",
-                        "id": "685b21230e3822f4efa9d073",
-                        "name": "codealive-mcp"
-                    }
-                },
-                {
-                    "kind": "File",
-                    "identifier": "CodeAlive-AI/codealive-mcp::CLAUDE.md",
-                    "location": {"path": "CLAUDE.md", "range": {"start": {"line": 0}, "end": {"line": 0}}},
-                    "score": 0.75,
-                    "content": "# CLAUDE.md\n\nThis file provides guidance",
-                    "dataSource": {
-                        "type": "repository",
-                        "id": "685b21230e3822f4efa9d073",
-                        "name": "codealive-mcp"
-                    }
-                }
-            ]
-        }
+        # Verify contentByteSize
+        assert 'contentByteSize="8500"' in result
 
-        result = transform_search_response_to_xml(response, include_content=True)
-
-        # Verify all paths are preserved
-        assert 'path="src/tools/search.py"' in result
-        assert 'path="README.md"' in result
-        assert 'path="CLAUDE.md"' in result
-
-        # Verify line numbers are preserved
-        assert 'startLine="18"' in result
-        assert 'endLine="168"' in result
-
-        # Verify content is included
-        assert "async def codebase_search" in result
-        assert "include_content: Whether to include full file content" in result
-        assert "This file provides guidance" in result
-
-        # Verify proper escaping
-        assert "&quot;" in result or '"' in result  # Quotes should be handled
-
-    def test_mixed_content_sources(self):
-        """Test handling results with both content and snippet fields."""
-        response = {
-            "results": [
-                {
-                    "kind": "Symbol",
-                    "location": {"path": "file1.py", "range": {"start": {"line": 1}, "end": {"line": 5}}},
-                    "content": "Full content from API"
-                },
-                {
-                    "kind": "Chunk",
-                    "location": {"path": "file2.py"},
-                    "snippet": "Just a snippet"
-                },
-                {
-                    "kind": "Symbol",
-                    "location": {"path": "file3.py", "range": {"start": {"line": 10}, "end": {"line": 15}}},
-                    "content": "Another full content",
-                    "snippet": "Also has snippet but content takes priority"
-                }
-            ]
-        }
-
-        result = transform_search_response_to_xml(response, include_content=True)
-
-        # Verify content is preferred over snippet when both exist
-        assert "Full content from API" in result
-        assert "Just a snippet" in result
-        assert "Another full content" in result
-        assert "Also has snippet but content takes priority" not in result  # Content takes priority
+        # Verify descriptions
+        assert "Main search function" in result
+        assert "Search documentation section" in result
