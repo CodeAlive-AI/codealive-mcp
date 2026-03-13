@@ -1,0 +1,212 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Exact version (e.g. 0.6.0). Takes precedence over bump_type.'
+        required: false
+        type: string
+      bump_type:
+        description: 'Version bump type (used if version is empty)'
+        required: false
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+
+env:
+  DOCKER_REGISTRY: ghcr.io
+  IMAGE_NAME: ghcr.io/codealive-ai/codealive-mcp
+
+permissions:
+  id-token: write   # MCP Registry OIDC authentication
+  contents: write   # Git tags, releases, push version bump
+  packages: write   # Docker push to GHCR
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    # Requires the "release" environment — configure protection rules in
+    # Settings > Environments to restrict to admins/maintainers
+    environment: release
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest pytest-asyncio pytest-mock pytest-cov jsonschema
+
+      - name: Run tests
+        run: |
+          python -m pytest src/tests/ -v
+
+      - name: Calculate version
+        id: version
+        run: |
+          CURRENT=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          echo "current=$CURRENT" >> $GITHUB_OUTPUT
+
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+            case "${{ inputs.bump_type }}" in
+              major) VERSION="$((MAJOR + 1)).0.0" ;;
+              minor) VERSION="$MAJOR.$((MINOR + 1)).0" ;;
+              patch) VERSION="$MAJOR.$MINOR.$((PATCH + 1))" ;;
+              *) echo "::error::No version or bump_type provided"; exit 1 ;;
+            esac
+          fi
+
+          if git tag -l "v$VERSION" | grep -q "v$VERSION"; then
+            echo "::error::Tag v$VERSION already exists"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "### 🚀 Releasing $CURRENT → $VERSION" >> $GITHUB_STEP_SUMMARY
+
+      - name: Update pyproject.toml version
+        run: |
+          sed -i 's/^version = ".*"/version = "${{ steps.version.outputs.version }}"/' pyproject.toml
+
+      - name: Update server.json version
+        run: |
+          python -c "
+          import json
+          with open('server.json', 'r') as f:
+              data = json.load(f)
+          version = '${{ steps.version.outputs.version }}'
+          data['version'] = version
+          if 'packages' in data:
+              for package in data['packages']:
+                  package['version'] = version
+                  if package.get('registryType') == 'oci':
+                      identifier = package.get('identifier', '')
+                      if ':' in identifier:
+                          base = identifier.rsplit(':', 1)[0]
+                          package['identifier'] = f'{base}:{version}'
+          with open('server.json', 'w') as f:
+              json.dump(data, f, indent=2)
+              f.write('\n')
+          "
+
+      - name: Validate server.json
+        run: |
+          python -c "
+          import json, sys, urllib.request
+          from jsonschema import ValidationError, validate
+          schema_url = 'https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json'
+          with urllib.request.urlopen(schema_url, timeout=30) as response:
+              schema = json.load(response)
+          with open('server.json', 'r') as f:
+              data = json.load(f)
+          validate(instance=data, schema=schema)
+          print('✓ server.json validation passed')
+          "
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          push: true
+          platforms: linux/amd64,linux/arm64
+          file: ./Dockerfile
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+            ${{ env.IMAGE_NAME }}:v${{ steps.version.outputs.version }}
+            ${{ env.IMAGE_NAME }}:latest
+          labels: |
+            io.modelcontextprotocol.server.name=io.github.CodeAlive-AI/codealive-mcp
+          cache-from: type=gha
+          cache-to: type=gha
+
+      # Git operations happen AFTER Docker push — if Docker fails, repo stays clean
+      - name: Commit version bump and create tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add pyproject.toml server.json
+          git commit -m "chore: release v${{ steps.version.outputs.version }} [skip ci]"
+          git tag "v${{ steps.version.outputs.version }}"
+          git push origin main --tags
+
+      - name: Install MCP Publisher CLI
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/download/v1.5.0/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          chmod +x mcp-publisher
+          ./mcp-publisher version || true
+
+      - name: Login to MCP Registry (GitHub OIDC)
+        run: |
+          ./mcp-publisher login github-oidc
+
+      - name: Publish to MCP Registry
+        run: |
+          ./mcp-publisher publish
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: CodeAlive MCP v${{ steps.version.outputs.version }}
+          body: |
+            ## CodeAlive MCP Server v${{ steps.version.outputs.version }}
+
+            ### 🚀 Deployment Options
+
+            **Docker Container (Local)**
+            ```bash
+            docker run --rm -i -e CODEALIVE_API_KEY=your-key ghcr.io/codealive-ai/codealive-mcp:v${{ steps.version.outputs.version }}
+            ```
+
+            **MCP Registry**
+            ```json
+            {
+              "name": "io.github.codealive-ai/codealive-mcp",
+              "transport": {
+                "type": "stdio",
+                "command": "docker",
+                "args": ["run", "--rm", "-i", "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE", "ghcr.io/codealive-ai/codealive-mcp:v${{ steps.version.outputs.version }}"]
+              }
+            }
+            ```
+
+            **Remote HTTP (Zero Setup)**
+            ```json
+            {
+              "transport": {
+                "type": "http",
+                "url": "https://mcp.codealive.ai/api"
+              },
+              "headers": {
+                "Authorization": "Bearer your-codealive-api-key"
+              }
+            }
+            ```
+          draft: false
+          prerelease: false
