@@ -81,9 +81,7 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           file: ./Dockerfile
-          tags: |
-            ${{ env.IMAGE_NAME }}:main
-            ${{ env.IMAGE_NAME }}:latest
+          tags: ${{ env.IMAGE_NAME }}:main
           labels: |
             io.modelcontextprotocol.server.name=io.github.CodeAlive-AI/codealive-mcp
           cache-from: type=gha

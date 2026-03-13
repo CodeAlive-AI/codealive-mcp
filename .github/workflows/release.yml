@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Exact version (e.g. 0.6.0). Takes precedence over bump_type.'
+        description: 'Exact version (e.g. 0.6.0). Leave empty to auto-calculate from bump_type.'
         required: false
         type: string
       bump_type:
-        description: 'Version bump type (used if version is empty)'
+        description: 'Version bump type (used when version is empty)'
         required: false
         type: choice
         default: patch
@@ -23,15 +23,13 @@ env:
 
 permissions:
   id-token: write   # MCP Registry OIDC authentication
-  contents: write   # Git tags, releases, push version bump
+  contents: write   # Git tags and GitHub Releases
   packages: write   # Docker push to GHCR
 
 jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    # Requires the "release" environment — configure protection rules in
-    # Settings > Environments to restrict to admins/maintainers
     environment: release
     steps:
       - name: Checkout repository
@@ -58,7 +56,12 @@ jobs:
       - name: Calculate version
         id: version
         run: |
-          CURRENT=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          # Derive current version from the latest git tag (single source of truth)
+          CURRENT=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 | sed 's/^v//')
+          if [ -z "$CURRENT" ]; then
+            CURRENT="0.0.0"
+            echo "::warning::No existing version tags found, starting from 0.0.0"
+          fi
           echo "current=$CURRENT" >> $GITHUB_OUTPUT
 
           if [ -n "${{ inputs.version }}" ]; then
@@ -73,25 +76,32 @@ jobs:
             esac
           fi
 
+          # Validate version format
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Invalid version format: $VERSION (expected X.Y.Z)"
+            exit 1
+          fi
+
+          # Check if tag already exists
           if git tag -l "v$VERSION" | grep -q "v$VERSION"; then
-            echo "::error::Tag v$VERSION already exists"
+            echo "::error::Tag v$VERSION already exists. Delete it first or choose a different version."
             exit 1
           fi
 
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "### 🚀 Releasing $CURRENT → $VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "### Releasing $CURRENT → $VERSION" >> $GITHUB_STEP_SUMMARY
 
-      - name: Update pyproject.toml version
+      - name: Prepare server.json for publish
         run: |
-          sed -i 's/^version = ".*"/version = "${{ steps.version.outputs.version }}"/' pyproject.toml
+          VERSION="${{ steps.version.outputs.version }}"
 
-      - name: Update server.json version
-        run: |
+          # Update server.json in working directory (not committed)
+          # pyproject.toml uses setuptools-scm — version comes from Docker build arg
           python -c "
           import json
           with open('server.json', 'r') as f:
               data = json.load(f)
-          version = '${{ steps.version.outputs.version }}'
+          version = '$VERSION'
           data['version'] = version
           if 'packages' in data:
               for package in data['packages']:
@@ -106,6 +116,8 @@ jobs:
               f.write('\n')
           "
 
+          echo "Updated server.json to $VERSION (working dir only)"
+
       - name: Validate server.json
         run: |
           python -c "
@@ -117,7 +129,7 @@ jobs:
           with open('server.json', 'r') as f:
               data = json.load(f)
           validate(instance=data, schema=schema)
-          print('✓ server.json validation passed')
+          print('server.json validation passed')
           "
 
       - name: Set up Docker Buildx
@@ -136,6 +148,7 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           file: ./Dockerfile
+          build-args: VERSION=${{ steps.version.outputs.version }}
           tags: |
             ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
             ${{ env.IMAGE_NAME }}:v${{ steps.version.outputs.version }}
@@ -145,39 +158,34 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha
 
-      # Git operations happen AFTER Docker push — if Docker fails, repo stays clean
-      - name: Commit version bump and create tag
+      # Git tag created AFTER Docker push succeeds — if Docker fails, no stale tag
+      - name: Create and push git tag
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add pyproject.toml server.json
-          git commit -m "chore: release v${{ steps.version.outputs.version }} [skip ci]"
-          git tag "v${{ steps.version.outputs.version }}"
-          git push origin main --tags
+          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
 
       - name: Install MCP Publisher CLI
         run: |
           curl -L "https://github.com/modelcontextprotocol/registry/releases/download/v1.5.0/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
           chmod +x mcp-publisher
-          ./mcp-publisher version || true
 
       - name: Login to MCP Registry (GitHub OIDC)
-        run: |
-          ./mcp-publisher login github-oidc
+        run: ./mcp-publisher login github-oidc
 
       - name: Publish to MCP Registry
-        run: |
-          ./mcp-publisher publish
+        run: ./mcp-publisher publish
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: CodeAlive MCP v${{ steps.version.outputs.version }}
           body: |
             ## CodeAlive MCP Server v${{ steps.version.outputs.version }}
 
-            ### 🚀 Deployment Options
+            ### Deployment Options
 
             **Docker Container (Local)**
             ```bash

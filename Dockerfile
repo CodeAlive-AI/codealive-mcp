@@ -5,6 +5,10 @@ FROM python:3.11-slim AS base
 # MCP Server validation label for Docker registry
 LABEL io.modelcontextprotocol.server.name="io.github.CodeAlive-AI/codealive-mcp"
 
+# Version injected at build time for setuptools-scm
+ARG VERSION=0.0.0
+ENV SETUPTOOLS_SCM_PRETEND_VERSION=$VERSION
+
 # Set working directory
 WORKDIR /app
 

@@ -1,6 +1,6 @@
 [project]
 name = "codealive-mcp"
-version = "0.5.1"
+dynamic = ["version"]
 description = "MCP server for the CodeAlive API"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -23,9 +23,11 @@ test = [
 codealive-mcp = "codealive_mcp.server:main"
 
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 packages = ["src"]
-package-dir = {"" = "."} 
+package-dir = {"" = "."}
+
+[tool.setuptools_scm]
