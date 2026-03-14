@@ -169,7 +169,16 @@ def main():
     # Run the server with the selected transport
     if args.transport == "http":
         # Use /api path to avoid conflicts with health endpoint
-        mcp.run(transport="http", host=args.host, port=args.port, path="/api", stateless_http=True)
+        mcp.run(
+            transport="http",
+            host=args.host,
+            port=args.port,
+            path="/api",
+            stateless_http=True,
+            uvicorn_config={
+                "forwarded_allow_ips": "*",
+            },
+        )
     else:
         mcp.run(transport="stdio")
 
