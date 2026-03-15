@@ -305,6 +305,94 @@ class TestXMLTransformer:
         assert important_line < less_important_line
         assert less_important_line < another_line
 
+    def test_snippet_fallback_when_no_description(self):
+        """Test that snippet is rendered as truncated content when description is absent."""
+        response = {
+            "results": [
+                {
+                    "kind": "Symbol",
+                    "identifier": "owner/repo::file.py::func",
+                    "location": {
+                        "path": "file.py",
+                        "range": {"start": {"line": 1}, "end": {"line": 5}}
+                    },
+                    "snippet": "def func(): return 42"
+                }
+            ]
+        }
+
+        result = transform_search_response_to_xml(response)
+
+        assert '<content truncated="true">' in result
+        assert "def func(): return 42" in result
+        assert "</content>" in result
+        assert "<description>" not in result
+
+    def test_snippet_html_escaped(self):
+        """Test that snippet content is HTML-escaped."""
+        response = {
+            "results": [
+                {
+                    "kind": "Symbol",
+                    "identifier": "owner/repo::file.py::func",
+                    "location": {
+                        "path": "file.py",
+                        "range": {"start": {"line": 1}, "end": {"line": 5}}
+                    },
+                    "snippet": 'if x < 10 && y > 5: return "<ok>"'
+                }
+            ]
+        }
+
+        result = transform_search_response_to_xml(response)
+
+        assert "&lt;" in result
+        assert "&amp;" in result
+        assert '<content truncated="true">' in result
+
+    def test_description_takes_precedence_over_snippet(self):
+        """Test that description wins when both description and snippet are present."""
+        response = {
+            "results": [
+                {
+                    "kind": "Symbol",
+                    "identifier": "owner/repo::file.py::func",
+                    "location": {
+                        "path": "file.py",
+                        "range": {"start": {"line": 1}, "end": {"line": 5}}
+                    },
+                    "description": "A helper function",
+                    "snippet": "def func(): return 42"
+                }
+            ]
+        }
+
+        result = transform_search_response_to_xml(response)
+
+        assert "<description>A helper function</description>" in result
+        assert '<content truncated="true">' not in result
+
+    def test_no_description_no_snippet_self_closing(self):
+        """Test that results without description and without snippet use self-closing tags."""
+        response = {
+            "results": [
+                {
+                    "kind": "Symbol",
+                    "identifier": "owner/repo::file.py::func",
+                    "location": {
+                        "path": "file.py",
+                        "range": {"start": {"line": 1}, "end": {"line": 5}}
+                    }
+                }
+            ]
+        }
+
+        result = transform_search_response_to_xml(response)
+
+        assert "/>" in result
+        assert "<description>" not in result
+        assert "<content" not in result
+
     def test_data_preservation_without_content(self):
         """Test that all essential data is preserved."""
         response = {

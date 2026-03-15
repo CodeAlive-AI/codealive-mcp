@@ -99,6 +99,10 @@ def _build_result_info(result: Dict) -> Dict:
     if result.get("description"):
         result_info["description"] = result["description"]
 
+    # Add snippet if present (fallback content when description is missing)
+    if result.get("snippet"):
+        result_info["snippet"] = result["snippet"]
+
     # Add contentByteSize if present
     if result.get("contentByteSize") is not None:
         result_info["contentByteSize"] = result["contentByteSize"]
@@ -118,9 +122,14 @@ def _build_xml_without_content(file_groups: OrderedDict) -> str:
         for result in results:
             attrs = _build_xml_attributes(path, result)
             description = result.get("description")
+            snippet = result.get("snippet")
             if description:
                 xml_parts.append(f'  <search_result {" ".join(attrs)}>')
                 xml_parts.append(f'    <description>{html.escape(description)}</description>')
+                xml_parts.append(f'  </search_result>')
+            elif snippet:
+                xml_parts.append(f'  <search_result {" ".join(attrs)}>')
+                xml_parts.append(f'    <content truncated="true">{html.escape(snippet)}</content>')
                 xml_parts.append(f'  </search_result>')
             else:
                 xml_parts.append(f'  <search_result {" ".join(attrs)} />')
