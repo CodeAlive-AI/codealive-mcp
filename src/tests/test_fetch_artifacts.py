@@ -3,7 +3,74 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastmcp import Context
-from tools.fetch_artifacts import fetch_artifacts
+from tools.fetch_artifacts import fetch_artifacts, _add_line_numbers, _build_artifacts_xml
+
+
+class TestAddLineNumbers:
+    """Test cases for _add_line_numbers helper."""
+
+    def test_multi_line_content(self):
+        content = "line1\nline2\nline3"
+        result = _add_line_numbers(content)
+        assert result == "1 | line1\n2 | line2\n3 | line3"
+
+    def test_single_line_content(self):
+        content = "only one line"
+        result = _add_line_numbers(content)
+        assert result == "1 | only one line"
+
+    def test_empty_content(self):
+        assert _add_line_numbers("") == ""
+
+    def test_right_aligned_padding(self):
+        lines = "\n".join(f"line{i}" for i in range(100))
+        result = _add_line_numbers(lines)
+        first_line = result.split("\n")[0]
+        assert first_line == "  1 | line0"
+        last_line = result.split("\n")[99]
+        assert last_line == "100 | line99"
+
+    def test_start_line_offset(self):
+        result = _add_line_numbers("a\nb", start_line=50)
+        assert result == "50 | a\n51 | b"
+
+    def test_start_line_default(self):
+        result = _add_line_numbers("x", start_line=1)
+        assert result == "1 | x"
+
+    def test_start_line_right_aligned_padding(self):
+        result = _add_line_numbers("a\nb\nc", start_line=98)
+        assert result == " 98 | a\n 99 | b\n100 | c"
+
+    def test_start_line_empty_content(self):
+        assert _add_line_numbers("", start_line=50) == ""
+
+
+class TestBuildArtifactsXmlStartLine:
+    """Test _build_artifacts_xml uses startLine from API response."""
+
+    def test_artifact_with_start_line(self):
+        data = {"artifacts": [
+            {"identifier": "repo::file.py::func", "content": "line1\nline2", "contentByteSize": 10, "startLine": 50}
+        ]}
+        result = _build_artifacts_xml(data)
+        assert "50 | line1" in result
+        assert "51 | line2" in result
+
+    def test_artifact_without_start_line_defaults_to_1(self):
+        data = {"artifacts": [
+            {"identifier": "repo::file.py::func", "content": "line1\nline2", "contentByteSize": 10}
+        ]}
+        result = _build_artifacts_xml(data)
+        assert "1 | line1" in result
+        assert "2 | line2" in result
+
+    def test_artifact_with_null_start_line_defaults_to_1(self):
+        data = {"artifacts": [
+            {"identifier": "repo::file.py", "content": "hello", "contentByteSize": 5, "startLine": None}
+        ]}
+        result = _build_artifacts_xml(data)
+        assert "1 | hello" in result
 
 
 @pytest.mark.asyncio
@@ -52,8 +119,9 @@ async def test_fetch_artifacts_returns_xml(mock_get_api_key):
     assert isinstance(result, str)
     assert "<artifacts>" in result
     assert "</artifacts>" in result
-    # Found artifact has content
-    assert "def login(user, pwd):" in result
+    # Found artifact has line-numbered content
+    assert "1 | def login(user, pwd):" in result
+    assert "2 |     return True" in result
     assert 'contentByteSize="38"' in result
     assert 'identifier="owner/repo::src/auth.py::login"' in result
     # Not-found artifact is skipped (not in output)
@@ -204,6 +272,8 @@ async def test_fetch_artifacts_escapes_xml(mock_get_api_key):
         identifiers=["owner/repo::file.py::func"],
     )
 
+    # Line numbers are added before escaping
+    assert "1 | if x &lt; 10 &amp;&amp; y &gt; 5:" in result
     assert "&lt;" in result
     assert "&amp;" in result
     assert "<artifacts>" in result

@@ -85,6 +85,25 @@ async def fetch_artifacts(
         return f"<error>{error_msg}</error>"
 
 
+def _add_line_numbers(content: str, start_line: int = 1) -> str:
+    """Add line numbers to content for easier navigation.
+
+    Returns content with each line prefixed by its line number,
+    right-aligned and separated by ' | '.
+
+    Args:
+        content: The text content to number.
+        start_line: 1-based line number for the first line (default 1).
+    """
+    if not content:
+        return content
+
+    lines = content.split("\n")
+    width = len(str(start_line + len(lines) - 1))
+    numbered = [f"{start_line + i:>{width}} | {line}" for i, line in enumerate(lines)]
+    return "\n".join(numbered)
+
+
 def _build_artifacts_xml(data: dict) -> str:
     """Build XML representation of fetched artifacts.
 
@@ -106,7 +125,9 @@ def _build_artifacts_xml(data: dict) -> str:
         attrs = [f'identifier="{identifier}"']
         if content_byte_size is not None:
             attrs.append(f'contentByteSize="{content_byte_size}"')
-        escaped_content = html.escape(content)
+        start_line = artifact.get("startLine") or 1
+        numbered_content = _add_line_numbers(content, start_line)
+        escaped_content = html.escape(numbered_content)
         xml_parts.append(f'  <artifact {" ".join(attrs)}>{escaped_content}</artifact>')
 
     xml_parts.append("</artifacts>")
