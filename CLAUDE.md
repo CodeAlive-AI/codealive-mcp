@@ -17,6 +17,12 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -e .
 ```
 
+## Dependency Rules
+
+- Keep Python dependency specifiers exact where this repository already pins them, including test extras and `build-system`.
+- If `pyproject.toml` changes affect resolved packages, verify the result through the lock/install path used by CI.
+- Do not introduce floating versions in CI or release automation when exact pins are practical.
+
 ### Running the MCP Server
 ```bash
 # Basic run with stdio transport
