@@ -31,3 +31,7 @@ packages = ["src"]
 package-dir = {"" = "."}
 
 [tool.setuptools_scm]
+
+[tool.uv]
+required-version = "==0.11.2"
+exclude-newer = "7 days"
