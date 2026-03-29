@@ -23,7 +23,7 @@ test = [
 codealive-mcp = "codealive_mcp.server:main"
 
 [build-system]
-requires = ["setuptools==82.0.1", "setuptools-scm==10.0.3"]
+requires = ["setuptools==82.0.1", "setuptools-scm==10.0.1"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
