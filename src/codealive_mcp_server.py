@@ -26,7 +26,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 # Import core components
 from core import codealive_lifespan, setup_debug_logging
 from middleware import N8NRemoveParametersMiddleware
-from tools import codebase_consultant, get_data_sources, fetch_artifacts, codebase_search
+from tools import codebase_consultant, get_data_sources, fetch_artifacts, codebase_search, get_artifact_relations
 
 # Initialize FastMCP server with lifespan and enhanced system instructions
 mcp = FastMCP(
@@ -99,6 +99,7 @@ mcp.tool()(codebase_consultant)
 mcp.tool()(get_data_sources)
 mcp.tool()(codebase_search)
 mcp.tool()(fetch_artifacts)
+mcp.tool()(get_artifact_relations)
 
 
 def main():

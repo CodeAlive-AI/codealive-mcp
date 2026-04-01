@@ -73,6 +73,134 @@ class TestBuildArtifactsXmlStartLine:
         assert "1 | hello" in result
 
 
+class TestBuildArtifactsXmlContentWrapper:
+    """Test that content is wrapped in <content> element."""
+
+    def test_content_wrapped_in_element(self):
+        data = {"artifacts": [
+            {"identifier": "repo::file.py::func", "content": "code here", "contentByteSize": 9}
+        ]}
+        result = _build_artifacts_xml(data)
+        assert "<content>" in result
+        assert "</content>" in result
+        assert "<content>1 | code here</content>" in result
+
+    def test_artifact_structure_has_content_child(self):
+        data = {"artifacts": [
+            {"identifier": "repo::f.py::fn", "content": "x = 1", "contentByteSize": 5}
+        ]}
+        result = _build_artifacts_xml(data)
+        assert "<artifact" in result
+        assert "</artifact>" in result
+        assert "<content>" in result
+
+
+class TestBuildArtifactsXmlRelations:
+    """Test relations rendering in _build_artifacts_xml."""
+
+    def test_relations_with_outgoing_and_incoming(self):
+        data = {"artifacts": [{
+            "identifier": "repo::src/a.ts::FuncA",
+            "content": "code",
+            "contentByteSize": 4,
+            "relations": {
+                "outgoingCallsCount": 12,
+                "outgoingCalls": [
+                    {"identifier": "repo::src/b.ts::FuncB", "summary": "Validates token"},
+                    {"identifier": "repo::src/c.ts::FuncC", "summary": "Logs event"},
+                ],
+                "incomingCallsCount": 3,
+                "incomingCalls": [
+                    {"identifier": "repo::src/d.ts::FuncD", "summary": "Entry point"},
+                ],
+            }
+        }]}
+        result = _build_artifacts_xml(data)
+        assert "<relations>" in result
+        assert '</relations>' in result
+        assert '<outgoing_calls count="12">' in result
+        assert '</outgoing_calls>' in result
+        assert '<incoming_calls count="3">' in result
+        assert '</incoming_calls>' in result
+        assert 'identifier="repo::src/b.ts::FuncB" summary="Validates token"' in result
+        assert 'identifier="repo::src/d.ts::FuncD" summary="Entry point"' in result
+
+    def test_relations_with_only_outgoing(self):
+        data = {"artifacts": [{
+            "identifier": "repo::src/a.ts::FuncA",
+            "content": "code",
+            "contentByteSize": 4,
+            "relations": {
+                "outgoingCallsCount": 2,
+                "outgoingCalls": [
+                    {"identifier": "repo::src/b.ts::FuncB", "summary": "Does stuff"},
+                ],
+                "incomingCallsCount": None,
+                "incomingCalls": None,
+            }
+        }]}
+        result = _build_artifacts_xml(data)
+        assert "<relations>" in result
+        assert "<outgoing_calls" in result
+        assert "<incoming_calls" not in result
+
+    def test_relations_null_omits_relations_element(self):
+        data = {"artifacts": [{
+            "identifier": "repo::src/a.ts",
+            "content": "code",
+            "contentByteSize": 4,
+            "relations": None,
+        }]}
+        result = _build_artifacts_xml(data)
+        assert "<relations>" not in result
+        assert "<content>" in result
+
+    def test_relations_absent_omits_relations_element(self):
+        data = {"artifacts": [{
+            "identifier": "repo::src/a.ts",
+            "content": "code",
+            "contentByteSize": 4,
+        }]}
+        result = _build_artifacts_xml(data)
+        assert "<relations>" not in result
+
+    def test_relations_call_without_summary_omits_summary_attr(self):
+        data = {"artifacts": [{
+            "identifier": "repo::src/a.ts::FuncA",
+            "content": "code",
+            "contentByteSize": 4,
+            "relations": {
+                "outgoingCallsCount": 1,
+                "outgoingCalls": [
+                    {"identifier": "repo::src/b.ts::FuncB", "summary": None},
+                ],
+                "incomingCallsCount": None,
+                "incomingCalls": None,
+            }
+        }]}
+        result = _build_artifacts_xml(data)
+        assert 'identifier="repo::src/b.ts::FuncB"/>' in result
+        assert 'summary' not in result.split('FuncB')[1].split('/>')[0]
+
+    def test_relations_escapes_xml_in_summary(self):
+        data = {"artifacts": [{
+            "identifier": "repo::src/a.ts::FuncA",
+            "content": "code",
+            "contentByteSize": 4,
+            "relations": {
+                "outgoingCallsCount": 1,
+                "outgoingCalls": [
+                    {"identifier": "repo::src/b.ts::FuncB", "summary": 'Checks if x < 10 & y > 5'},
+                ],
+                "incomingCallsCount": None,
+                "incomingCalls": None,
+            }
+        }]}
+        result = _build_artifacts_xml(data)
+        assert "&lt;" in result
+        assert "&amp;" in result
+
+
 @pytest.mark.asyncio
 @patch('tools.fetch_artifacts.get_api_key_from_context')
 async def test_fetch_artifacts_returns_xml(mock_get_api_key):
@@ -119,7 +247,8 @@ async def test_fetch_artifacts_returns_xml(mock_get_api_key):
     assert isinstance(result, str)
     assert "<artifacts>" in result
     assert "</artifacts>" in result
-    # Found artifact has line-numbered content
+    # Found artifact has line-numbered content wrapped in <content>
+    assert "<content>" in result
     assert "1 | def login(user, pwd):" in result
     assert "2 |     return True" in result
     assert 'contentByteSize="38"' in result
