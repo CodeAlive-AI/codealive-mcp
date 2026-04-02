@@ -133,7 +133,7 @@ class SmokeTest:
             result = await self.session.list_tools()
             tools = result.tools
 
-            expected_tools = {"codebase_consultant", "get_data_sources", "codebase_search", "fetch_artifacts"}
+            expected_tools = {"codebase_consultant", "get_data_sources", "codebase_search", "fetch_artifacts", "get_artifact_relationships"}
             actual_tools = {tool.name for tool in tools}
 
             if expected_tools == actual_tools:
