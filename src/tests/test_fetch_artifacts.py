@@ -95,15 +95,15 @@ class TestBuildArtifactsXmlContentWrapper:
         assert "<content>" in result
 
 
-class TestBuildArtifactsXmlRelations:
-    """Test relations rendering in _build_artifacts_xml."""
+class TestBuildArtifactsXmlRelationships:
+    """Test relationships rendering in _build_artifacts_xml."""
 
-    def test_relations_with_outgoing_and_incoming(self):
+    def test_relationships_with_outgoing_and_incoming(self):
         data = {"artifacts": [{
             "identifier": "repo::src/a.ts::FuncA",
             "content": "code",
             "contentByteSize": 4,
-            "relations": {
+            "relationships": {
                 "outgoingCallsCount": 12,
                 "outgoingCalls": [
                     {"identifier": "repo::src/b.ts::FuncB", "summary": "Validates token"},
@@ -116,8 +116,8 @@ class TestBuildArtifactsXmlRelations:
             }
         }]}
         result = _build_artifacts_xml(data)
-        assert "<relations>" in result
-        assert '</relations>' in result
+        assert "<relationships>" in result
+        assert '</relationships>' in result
         assert '<outgoing_calls count="12">' in result
         assert '</outgoing_calls>' in result
         assert '<incoming_calls count="3">' in result
@@ -125,12 +125,12 @@ class TestBuildArtifactsXmlRelations:
         assert 'identifier="repo::src/b.ts::FuncB" summary="Validates token"' in result
         assert 'identifier="repo::src/d.ts::FuncD" summary="Entry point"' in result
 
-    def test_relations_with_only_outgoing(self):
+    def test_relationships_with_only_outgoing(self):
         data = {"artifacts": [{
             "identifier": "repo::src/a.ts::FuncA",
             "content": "code",
             "contentByteSize": 4,
-            "relations": {
+            "relationships": {
                 "outgoingCallsCount": 2,
                 "outgoingCalls": [
                     {"identifier": "repo::src/b.ts::FuncB", "summary": "Does stuff"},
@@ -140,36 +140,36 @@ class TestBuildArtifactsXmlRelations:
             }
         }]}
         result = _build_artifacts_xml(data)
-        assert "<relations>" in result
+        assert "<relationships>" in result
         assert "<outgoing_calls" in result
         assert "<incoming_calls" not in result
 
-    def test_relations_null_omits_relations_element(self):
+    def test_relationships_null_omits_relationships_element(self):
         data = {"artifacts": [{
             "identifier": "repo::src/a.ts",
             "content": "code",
             "contentByteSize": 4,
-            "relations": None,
+            "relationships": None,
         }]}
         result = _build_artifacts_xml(data)
-        assert "<relations>" not in result
+        assert "<relationships>" not in result
         assert "<content>" in result
 
-    def test_relations_absent_omits_relations_element(self):
+    def test_relationships_absent_omits_relationships_element(self):
         data = {"artifacts": [{
             "identifier": "repo::src/a.ts",
             "content": "code",
             "contentByteSize": 4,
         }]}
         result = _build_artifacts_xml(data)
-        assert "<relations>" not in result
+        assert "<relationships>" not in result
 
-    def test_relations_call_without_summary_omits_summary_attr(self):
+    def test_relationships_call_without_summary_omits_summary_attr(self):
         data = {"artifacts": [{
             "identifier": "repo::src/a.ts::FuncA",
             "content": "code",
             "contentByteSize": 4,
-            "relations": {
+            "relationships": {
                 "outgoingCallsCount": 1,
                 "outgoingCalls": [
                     {"identifier": "repo::src/b.ts::FuncB", "summary": None},
@@ -182,12 +182,12 @@ class TestBuildArtifactsXmlRelations:
         assert 'identifier="repo::src/b.ts::FuncB"/>' in result
         assert 'summary' not in result.split('FuncB')[1].split('/>')[0]
 
-    def test_relations_escapes_xml_in_summary(self):
+    def test_relationships_escapes_xml_in_summary(self):
         data = {"artifacts": [{
             "identifier": "repo::src/a.ts::FuncA",
             "content": "code",
             "contentByteSize": 4,
-            "relations": {
+            "relationships": {
                 "outgoingCallsCount": 1,
                 "outgoingCalls": [
                     {"identifier": "repo::src/b.ts::FuncB", "summary": 'Checks if x < 10 & y > 5'},

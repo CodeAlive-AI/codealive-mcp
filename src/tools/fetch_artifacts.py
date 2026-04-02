@@ -35,27 +35,27 @@ async def fetch_artifacts(
                        Chunk:   "my-org/backend::README.md::0042"
 
     Returns:
-        XML with full content and call relations for each found artifact:
+        XML with full content and call relationships for each found artifact:
         <artifacts>
           <artifact identifier="..." contentByteSize="...">
             <content>numbered source code</content>
-            <relations>
+            <relationships>
               <outgoing_calls count="12">
                 <call identifier="org/repo::path::Symbol" summary="Does X..."/>
               </outgoing_calls>
               <incoming_calls count="3">
                 <call identifier="org/repo::path::Caller" summary="Calls this to..."/>
               </incoming_calls>
-            </relations>
+            </relationships>
           </artifact>
         </artifacts>
 
         Only artifacts with content are included in the response.
-        The `<relations>` element shows the artifact's call graph:
+        The `<relationships>` element shows the artifact's call graph:
         - **outgoing_calls**: functions this artifact calls (its dependencies)
         - **incoming_calls**: functions that call this artifact (its blast radius)
         Each shows up to 3 related artifacts with summaries. The `count` attribute
-        gives the total. Relations are omitted for non-function artifacts.
+        gives the total. Relationships are omitted for non-function artifacts.
 
     Note:
         - Maximum 20 identifiers per request to avoid excessive payloads.
@@ -124,7 +124,7 @@ def _build_artifacts_xml(data: dict) -> str:
     """Build XML representation of fetched artifacts.
 
     Backend DTO: Identifier (string), Content (string?), ContentByteSize (long?),
-    Relations (object?).
+    Relationships (object?).
     Content is null when artifact is not found or has no content.
     Only artifacts with content are included in output.
     """
@@ -150,11 +150,11 @@ def _build_artifacts_xml(data: dict) -> str:
         xml_parts.append(f'  <artifact {" ".join(attrs)}>')
         xml_parts.append(f'    <content>{escaped_content}</content>')
 
-        relations = artifact.get("relations")
-        if relations is not None:
-            relations_xml = _build_relations_xml(relations)
-            if relations_xml:
-                xml_parts.append(relations_xml)
+        relationships = artifact.get("relationships")
+        if relationships is not None:
+            relationships_xml = _build_relationships_xml(relationships)
+            if relationships_xml:
+                xml_parts.append(relationships_xml)
 
         xml_parts.append('  </artifact>')
 
@@ -162,17 +162,17 @@ def _build_artifacts_xml(data: dict) -> str:
     return "\n".join(xml_parts)
 
 
-def _build_relations_xml(relations: dict) -> str | None:
-    """Build XML for artifact call relations.
+def _build_relationships_xml(relationships: dict) -> str | None:
+    """Build XML for artifact call relationships.
 
-    Returns None if no relation types are present.
+    Returns None if no relationship types are present.
     """
     parts = []
 
     for rel_type in ("outgoingCalls", "incomingCalls"):
         tag = "outgoing_calls" if rel_type == "outgoingCalls" else "incoming_calls"
-        count = relations.get(f"{rel_type}Count")
-        calls = relations.get(rel_type)
+        count = relationships.get(f"{rel_type}Count")
+        calls = relationships.get(rel_type)
 
         if count is None:
             continue
@@ -180,7 +180,7 @@ def _build_relations_xml(relations: dict) -> str | None:
         call_elements = []
         if calls:
             for call in calls:
-                call_id = html.escape(call.get("identifier", ""))
+                call_id = html.escape(call.get("identifier") or "")
                 summary = call.get("summary")
                 if summary is not None:
                     call_elements.append(
@@ -196,4 +196,4 @@ def _build_relations_xml(relations: dict) -> str | None:
     if not parts:
         return None
 
-    return "    <relations>\n" + "\n".join(parts) + "\n    </relations>"
+    return "    <relationships>\n" + "\n".join(parts) + "\n    </relationships>"

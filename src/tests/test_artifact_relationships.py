@@ -1,11 +1,11 @@
-"""Tests for the get_artifact_relations tool."""
+"""Tests for the get_artifact_relationships tool."""
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastmcp import Context
 
-from tools.artifact_relations import get_artifact_relations, _build_relations_xml, PROFILE_MAP
+from tools.artifact_relationships import get_artifact_relationships, _build_relationships_xml, PROFILE_MAP
 
 
 class TestProfileMapping:
@@ -25,15 +25,15 @@ class TestProfileMapping:
         assert PROFILE_MAP["referencesOnly"] == "ReferencesOnly"
 
 
-class TestBuildRelationsXml:
-    """Test XML rendering of relation responses."""
+class TestBuildRelationshipsXml:
+    """Test XML rendering of relationship responses."""
 
-    def test_found_with_grouped_relations(self):
+    def test_found_with_grouped_relationships(self):
         data = {
             "sourceIdentifier": "org/repo::path::Symbol",
             "profile": "CallsOnly",
             "found": True,
-            "relations": [
+            "relationships": [
                 {
                     "relationType": "OutgoingCalls",
                     "totalCount": 57,
@@ -64,7 +64,7 @@ class TestBuildRelationsXml:
             ],
         }
 
-        result = _build_relations_xml(data)
+        result = _build_relationships_xml(data)
 
         assert 'sourceIdentifier="org/repo::path::Symbol"' in result
         assert 'profile="callsOnly"' in result
@@ -86,21 +86,21 @@ class TestBuildRelationsXml:
             "sourceIdentifier": "org/repo::path::Missing",
             "profile": "CallsOnly",
             "found": False,
-            "relations": [],
+            "relationships": [],
         }
 
-        result = _build_relations_xml(data)
+        result = _build_relationships_xml(data)
 
         assert 'found="false"' in result
         assert result.endswith("/>")
-        assert "<relation_group" not in result
+        assert "<relationship_group" not in result
 
     def test_empty_group_still_rendered(self):
         data = {
             "sourceIdentifier": "org/repo::path::Symbol",
             "profile": "InheritanceOnly",
             "found": True,
-            "relations": [
+            "relationships": [
                 {
                     "relationType": "Ancestors",
                     "totalCount": 0,
@@ -118,7 +118,7 @@ class TestBuildRelationsXml:
             ],
         }
 
-        result = _build_relations_xml(data)
+        result = _build_relationships_xml(data)
 
         assert 'type="ancestors"' in result
         assert 'type="descendants"' in result
@@ -129,7 +129,7 @@ class TestBuildRelationsXml:
             "sourceIdentifier": "org/repo::path::Symbol",
             "profile": "CallsOnly",
             "found": True,
-            "relations": [
+            "relationships": [
                 {
                     "relationType": "OutgoingCalls",
                     "totalCount": 1,
@@ -145,7 +145,7 @@ class TestBuildRelationsXml:
             ],
         }
 
-        result = _build_relations_xml(data)
+        result = _build_relationships_xml(data)
 
         assert 'identifier="org/repo::path::Target"' in result
         assert "filePath" not in result
@@ -157,7 +157,7 @@ class TestBuildRelationsXml:
             "sourceIdentifier": "org/repo::path::Class<T>",
             "profile": "CallsOnly",
             "found": True,
-            "relations": [
+            "relationships": [
                 {
                     "relationType": "OutgoingCalls",
                     "totalCount": 1,
@@ -173,7 +173,7 @@ class TestBuildRelationsXml:
             ],
         }
 
-        result = _build_relations_xml(data)
+        result = _build_relationships_xml(data)
 
         assert "Class&lt;T&gt;" in result
         assert "Method&lt;T&gt;" in result
@@ -187,17 +187,17 @@ class TestBuildRelationsXml:
                 "sourceIdentifier": "id",
                 "profile": api_name,
                 "found": False,
-                "relations": [],
+                "relationships": [],
             }
-            result = _build_relations_xml(data)
+            result = _build_relationships_xml(data)
             assert f'profile="{mcp_name}"' in result
 
 
-class TestGetArtifactRelationsTool:
+class TestGetArtifactRelationshipsTool:
     """Test the async tool function."""
 
     @pytest.mark.asyncio
-    @patch("tools.artifact_relations.get_api_key_from_context")
+    @patch("tools.artifact_relationships.get_api_key_from_context")
     async def test_default_profile_sends_calls_only(self, mock_get_api_key):
         mock_get_api_key.return_value = "test_key"
 
@@ -210,7 +210,7 @@ class TestGetArtifactRelationsTool:
             "sourceIdentifier": "org/repo::path::Symbol",
             "profile": "CallsOnly",
             "found": True,
-            "relations": [],
+            "relationships": [],
         }
         mock_response.raise_for_status = MagicMock()
 
@@ -222,7 +222,7 @@ class TestGetArtifactRelationsTool:
         mock_context.base_url = "https://app.codealive.ai"
         ctx.request_context.lifespan_context = mock_context
 
-        result = await get_artifact_relations(
+        result = await get_artifact_relationships(
             ctx=ctx,
             identifier="org/repo::path::Symbol",
         )
@@ -233,7 +233,7 @@ class TestGetArtifactRelationsTool:
         assert 'found="true"' in result
 
     @pytest.mark.asyncio
-    @patch("tools.artifact_relations.get_api_key_from_context")
+    @patch("tools.artifact_relationships.get_api_key_from_context")
     async def test_explicit_profile_maps_correctly(self, mock_get_api_key):
         mock_get_api_key.return_value = "test_key"
 
@@ -246,7 +246,7 @@ class TestGetArtifactRelationsTool:
             "sourceIdentifier": "id",
             "profile": "InheritanceOnly",
             "found": True,
-            "relations": [],
+            "relationships": [],
         }
         mock_response.raise_for_status = MagicMock()
 
@@ -258,7 +258,7 @@ class TestGetArtifactRelationsTool:
         mock_context.base_url = "https://app.codealive.ai"
         ctx.request_context.lifespan_context = mock_context
 
-        await get_artifact_relations(
+        await get_artifact_relationships(
             ctx=ctx,
             identifier="id",
             profile="inheritanceOnly",
@@ -270,21 +270,21 @@ class TestGetArtifactRelationsTool:
     @pytest.mark.asyncio
     async def test_empty_identifier_returns_error(self):
         ctx = MagicMock(spec=Context)
-        result = await get_artifact_relations(ctx=ctx, identifier="")
+        result = await get_artifact_relationships(ctx=ctx, identifier="")
         assert "<error>" in result
         assert "required" in result
 
     @pytest.mark.asyncio
     async def test_unsupported_profile_returns_error(self):
         ctx = MagicMock(spec=Context)
-        result = await get_artifact_relations(
+        result = await get_artifact_relationships(
             ctx=ctx, identifier="id", profile="invalidProfile"
         )
         assert "<error>" in result
         assert "Unsupported profile" in result
 
     @pytest.mark.asyncio
-    @patch("tools.artifact_relations.get_api_key_from_context")
+    @patch("tools.artifact_relationships.get_api_key_from_context")
     async def test_api_error_returns_error_xml(self, mock_get_api_key):
         import httpx
 
@@ -309,13 +309,13 @@ class TestGetArtifactRelationsTool:
         mock_context.base_url = "https://app.codealive.ai"
         ctx.request_context.lifespan_context = mock_context
 
-        result = await get_artifact_relations(ctx=ctx, identifier="id")
+        result = await get_artifact_relationships(ctx=ctx, identifier="id")
 
         assert "<error>" in result
         assert "401" in result
 
     @pytest.mark.asyncio
-    @patch("tools.artifact_relations.get_api_key_from_context")
+    @patch("tools.artifact_relationships.get_api_key_from_context")
     async def test_not_found_response_renders_correctly(self, mock_get_api_key):
         mock_get_api_key.return_value = "test_key"
 
@@ -328,7 +328,7 @@ class TestGetArtifactRelationsTool:
             "sourceIdentifier": "org/repo::path::Missing",
             "profile": "CallsOnly",
             "found": False,
-            "relations": [],
+            "relationships": [],
         }
         mock_response.raise_for_status = MagicMock()
 
@@ -340,7 +340,7 @@ class TestGetArtifactRelationsTool:
         mock_context.base_url = "https://app.codealive.ai"
         ctx.request_context.lifespan_context = mock_context
 
-        result = await get_artifact_relations(ctx=ctx, identifier="org/repo::path::Missing")
+        result = await get_artifact_relationships(ctx=ctx, identifier="org/repo::path::Missing")
 
         assert 'found="false"' in result
-        assert "<relation_group" not in result
+        assert "<relationship_group" not in result
