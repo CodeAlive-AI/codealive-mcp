@@ -60,6 +60,9 @@ async def fetch_artifacts(
     Note:
         - Maximum 20 identifiers per request to avoid excessive payloads.
         - Identifiers must come from `codebase_search` results.
+        - Relationships shown here are a **preview** (up to 3 call relationships per direction).
+          To retrieve the complete list, or to explore other relationship types
+          (inheritance, references), use `get_artifact_relationships`.
     """
     if not identifiers:
         return "<error>At least one identifier is required.</error>"
