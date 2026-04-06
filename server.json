@@ -61,6 +61,14 @@
       {
         "name": "codebase_consultant",
         "description": "Get comprehensive AI-powered analysis, explanations, and insights about your codebase. Ask complex questions about architecture, patterns, dependencies, and implementation details."
+      },
+      {
+        "name": "fetch_artifacts",
+        "description": "Retrieve full source code of artifacts by their identifiers from search results. Returns content with line numbers and a preview of call relationships (outgoing and incoming calls)."
+      },
+      {
+        "name": "get_artifact_relationships",
+        "description": "Explore an artifact's relationships — call graph, inheritance hierarchy, or references. Drill down after search or fetch to understand how code connects across the codebase."
       }
     ]
   }
