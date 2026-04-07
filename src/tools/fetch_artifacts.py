@@ -143,6 +143,7 @@ def _build_artifacts_xml(data: dict) -> str:
     """
     xml_parts = ["<artifacts>"]
 
+    has_any_relationships = False
     artifacts = data.get("artifacts", [])
     for artifact in artifacts:
         content = artifact.get("content")
@@ -168,11 +169,30 @@ def _build_artifacts_xml(data: dict) -> str:
             relationships_xml = _build_relationships_xml(relationships)
             if relationships_xml:
                 xml_parts.append(relationships_xml)
+                if _has_any_calls(relationships):
+                    has_any_relationships = True
 
         xml_parts.append('  </artifact>')
 
+    if has_any_relationships:
+        xml_parts.append(
+            '  <hint>The <relationships> above are a preview (up to 3 calls per '
+            'direction). To retrieve the full list, or to explore other relationship '
+            'types (inheritance, references), call `get_artifact_relationships` with '
+            'an artifact identifier.</hint>'
+        )
+
     xml_parts.append("</artifacts>")
     return "\n".join(xml_parts)
+
+
+def _has_any_calls(relationships: dict) -> bool:
+    """Return True if relationships contain at least one outgoing or incoming call."""
+    for rel_type in ("outgoingCalls", "incomingCalls"):
+        count = relationships.get(f"{rel_type}Count")
+        if count and count > 0:
+            return True
+    return False
 
 
 def _build_relationships_xml(relationships: dict) -> str | None:
