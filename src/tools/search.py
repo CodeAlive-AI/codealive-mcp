@@ -6,9 +6,11 @@ from urllib.parse import urljoin
 import httpx
 from fastmcp import Context
 
+import json
+
 from core import CodeAliveContext, get_api_key_from_context, log_api_request, log_api_response
 from utils import (
-    transform_search_response_to_xml,
+    transform_search_response_to_json,
     handle_api_error,
     normalize_data_source_names,
 )
@@ -31,7 +33,7 @@ async def codebase_search(
     UNLESS the user has explicitly provided specific names (e.g., "search in my-repo").
 
     **WORKFLOW** (search → review → get content):
-      1. Call `codebase_search` → returns XML with paths, descriptions, identifiers
+      1. Call `codebase_search` → returns compact JSON with paths, descriptions, identifiers
       2. Review descriptions to decide which results matter
       3. Get full content:
          - Local repos (in your working directory): use `Read()` on the file paths
@@ -62,9 +64,13 @@ async def codebase_search(
                             - "full": Richer description — use when deciding which results to fetch.
 
     Returns:
-        XML with search results. Each result includes path, line numbers, kind, identifier,
-        contentByteSize, and description. Use identifiers with `fetch_artifacts` to get
-        full content for external repos, or `Read()` for local files.
+        Compact JSON with search results. Each result includes path, line numbers, kind,
+        identifier, contentByteSize, and description. Use identifiers with `fetch_artifacts`
+        to get full content for external repos, or `Read()` for local files.
+
+        Shape:
+            {"results":[{"path":"...","startLine":...,"endLine":...,"kind":"...",
+                         "identifier":"...","contentByteSize":...,"description":"..."}]}
 
     Note:
         - Searches the INDEXED version of repositories, NOT local files
@@ -78,7 +84,12 @@ async def codebase_search(
 
     # Validate inputs
     if not query or not query.strip():
-        return f"<error>[{_TOOL_NAME}] Query cannot be empty. Please provide a search term, function name, or description of the code you're looking for.</error>"
+        return json.dumps(
+            {
+                "error": f"[{_TOOL_NAME}] Query cannot be empty. Please provide a search term, function name, or description of the code you're looking for."
+            },
+            separators=(",", ":"),
+        )
 
     if not data_source_names or len(data_source_names) == 0:
         await ctx.info("No data source names provided. If the API key has exactly one assigned data source, that will be used as default.")
@@ -142,11 +153,8 @@ async def codebase_search(
 
         search_results = response.json()
 
-        # Transform the response to XML format for better LLM processing
-        xml_content = transform_search_response_to_xml(search_results)
-
-        # Return XML string directly
-        return xml_content
+        # Return compact JSON string directly
+        return transform_search_response_to_json(search_results)
 
     except (httpx.HTTPStatusError, Exception) as e:
         error_msg = await handle_api_error(
@@ -154,4 +162,4 @@ async def codebase_search(
         )
         if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 404:
             error_msg = f"[{_TOOL_NAME}] Error: Not found (404): One or more data sources could not be found. Check your data_sources."
-        return f"<error>{error_msg}</error>"
+        return json.dumps({"error": error_msg}, separators=(",", ":"))

@@ -28,7 +28,7 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
                     If False, returns all data sources regardless of processing state.
 
     Returns:
-        A formatted list of available data sources with the following information for each:
+        A compact JSON array of available data sources with the following fields for each:
         - id: Unique identifier for the data source
         - name: Human-readable name - CRITICAL for matching with current working directory name
         - description: Summary of codebase contents - CRITICAL for identifying if this matches your
@@ -109,25 +109,26 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
         # Parse and format the response
         data_sources = response.json()
 
-        # If no data sources found, return a helpful message
+        # If no data sources found, return an empty JSON array with a hint
         if not data_sources or len(data_sources) == 0:
-            return "No data sources found. Please add a repository or workspace to CodeAlive before using this API."
+            return json.dumps(
+                {
+                    "dataSources": [],
+                    "message": "No data sources found. Please add a repository or workspace to CodeAlive before using this API.",
+                },
+                separators=(",", ":"),
+            )
 
         # Remove repositoryIds from workspace data sources
         for data_source in data_sources:
             if data_source.get("type") == "Workspace" and "repositoryIds" in data_source:
                 del data_source["repositoryIds"]
 
-        # Format the response as a readable string
-        formatted_data = json.dumps(data_sources, indent=2)
-        result = f"Available data sources:\n{formatted_data}"
-
-        # Add usage hint
-        result += "\n\nYou can use these data source names with the codebase_search and codebase_consultant functions."
-
-        return result
+        # Return compact JSON
+        return json.dumps(data_sources, separators=(",", ":"))
 
     except (httpx.HTTPStatusError, Exception) as e:
-        return await handle_api_error(
+        error_msg = await handle_api_error(
             ctx, e, "retrieving data sources", method=_TOOL_NAME
         )
+        return json.dumps({"error": error_msg}, separators=(",", ":"))

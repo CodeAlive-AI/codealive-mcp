@@ -1,7 +1,7 @@
 """Artifact relationships tool implementation."""
 
-import html
-from typing import Optional
+import json
+from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin
 
 import httpx
@@ -55,26 +55,34 @@ async def get_artifact_relationships(
         max_count_per_type: Maximum related artifacts per relationship type (1–1000, default 50).
 
     Returns:
-        XML with grouped relationships:
-        <artifact_relationships sourceIdentifier="..." profile="callsOnly" found="true">
-          <relationship_group type="outgoing_calls" totalCount="57" returnedCount="50" truncated="true">
-            <artifact identifier="..." filePath="src/Data/Repo.cs" startLine="88" shortSummary="Stores data"/>
-          </relationship_group>
-          <relationship_group type="incoming_calls" totalCount="3" returnedCount="3" truncated="false">
-            <artifact identifier="..." filePath="src/Services/Worker.cs" startLine="142"/>
-          </relationship_group>
-        </artifact_relationships>
+        Compact JSON with grouped relationships:
+            {"sourceIdentifier":"...","profile":"callsOnly","found":true,
+             "relationships":[
+               {"type":"outgoing_calls","totalCount":57,"returnedCount":50,"truncated":true,
+                "items":[{"identifier":"...","filePath":"src/Data/Repo.cs","startLine":88,
+                          "shortSummary":"Stores data"}]},
+               {"type":"incoming_calls","totalCount":3,"returnedCount":3,"truncated":false,
+                "items":[{"identifier":"...","filePath":"src/Services/Worker.cs","startLine":142}]}
+             ]}
 
         When the artifact is not found or inaccessible:
-        <artifact_relationships sourceIdentifier="..." profile="callsOnly" found="false"/>
+            {"sourceIdentifier":"...","profile":"callsOnly","found":false}
     """
     if not identifier:
-        return f"<error>[{_TOOL_NAME}] Artifact identifier is required.</error>"
+        return json.dumps(
+            {"error": f"[{_TOOL_NAME}] Artifact identifier is required."},
+            separators=(",", ":"),
+        )
 
     api_profile = PROFILE_MAP.get(profile)
     if api_profile is None:
         supported = ", ".join(PROFILE_MAP.keys())
-        return f'<error>[{_TOOL_NAME}] Unsupported profile "{profile}". Use one of: {supported}</error>'
+        return json.dumps(
+            {
+                "error": f'[{_TOOL_NAME}] Unsupported profile "{profile}". Use one of: {supported}'
+            },
+            separators=(",", ":"),
+        )
 
     context: CodeAliveContext = ctx.request_context.lifespan_context
 
@@ -105,20 +113,20 @@ async def get_artifact_relationships(
         log_api_response(response, request_id)
         response.raise_for_status()
 
-        return _build_relationships_xml(response.json())
+        return _build_relationships_json(response.json())
 
     except (httpx.HTTPStatusError, Exception) as e:
         error_msg = await handle_api_error(
             ctx, e, "get artifact relationships", method=_TOOL_NAME
         )
-        return f"<error>{error_msg}</error>"
+        return json.dumps({"error": error_msg}, separators=(",", ":"))
 
 
-def _build_relationships_xml(data: dict) -> str:
-    """Build XML representation of artifact relationships response."""
+def _build_relationships_json(data: dict) -> str:
+    """Build a compact JSON representation of an artifact relationships response."""
     raw_source_id = data.get("sourceIdentifier") or ""
     raw_profile = data.get("profile") or ""
-    found = data.get("found", False)
+    found = bool(data.get("found", False))
 
     # Map profile back to MCP-friendly name
     mcp_profile = raw_profile
@@ -127,51 +135,46 @@ def _build_relationships_xml(data: dict) -> str:
             mcp_profile = mcp_name
             break
 
-    source_id_attr = html.escape(raw_source_id)
-    profile_attr = html.escape(mcp_profile)
+    payload: Dict[str, Any] = {
+        "sourceIdentifier": raw_source_id,
+        "profile": mcp_profile,
+        "found": found,
+    }
 
-    if not found:
-        return f'<artifact_relationships sourceIdentifier="{source_id_attr}" profile="{profile_attr}" found="false"/>'
+    if found:
+        relationships = data.get("relationships") or []
+        payload["relationships"] = [_build_group(group) for group in relationships]
 
-    relationships = data.get("relationships") or []
-    if not relationships:
-        return f'<artifact_relationships sourceIdentifier="{source_id_attr}" profile="{profile_attr}" found="true"/>'
+    return json.dumps(payload, separators=(",", ":"))
 
-    xml_parts = [
-        f'<artifact_relationships sourceIdentifier="{source_id_attr}" profile="{profile_attr}" found="true">'
-    ]
 
-    for group in relationships:
-        relationship_type = group.get("relationType", "")
-        mcp_type = RELATIONSHIP_TYPE_MAP.get(relationship_type, relationship_type.lower())
-        total_count = group.get("totalCount") or 0
-        returned_count = group.get("returnedCount") or 0
-        truncated = str(bool(group.get("truncated"))).lower()
+def _build_group(group: dict) -> Dict[str, Any]:
+    """Build the JSON representation of a single relationship group."""
+    relationship_type = group.get("relationType", "")
+    mcp_type = RELATIONSHIP_TYPE_MAP.get(relationship_type, relationship_type.lower())
 
-        xml_parts.append(
-            f'  <relationship_group type="{html.escape(mcp_type)}" '
-            f'totalCount="{total_count}" returnedCount="{returned_count}" '
-            f'truncated="{truncated}">'
-        )
+    items: List[Dict[str, Any]] = []
+    for item in group.get("items", []) or []:
+        item_dict: Dict[str, Any] = {"identifier": item.get("identifier") or ""}
 
-        for item in group.get("items", []):
-            attrs = [f'identifier="{html.escape(item.get("identifier") or "")}"']
+        file_path = item.get("filePath")
+        if file_path is not None:
+            item_dict["filePath"] = file_path
 
-            file_path = item.get("filePath")
-            if file_path is not None:
-                attrs.append(f'filePath="{html.escape(file_path)}"')
+        start_line = item.get("startLine")
+        if start_line is not None:
+            item_dict["startLine"] = start_line
 
-            start_line = item.get("startLine")
-            if start_line is not None:
-                attrs.append(f'startLine="{start_line}"')
+        short_summary = item.get("shortSummary")
+        if short_summary is not None:
+            item_dict["shortSummary"] = short_summary
 
-            short_summary = item.get("shortSummary")
-            if short_summary is not None:
-                attrs.append(f'shortSummary="{html.escape(short_summary)}"')
+        items.append(item_dict)
 
-            xml_parts.append(f'    <artifact {" ".join(attrs)}/>')
-
-        xml_parts.append('  </relationship_group>')
-
-    xml_parts.append('</artifact_relationships>')
-    return "\n".join(xml_parts)
+    return {
+        "type": mcp_type,
+        "totalCount": group.get("totalCount") or 0,
+        "returnedCount": group.get("returnedCount") or 0,
+        "truncated": bool(group.get("truncated")),
+        "items": items,
+    }

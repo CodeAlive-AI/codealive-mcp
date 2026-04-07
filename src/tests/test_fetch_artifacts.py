@@ -79,16 +79,17 @@ class TestBuildArtifactsXmlStartLine:
 
 
 class TestBuildArtifactsXmlContentWrapper:
-    """Test that content is wrapped in <content> element."""
+    """Test that content is wrapped in <content> element with newlines around it."""
 
-    def test_content_wrapped_in_element(self):
+    def test_content_wrapped_in_element_with_newlines(self):
         data = {"artifacts": [
             {"identifier": "repo::file.py::func", "content": "code here", "contentByteSize": 9}
         ]}
         result = _build_artifacts_xml(data)
         assert "<content>" in result
         assert "</content>" in result
-        assert "<content>1 | code here</content>" in result
+        # Content lives on its own line(s) between the open and close tags
+        assert "<content>\n1 | code here\n    </content>" in result
 
     def test_artifact_structure_has_content_child(self):
         data = {"artifacts": [
@@ -98,6 +99,21 @@ class TestBuildArtifactsXmlContentWrapper:
         assert "<artifact" in result
         assert "</artifact>" in result
         assert "<content>" in result
+
+    def test_content_is_not_html_escaped(self):
+        """Quotes, ampersands, and angle brackets are kept as-is inside <content>."""
+        data = {"artifacts": [
+            {"identifier": "repo::f.py::fn",
+             "content": 'if x < 10 && y > 5: return "<ok>"',
+             "contentByteSize": 32}
+        ]}
+        result = _build_artifacts_xml(data)
+        # Raw characters preserved
+        assert 'if x < 10 && y > 5: return "<ok>"' in result
+        # No HTML escaping
+        assert "&lt;" not in result
+        assert "&amp;" not in result
+        assert "&quot;" not in result
 
 
 class TestBuildArtifactsXmlRelationships:
@@ -187,7 +203,7 @@ class TestBuildArtifactsXmlRelationships:
         assert 'identifier="repo::src/b.ts::FuncB"/>' in result
         assert 'summary' not in result.split('FuncB')[1].split('/>')[0]
 
-    def test_relationships_escapes_xml_in_summary(self):
+    def test_relationships_summary_kept_raw(self):
         data = {"artifacts": [{
             "identifier": "repo::src/a.ts::FuncA",
             "content": "code",
@@ -202,8 +218,10 @@ class TestBuildArtifactsXmlRelationships:
             }
         }]}
         result = _build_artifacts_xml(data)
-        assert "&lt;" in result
-        assert "&amp;" in result
+        # Raw special chars preserved (no HTML escaping)
+        assert "Checks if x < 10 & y > 5" in result
+        assert "&lt;" not in result
+        assert "&amp;" not in result
 
 
 class TestHasAnyCalls:
@@ -510,8 +528,8 @@ async def test_fetch_artifacts_api_error(mock_get_api_key):
 
 @pytest.mark.asyncio
 @patch('tools.fetch_artifacts.get_api_key_from_context')
-async def test_fetch_artifacts_escapes_xml(mock_get_api_key):
-    """Test that content with XML special characters is properly escaped."""
+async def test_fetch_artifacts_keeps_content_raw(mock_get_api_key):
+    """Test that XML special chars in content are emitted as-is (no HTML escaping)."""
     mock_get_api_key.return_value = "test_key"
 
     ctx = MagicMock(spec=Context)
@@ -546,9 +564,15 @@ async def test_fetch_artifacts_escapes_xml(mock_get_api_key):
         identifiers=["owner/repo::file.py::func"],
     )
 
-    # Line numbers are added before escaping
-    assert "1 | if x &lt; 10 &amp;&amp; y &gt; 5:" in result
-    assert "&lt;" in result
-    assert "&amp;" in result
+    # Line numbers are added but no escaping
+    assert '1 | if x < 10 && y > 5:' in result
+    assert '2 |     return "<ok>"' in result
+    # No HTML escaping
+    assert "&lt;" not in result
+    assert "&amp;" not in result
+    assert "&quot;" not in result
+    # Structure is preserved with newline-bracketed content body
     assert "<artifacts>" in result
     assert "</artifacts>" in result
+    assert "<content>\n" in result
+    assert "\n    </content>" in result

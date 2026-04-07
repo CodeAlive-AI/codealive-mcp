@@ -53,11 +53,8 @@ async def test_get_data_sources_removes_repository_ids_from_workspaces(mock_get_
     # Call the function
     result = await get_data_sources(mock_ctx, alive_only=True)
 
-    # Parse the result to verify repositoryIds were removed
-    # The result format is: "Available data sources:\n{json}\n\nYou can use..."
-    json_start = result.index('[')
-    json_end = result.rindex(']') + 1
-    data_sources = json.loads(result[json_start:json_end])
+    # Result is a compact JSON array
+    data_sources = json.loads(result)
 
     # Verify repository still has all fields
     repo = next(ds for ds in data_sources if ds["type"] == "Repository")
@@ -122,10 +119,8 @@ async def test_get_data_sources_preserves_other_workspace_fields(mock_get_api_ke
     # Call the function
     result = await get_data_sources(mock_ctx, alive_only=True)
 
-    # Parse the result
-    json_start = result.index('[')
-    json_end = result.rindex(']') + 1
-    data_sources = json.loads(result[json_start:json_end])
+    # Result is compact JSON array
+    data_sources = json.loads(result)
 
     workspace = data_sources[0]
 
@@ -175,10 +170,8 @@ async def test_get_data_sources_handles_missing_repository_ids(mock_get_api_key)
     # Call the function - should not raise an error
     result = await get_data_sources(mock_ctx, alive_only=True)
 
-    # Parse the result
-    json_start = result.index('[')
-    json_end = result.rindex(']') + 1
-    data_sources = json.loads(result[json_start:json_end])
+    # Result is compact JSON array
+    data_sources = json.loads(result)
 
     # Verify workspace is intact
     workspace = data_sources[0]

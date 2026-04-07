@@ -3,7 +3,6 @@
 from typing import List
 from urllib.parse import urljoin
 
-import html
 import httpx
 from fastmcp import Context
 
@@ -140,6 +139,9 @@ def _build_artifacts_xml(data: dict) -> str:
     Relationships (object?).
     Content is null when artifact is not found or has no content.
     Only artifacts with content are included in output.
+
+    Content is emitted raw (no HTML escaping) and wrapped between newlines so the
+    LLM sees the source code exactly as-is.
     """
     xml_parts = ["<artifacts>"]
 
@@ -150,7 +152,7 @@ def _build_artifacts_xml(data: dict) -> str:
         if content is None:
             continue
 
-        identifier = html.escape(artifact.get("identifier", ""))
+        identifier = artifact.get("identifier", "")
         content_byte_size = artifact.get("contentByteSize")
 
         attrs = [f'identifier="{identifier}"']
@@ -159,10 +161,11 @@ def _build_artifacts_xml(data: dict) -> str:
 
         start_line = artifact.get("startLine") or 1
         numbered_content = _add_line_numbers(content, start_line)
-        escaped_content = html.escape(numbered_content)
 
         xml_parts.append(f'  <artifact {" ".join(attrs)}>')
-        xml_parts.append(f'    <content>{escaped_content}</content>')
+        xml_parts.append('    <content>')
+        xml_parts.append(numbered_content)
+        xml_parts.append('    </content>')
 
         relationships = artifact.get("relationships")
         if relationships is not None:
@@ -199,6 +202,7 @@ def _build_relationships_xml(relationships: dict) -> str | None:
     """Build XML for artifact call relationships.
 
     Returns None if no relationship types are present.
+    Identifiers and summaries are emitted raw (no HTML escaping).
     """
     parts = []
 
@@ -213,11 +217,11 @@ def _build_relationships_xml(relationships: dict) -> str | None:
         call_elements = []
         if calls:
             for call in calls:
-                call_id = html.escape(call.get("identifier") or "")
+                call_id = call.get("identifier") or ""
                 summary = call.get("summary")
                 if summary is not None:
                     call_elements.append(
-                        f'        <call identifier="{call_id}" summary="{html.escape(summary)}"/>'
+                        f'        <call identifier="{call_id}" summary="{summary}"/>'
                     )
                 else:
                     call_elements.append(f'        <call identifier="{call_id}"/>')

@@ -1,5 +1,7 @@
 """Test suite for search tool."""
 
+import json
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastmcp import Context
@@ -8,8 +10,8 @@ from tools.search import codebase_search
 
 @pytest.mark.asyncio
 @patch('tools.search.get_api_key_from_context')
-async def test_codebase_search_returns_xml_string(mock_get_api_key):
-    """Test that codebase_search returns an XML string directly."""
+async def test_codebase_search_returns_compact_json(mock_get_api_key):
+    """Test that codebase_search returns a compact JSON string."""
     mock_get_api_key.return_value = "test_key"
 
     ctx = MagicMock(spec=Context)
@@ -51,8 +53,13 @@ async def test_codebase_search_returns_xml_string(mock_get_api_key):
     )
 
     assert isinstance(result, str)
-    assert "<results>" in result
-    assert "<search_result" in result
+    # Compact JSON: no spaces after separators
+    assert ", " not in result and ": " not in result
+
+    data = json.loads(result)
+    assert len(data["results"]) == 1
+    assert data["results"][0]["path"] == "path/auth.py"
+    assert data["results"][0]["identifier"] == "owner/repo::path/auth.py::authenticate_user"
 
     call_args = mock_client.get.call_args
     params = call_args.kwargs["params"]
@@ -153,7 +160,7 @@ async def test_codebase_search_description_detail_mapping(mock_get_api_key):
 
 @pytest.mark.asyncio
 async def test_codebase_search_empty_query_returns_error_string():
-    """Test that empty query returns an error string (not dict)."""
+    """Test that empty query returns a JSON error object."""
     ctx = MagicMock(spec=Context)
     ctx.info = AsyncMock()
     ctx.warning = AsyncMock()
@@ -171,8 +178,9 @@ async def test_codebase_search_empty_query_returns_error_string():
     )
 
     assert isinstance(result, str)
-    assert "<error>" in result
-    assert "Query cannot be empty" in result
+    data = json.loads(result)
+    assert "error" in data
+    assert "Query cannot be empty" in data["error"]
 
 
 @pytest.mark.asyncio
@@ -219,5 +227,6 @@ async def test_codebase_search_api_error_returns_error_string(mock_get_api_key):
     )
 
     assert isinstance(result, str)
-    assert "<error>" in result
-    assert "404" in result
+    data = json.loads(result)
+    assert "error" in data
+    assert "404" in data["error"]

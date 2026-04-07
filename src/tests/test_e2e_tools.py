@@ -91,7 +91,7 @@ def _api_key_env(monkeypatch):
 
 class TestGetDataSourcesE2E:
     @pytest.mark.asyncio
-    async def test_returns_formatted_data_sources(self):
+    async def test_returns_compact_json(self):
         payload = [
             {"id": "r1", "name": "backend", "type": "Repository", "url": "https://github.com/org/backend"},
             {"id": "w1", "name": "platform", "type": "Workspace", "repositoryIds": ["r1", "r2"]},
@@ -106,10 +106,15 @@ class TestGetDataSourcesE2E:
             result = await client.call_tool("get_data_sources", {})
 
         text = _text(result)
-        assert "backend" in text
-        assert "platform" in text
+        # Compact JSON: no spaces after separators
+        assert ", " not in text and ": " not in text
+        data = json.loads(text)
+        names = [ds["name"] for ds in data]
+        assert "backend" in names
+        assert "platform" in names
         # repositoryIds must be stripped from workspaces
-        assert "repositoryIds" not in text
+        for ds in data:
+            assert "repositoryIds" not in ds
 
     @pytest.mark.asyncio
     async def test_empty_list_returns_message(self):
@@ -117,7 +122,10 @@ class TestGetDataSourcesE2E:
         async with Client(mcp) as client:
             result = await client.call_tool("get_data_sources", {})
 
-        assert "No data sources found" in _text(result)
+        text = _text(result)
+        data = json.loads(text)
+        assert data["dataSources"] == []
+        assert "No data sources found" in data["message"]
 
     @pytest.mark.asyncio
     async def test_alive_only_false_hits_all_endpoint(self):
@@ -145,7 +153,9 @@ class TestGetDataSourcesE2E:
             result = await client.call_tool("get_data_sources", {}, raise_on_error=False)
 
         text = _text(result)
-        assert "500" in text or "Server error" in text
+        data = json.loads(text)
+        assert "error" in data
+        assert "500" in data["error"] or "Server error" in data["error"]
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +179,7 @@ class TestCodebaseSearchE2E:
     }
 
     @pytest.mark.asyncio
-    async def test_success_returns_xml(self):
+    async def test_success_returns_compact_json(self):
         def handler(req):
             assert req.url.params.get("Query") == "auth service"
             assert req.url.params.get("Mode") == "auto"
@@ -183,10 +193,12 @@ class TestCodebaseSearchE2E:
                 {"query": "auth service", "data_sources": ["backend"]},
             )
 
-        xml = _text(result)
-        assert "<results>" in xml
-        assert "src/auth.py" in xml
-        assert "AuthService" in xml
+        text = _text(result)
+        # Compact JSON: no spaces after separators
+        assert ", " not in text and ": " not in text
+        data = json.loads(text)
+        assert data["results"][0]["path"] == "src/auth.py"
+        assert "AuthService" in data["results"][0]["identifier"]
 
     @pytest.mark.asyncio
     async def test_empty_query_returns_error(self):
@@ -198,10 +210,12 @@ class TestCodebaseSearchE2E:
             )
 
         text = _text(result)
-        assert "empty" in text.lower() or "error" in text.lower()
+        data = json.loads(text)
+        assert "error" in data
+        assert "empty" in data["error"].lower()
 
     @pytest.mark.asyncio
-    async def test_no_results_returns_empty_xml(self):
+    async def test_no_results_returns_empty_json(self):
         mcp = _server({
             "/api/search": lambda r: httpx.Response(200, json={"results": []}),
         })
@@ -210,7 +224,8 @@ class TestCodebaseSearchE2E:
                 "codebase_search", {"query": "nonexistent"},
             )
 
-        assert "<results></results>" in _text(result)
+        text = _text(result)
+        assert text == '{"results":[]}'
 
     @pytest.mark.asyncio
     async def test_deep_mode_forwarded(self):
@@ -240,7 +255,9 @@ class TestCodebaseSearchE2E:
             )
 
         text = _text(result)
-        assert "404" in text or "not found" in text.lower()
+        data = json.loads(text)
+        assert "error" in data
+        assert "404" in data["error"] or "not found" in data["error"].lower()
 
 
 # ---------------------------------------------------------------------------
@@ -277,6 +294,9 @@ class TestFetchArtifactsE2E:
         assert "<artifacts>" in xml
         assert "AuthService" in xml
         assert "class AuthService" in xml
+        # Content body sits between newlines inside <content>
+        assert "<content>\n" in xml
+        assert "\n    </content>" in xml
 
     @pytest.mark.asyncio
     async def test_empty_identifiers_returns_error(self):
@@ -460,7 +480,7 @@ class TestGetArtifactRelationshipsE2E:
     }
 
     @pytest.mark.asyncio
-    async def test_success_returns_xml(self):
+    async def test_success_returns_compact_json(self):
         def handler(req):
             body = json.loads(req.content)
             assert body["identifier"] == "org/repo::src/svc.py::Service"
@@ -474,12 +494,16 @@ class TestGetArtifactRelationshipsE2E:
                 {"identifier": "org/repo::src/svc.py::Service", "profile": "callsOnly"},
             )
 
-        xml = _text(result)
-        assert 'found="true"' in xml
-        assert "outgoing_calls" in xml
-        assert "incoming_calls" in xml
-        assert "Cache lookup" in xml
-        assert "src/db.py" in xml
+        text = _text(result)
+        assert ", " not in text and ": " not in text
+        data = json.loads(text)
+        assert data["found"] is True
+        types = [g["type"] for g in data["relationships"]]
+        assert "outgoing_calls" in types
+        assert "incoming_calls" in types
+        outgoing_items = data["relationships"][0]["items"]
+        assert any(item.get("shortSummary") == "Cache lookup" for item in outgoing_items)
+        assert any(item.get("filePath") == "src/db.py" for item in outgoing_items)
 
     @pytest.mark.asyncio
     async def test_not_found(self):
@@ -497,7 +521,9 @@ class TestGetArtifactRelationshipsE2E:
                 {"identifier": "org/repo::missing"},
             )
 
-        assert 'found="false"' in _text(result)
+        data = json.loads(_text(result))
+        assert data["found"] is False
+        assert "relationships" not in data
 
     @pytest.mark.asyncio
     async def test_invalid_profile_returns_error(self):
@@ -510,7 +536,9 @@ class TestGetArtifactRelationshipsE2E:
             )
 
         text = _text(result)
-        assert "Unsupported profile" in text or "error" in text.lower()
+        data = json.loads(text)
+        assert "error" in data
+        assert "Unsupported profile" in data["error"]
 
     @pytest.mark.asyncio
     async def test_empty_identifier_returns_error(self):
@@ -522,7 +550,9 @@ class TestGetArtifactRelationshipsE2E:
                 raise_on_error=False,
             )
 
-        assert "required" in _text(result).lower() or "error" in _text(result).lower()
+        data = json.loads(_text(result))
+        assert "error" in data
+        assert "required" in data["error"].lower()
 
     @pytest.mark.asyncio
     async def test_inheritance_profile_maps_correctly(self):
@@ -553,6 +583,6 @@ class TestGetArtifactRelationshipsE2E:
                 {"identifier": "org/repo::cls", "profile": "inheritanceOnly"},
             )
 
-        xml = _text(result)
-        assert "ancestors" in xml
-        assert 'profile="inheritanceOnly"' in xml
+        data = json.loads(_text(result))
+        assert data["profile"] == "inheritanceOnly"
+        assert data["relationships"][0]["type"] == "ancestors"

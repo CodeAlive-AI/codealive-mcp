@@ -1,11 +1,17 @@
 """Tests for the get_artifact_relationships tool."""
 
+import json
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastmcp import Context
 
-from tools.artifact_relationships import get_artifact_relationships, _build_relationships_xml, PROFILE_MAP
+from tools.artifact_relationships import (
+    PROFILE_MAP,
+    _build_relationships_json,
+    get_artifact_relationships,
+)
 
 
 class TestProfileMapping:
@@ -25,8 +31,8 @@ class TestProfileMapping:
         assert PROFILE_MAP["referencesOnly"] == "ReferencesOnly"
 
 
-class TestBuildRelationshipsXml:
-    """Test XML rendering of relationship responses."""
+class TestBuildRelationshipsJson:
+    """Test compact JSON rendering of relationship responses."""
 
     def test_found_with_grouped_relationships(self):
         data = {
@@ -64,24 +70,31 @@ class TestBuildRelationshipsXml:
             ],
         }
 
-        result = _build_relationships_xml(data)
+        result = _build_relationships_json(data)
+        # Compact JSON
+        assert ", " not in result and ": " not in result
 
-        assert 'sourceIdentifier="org/repo::path::Symbol"' in result
-        assert 'profile="callsOnly"' in result
-        assert 'found="true"' in result
-        assert 'type="outgoing_calls"' in result
-        assert 'totalCount="57"' in result
-        assert 'returnedCount="50"' in result
-        assert 'truncated="true"' in result
-        assert 'filePath="src/Data/Repository.cs"' in result
-        assert 'startLine="88"' in result
-        assert 'shortSummary="Stores the aggregate"' in result
-        assert 'type="incoming_calls"' in result
-        assert 'truncated="false"' in result
+        parsed = json.loads(result)
+        assert parsed["sourceIdentifier"] == "org/repo::path::Symbol"
+        assert parsed["profile"] == "callsOnly"
+        assert parsed["found"] is True
+
+        outgoing = parsed["relationships"][0]
+        assert outgoing["type"] == "outgoing_calls"
+        assert outgoing["totalCount"] == 57
+        assert outgoing["returnedCount"] == 50
+        assert outgoing["truncated"] is True
+        assert outgoing["items"][0]["filePath"] == "src/Data/Repository.cs"
+        assert outgoing["items"][0]["startLine"] == 88
+        assert outgoing["items"][0]["shortSummary"] == "Stores the aggregate"
+
+        incoming = parsed["relationships"][1]
+        assert incoming["type"] == "incoming_calls"
+        assert incoming["truncated"] is False
         # Incoming call has no shortSummary
-        assert result.count("shortSummary") == 1
+        assert "shortSummary" not in incoming["items"][0]
 
-    def test_not_found_renders_self_closing(self):
+    def test_not_found_omits_relationships(self):
         data = {
             "sourceIdentifier": "org/repo::path::Missing",
             "profile": "CallsOnly",
@@ -89,13 +102,11 @@ class TestBuildRelationshipsXml:
             "relationships": [],
         }
 
-        result = _build_relationships_xml(data)
+        parsed = json.loads(_build_relationships_json(data))
+        assert parsed["found"] is False
+        assert "relationships" not in parsed
 
-        assert 'found="false"' in result
-        assert result.endswith("/>")
-        assert "<relationship_group" not in result
-
-    def test_empty_group_still_rendered(self):
+    def test_empty_groups_still_rendered(self):
         data = {
             "sourceIdentifier": "org/repo::path::Symbol",
             "profile": "InheritanceOnly",
@@ -118,11 +129,12 @@ class TestBuildRelationshipsXml:
             ],
         }
 
-        result = _build_relationships_xml(data)
-
-        assert 'type="ancestors"' in result
-        assert 'type="descendants"' in result
-        assert 'totalCount="0"' in result
+        parsed = json.loads(_build_relationships_json(data))
+        types = [g["type"] for g in parsed["relationships"]]
+        assert types == ["ancestors", "descendants"]
+        for g in parsed["relationships"]:
+            assert g["totalCount"] == 0
+            assert g["items"] == []
 
     def test_optional_fields_omitted_when_null(self):
         data = {
@@ -145,14 +157,14 @@ class TestBuildRelationshipsXml:
             ],
         }
 
-        result = _build_relationships_xml(data)
+        parsed = json.loads(_build_relationships_json(data))
+        item = parsed["relationships"][0]["items"][0]
+        assert item["identifier"] == "org/repo::path::Target"
+        assert "filePath" not in item
+        assert "startLine" not in item
+        assert "shortSummary" not in item
 
-        assert 'identifier="org/repo::path::Target"' in result
-        assert "filePath" not in result
-        assert "startLine" not in result
-        assert "shortSummary" not in result
-
-    def test_html_entities_escaped(self):
+    def test_quotes_and_specials_use_json_escaping(self):
         data = {
             "sourceIdentifier": "org/repo::path::Class<T>",
             "profile": "CallsOnly",
@@ -173,12 +185,16 @@ class TestBuildRelationshipsXml:
             ],
         }
 
-        result = _build_relationships_xml(data)
+        result = _build_relationships_json(data)
+        # No HTML entity encoding in JSON output
+        assert "&quot;" not in result
+        assert "&amp;" not in result
+        assert "&lt;" not in result
 
-        assert "Class&lt;T&gt;" in result
-        assert "Method&lt;T&gt;" in result
-        assert "&amp;" in result
-        assert "&quot;" in result
+        parsed = json.loads(result)
+        assert parsed["sourceIdentifier"] == "org/repo::path::Class<T>"
+        assert parsed["relationships"][0]["items"][0]["identifier"] == "org/repo::path::Method<T>"
+        assert parsed["relationships"][0]["items"][0]["shortSummary"] == 'Returns "value" & more'
 
     def test_profile_mapped_back_to_mcp_name(self):
         """Backend profile enum names are mapped back to MCP-friendly names."""
@@ -189,8 +205,8 @@ class TestBuildRelationshipsXml:
                 "found": False,
                 "relationships": [],
             }
-            result = _build_relationships_xml(data)
-            assert f'profile="{mcp_name}"' in result
+            parsed = json.loads(_build_relationships_json(data))
+            assert parsed["profile"] == mcp_name
 
 
 class TestGetArtifactRelationshipsTool:
@@ -230,7 +246,7 @@ class TestGetArtifactRelationshipsTool:
         # Verify the API was called with CallsOnly profile
         call_args = mock_client.post.call_args
         assert call_args[1]["json"]["profile"] == "CallsOnly"
-        assert 'found="true"' in result
+        assert json.loads(result)["found"] is True
 
     @pytest.mark.asyncio
     @patch("tools.artifact_relationships.get_api_key_from_context")
@@ -271,8 +287,9 @@ class TestGetArtifactRelationshipsTool:
     async def test_empty_identifier_returns_error(self):
         ctx = MagicMock(spec=Context)
         result = await get_artifact_relationships(ctx=ctx, identifier="")
-        assert "<error>" in result
-        assert "required" in result
+        data = json.loads(result)
+        assert "error" in data
+        assert "required" in data["error"]
 
     @pytest.mark.asyncio
     async def test_unsupported_profile_returns_error(self):
@@ -280,12 +297,13 @@ class TestGetArtifactRelationshipsTool:
         result = await get_artifact_relationships(
             ctx=ctx, identifier="id", profile="invalidProfile"
         )
-        assert "<error>" in result
-        assert "Unsupported profile" in result
+        data = json.loads(result)
+        assert "error" in data
+        assert "Unsupported profile" in data["error"]
 
     @pytest.mark.asyncio
     @patch("tools.artifact_relationships.get_api_key_from_context")
-    async def test_api_error_returns_error_xml(self, mock_get_api_key):
+    async def test_api_error_returns_error_json(self, mock_get_api_key):
         import httpx
 
         mock_get_api_key.return_value = "test_key"
@@ -311,8 +329,9 @@ class TestGetArtifactRelationshipsTool:
 
         result = await get_artifact_relationships(ctx=ctx, identifier="id")
 
-        assert "<error>" in result
-        assert "401" in result
+        data = json.loads(result)
+        assert "error" in data
+        assert "401" in data["error"]
 
     @pytest.mark.asyncio
     @patch("tools.artifact_relationships.get_api_key_from_context")
@@ -342,5 +361,6 @@ class TestGetArtifactRelationshipsTool:
 
         result = await get_artifact_relationships(ctx=ctx, identifier="org/repo::path::Missing")
 
-        assert 'found="false"' in result
-        assert "<relationship_group" not in result
+        data = json.loads(result)
+        assert data["found"] is False
+        assert "relationships" not in data
