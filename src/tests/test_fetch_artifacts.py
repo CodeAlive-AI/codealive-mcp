@@ -3,7 +3,12 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastmcp import Context
-from tools.fetch_artifacts import fetch_artifacts, _add_line_numbers, _build_artifacts_xml
+from tools.fetch_artifacts import (
+    _add_line_numbers,
+    _build_artifacts_xml,
+    _has_any_calls,
+    fetch_artifacts,
+)
 
 
 class TestAddLineNumbers:
@@ -199,6 +204,146 @@ class TestBuildArtifactsXmlRelationships:
         result = _build_artifacts_xml(data)
         assert "&lt;" in result
         assert "&amp;" in result
+
+
+class TestHasAnyCalls:
+    """Test cases for _has_any_calls helper."""
+
+    def test_outgoing_calls_present(self):
+        assert _has_any_calls({"outgoingCallsCount": 5, "incomingCallsCount": 0}) is True
+
+    def test_incoming_calls_present(self):
+        assert _has_any_calls({"outgoingCallsCount": 0, "incomingCallsCount": 2}) is True
+
+    def test_both_zero(self):
+        assert _has_any_calls({"outgoingCallsCount": 0, "incomingCallsCount": 0}) is False
+
+    def test_both_none(self):
+        assert _has_any_calls({"outgoingCallsCount": None, "incomingCallsCount": None}) is False
+
+    def test_empty_dict(self):
+        assert _has_any_calls({}) is False
+
+
+class TestBuildArtifactsXmlHint:
+    """Test the trailing hint that points to get_artifact_relationships."""
+
+    HINT_MARKER = "get_artifact_relationships"
+
+    def test_hint_present_when_outgoing_calls_exist(self):
+        data = {"artifacts": [{
+            "identifier": "repo::src/a.ts::FuncA",
+            "content": "code",
+            "contentByteSize": 4,
+            "relationships": {
+                "outgoingCallsCount": 12,
+                "outgoingCalls": [
+                    {"identifier": "repo::src/b.ts::FuncB", "summary": "Validates"},
+                ],
+                "incomingCallsCount": 0,
+                "incomingCalls": None,
+            }
+        }]}
+        result = _build_artifacts_xml(data)
+        assert "<hint>" in result
+        assert self.HINT_MARKER in result
+        assert "</hint>" in result
+        # Hint must appear after relationships and before closing </artifacts>
+        assert result.index("<hint>") > result.index("</relationships>")
+        assert result.index("<hint>") < result.index("</artifacts>")
+
+    def test_hint_present_when_only_incoming_calls_exist(self):
+        data = {"artifacts": [{
+            "identifier": "repo::src/a.ts::FuncA",
+            "content": "code",
+            "contentByteSize": 4,
+            "relationships": {
+                "outgoingCallsCount": 0,
+                "outgoingCalls": None,
+                "incomingCallsCount": 1,
+                "incomingCalls": [
+                    {"identifier": "repo::src/d.ts::FuncD", "summary": "Calls A"},
+                ],
+            }
+        }]}
+        result = _build_artifacts_xml(data)
+        assert "<hint>" in result
+        assert self.HINT_MARKER in result
+
+    def test_hint_absent_when_relationships_missing(self):
+        data = {"artifacts": [{
+            "identifier": "repo::src/a.ts",
+            "content": "code",
+            "contentByteSize": 4,
+        }]}
+        result = _build_artifacts_xml(data)
+        assert "<hint>" not in result
+        assert self.HINT_MARKER not in result
+
+    def test_hint_absent_when_relationships_null(self):
+        data = {"artifacts": [{
+            "identifier": "repo::src/a.ts",
+            "content": "code",
+            "contentByteSize": 4,
+            "relationships": None,
+        }]}
+        result = _build_artifacts_xml(data)
+        assert "<hint>" not in result
+
+    def test_hint_absent_when_all_call_counts_are_zero(self):
+        data = {"artifacts": [{
+            "identifier": "repo::src/a.ts::FuncA",
+            "content": "code",
+            "contentByteSize": 4,
+            "relationships": {
+                "outgoingCallsCount": 0,
+                "outgoingCalls": None,
+                "incomingCallsCount": 0,
+                "incomingCalls": None,
+            }
+        }]}
+        result = _build_artifacts_xml(data)
+        assert "<hint>" not in result
+
+    def test_hint_appears_once_with_multiple_artifacts(self):
+        data = {"artifacts": [
+            {
+                "identifier": "repo::src/a.ts::FuncA",
+                "content": "code",
+                "contentByteSize": 4,
+                "relationships": {
+                    "outgoingCallsCount": 2,
+                    "outgoingCalls": [
+                        {"identifier": "repo::src/b.ts::FuncB", "summary": "X"},
+                    ],
+                    "incomingCallsCount": 0,
+                    "incomingCalls": None,
+                }
+            },
+            {
+                "identifier": "repo::src/c.ts::FuncC",
+                "content": "code",
+                "contentByteSize": 4,
+                "relationships": {
+                    "outgoingCallsCount": 0,
+                    "outgoingCalls": None,
+                    "incomingCallsCount": 3,
+                    "incomingCalls": [
+                        {"identifier": "repo::src/d.ts::FuncD", "summary": "Y"},
+                    ],
+                }
+            },
+        ]}
+        result = _build_artifacts_xml(data)
+        assert result.count("<hint>") == 1
+        assert result.count(self.HINT_MARKER) == 1
+
+    def test_hint_absent_when_no_artifacts_have_content(self):
+        data = {"artifacts": [
+            {"identifier": "repo::missing.ts::Func", "content": None, "contentByteSize": None},
+        ]}
+        result = _build_artifacts_xml(data)
+        assert "<hint>" not in result
 
 
 @pytest.mark.asyncio
