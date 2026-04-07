@@ -1,27 +1,135 @@
-"""Logging utilities for CodeAlive MCP server."""
+"""Structured logging with loguru for CodeAlive MCP server.
 
-import json
+All log output goes to stderr (safe for stdio MCP transport).
+When ``serialize=True`` loguru emits one JSON object per line,
+with OTel trace context automatically injected via a patcher.
+"""
+
 import logging
+import sys
 import uuid
-from typing import Optional, Dict, Any, Union, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import httpx
+from loguru import logger
+from opentelemetry import trace as otel_trace
 
-logger = logging.getLogger(__name__)
+# ---------------------------------------------------------------------------
+# PII masking
+# ---------------------------------------------------------------------------
+
+# Request-body keys that may contain user content
+_PII_FIELDS = frozenset({"query", "question", "messages", "message"})
+_PII_MAX_LEN = 80
+_RESPONSE_BODY_MAX_LEN = 500
+
+
+def _mask_pii(value: str, max_len: int = _PII_MAX_LEN) -> str:
+    if len(value) <= max_len:
+        return value
+    return value[:max_len] + f"...[{len(value)} chars]"
+
+
+def _sanitize_body(body: Dict[str, Any]) -> Dict[str, Any]:
+    """Return a shallow copy with PII fields truncated."""
+    sanitized: Dict[str, Any] = {}
+    for k, v in body.items():
+        if k in _PII_FIELDS:
+            if isinstance(v, str):
+                sanitized[k] = _mask_pii(v)
+            elif isinstance(v, list):
+                sanitized[k] = f"[{len(v)} items]"
+            else:
+                sanitized[k] = "<masked>"
+        else:
+            sanitized[k] = v
+    return sanitized
+
+
+# ---------------------------------------------------------------------------
+# OTel context injection
+# ---------------------------------------------------------------------------
+
+def _otel_patcher(record: dict) -> None:
+    """Inject current OTel trace_id / span_id into every log record."""
+    try:
+        span = otel_trace.get_current_span()
+        ctx = span.get_span_context()
+        if ctx and ctx.trace_id:
+            record["extra"]["trace_id"] = format(ctx.trace_id, "032x")
+            record["extra"]["span_id"] = format(ctx.span_id, "016x")
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# stdlib logging intercept (captures logs from libraries using stdlib)
+# ---------------------------------------------------------------------------
+
+class _InterceptHandler(logging.Handler):
+    """Route stdlib ``logging`` through loguru."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            level: str | int = logger.level(record.levelname).name
+        except ValueError:
+            level = record.levelno
+
+        frame, depth = sys._getframe(1), 1
+        while frame and frame.f_code.co_filename == logging.__file__:
+            frame = frame.f_back  # type: ignore[assignment]
+            depth += 1
+
+        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
+
+
+# ---------------------------------------------------------------------------
+# Minimum-level check
+# ---------------------------------------------------------------------------
+
+_current_level: str = "INFO"
+
+
+def _is_debug_enabled() -> bool:
+    """Fast check whether DEBUG-level logs are active."""
+    return _current_level == "DEBUG"
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def setup_logging(debug: bool = False) -> None:
+    """Configure loguru for structured JSON logging to stderr.
+
+    Also installs an intercept handler so that stdlib ``logging`` messages
+    (e.g. from uvicorn, httpx, n8n middleware) are routed through loguru.
+    """
+    global _current_level
+    logger.remove()
+
+    _current_level = "DEBUG" if debug else "INFO"
+
+    logger.configure(patcher=_otel_patcher)
+
+    logger.add(
+        sys.stderr,
+        level=_current_level,
+        serialize=True,
+    )
+
+    # Intercept stdlib logging
+    logging.basicConfig(handlers=[_InterceptHandler()], level=0, force=True)
+
+    logger.info("Logging initialized at {level} level", level=_current_level)
 
 
 def setup_debug_logging() -> bool:
-    """Setup debug logging if debug mode is enabled."""
+    """Backward-compatible helper: enable debug logging if ``DEBUG_MODE`` env is set."""
     import os
 
     if os.environ.get("DEBUG_MODE", "").lower() in ["true", "1", "yes"]:
-        logging.basicConfig(
-            level=logging.DEBUG,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            handlers=[logging.StreamHandler()]
-        )
-        logger.setLevel(logging.DEBUG)
-        logger.debug("Debug logging enabled")
+        setup_logging(debug=True)
         return True
     return False
 
@@ -32,70 +140,91 @@ def log_api_request(
     headers: Dict[str, str],
     params: Optional[Union[Dict, List[Tuple]]] = None,
     body: Optional[Dict[str, Any]] = None,
-    request_id: Optional[str] = None
+    request_id: Optional[str] = None,
 ) -> str:
-    """Log API request details in debug mode.
+    """Log an outgoing API request at DEBUG level with PII masking.
 
-    Returns:
-        Request ID for tracing
+    Returns the ``request_id`` for correlation with the response log.
     """
     if request_id is None:
         request_id = str(uuid.uuid4())[:8]
 
-    if logger.isEnabledFor(logging.DEBUG):
-        logger.debug(f"\n{'='*60}")
-        logger.debug(f"[{request_id}] API REQUEST: {method} {url}")
+    if not _is_debug_enabled():
+        return request_id
 
-        # Mask authorization header
-        safe_headers = {
-            k: v if k != 'Authorization' else 'Bearer ***'
-            for k, v in headers.items()
-        }
-        logger.debug(f"Headers: {json.dumps(safe_headers, indent=2)}")
+    safe_headers = {
+        k: ("Bearer ***" if k.lower() == "authorization" else v)
+        for k, v in headers.items()
+    }
 
-        if params:
-            if isinstance(params, dict):
-                logger.debug(f"Query Parameters: {json.dumps(params, indent=2)}")
-            else:
-                # Handle list of tuples
-                param_dict = {}
-                for key, value in params:
-                    if key in param_dict:
-                        if not isinstance(param_dict[key], list):
-                            param_dict[key] = [param_dict[key]]
-                        param_dict[key].append(value)
-                    else:
-                        param_dict[key] = value
-                logger.debug(f"Query Parameters: {json.dumps(param_dict, indent=2)}")
+    extra: Dict[str, Any] = {
+        "event": "api_request",
+        "request_id": request_id,
+        "http_method": method,
+        "url": url,
+        "headers": safe_headers,
+    }
 
-        if body:
-            logger.debug(f"Request Body: {json.dumps(body, indent=2)}")
+    if params:
+        if isinstance(params, dict):
+            extra["params"] = params
+        else:
+            param_dict: Dict[str, Any] = {}
+            for key, value in params:
+                if key in param_dict:
+                    if not isinstance(param_dict[key], list):
+                        param_dict[key] = [param_dict[key]]
+                    param_dict[key].append(value)
+                else:
+                    param_dict[key] = value
+            extra["params"] = param_dict
 
-        logger.debug(f"{'='*60}\n")
+    if body:
+        extra["body"] = _sanitize_body(body)
+
+    logger.bind(**extra).debug("API request: {method} {url}", method=method, url=url)
 
     return request_id
 
 
-def log_api_response(response: httpx.Response, request_id: Optional[str] = None) -> None:
-    """Log API response details in debug mode without truncation."""
-    if logger.isEnabledFor(logging.DEBUG):
-        if request_id is None:
-            request_id = "unknown"
+def log_api_response(
+    response: httpx.Response,
+    request_id: Optional[str] = None,
+) -> None:
+    """Log an API response at DEBUG level with body truncation.
 
-        logger.debug(f"\n{'='*60}")
-        logger.debug(f"[{request_id}] API RESPONSE: {response.status_code} {response.url}")
-        logger.debug(f"Response Headers: {json.dumps(dict(response.headers), indent=2)}")
+    IMPORTANT: This function reads ``response.text`` which consumes the
+    response body.  It is guarded by a level check so that streaming
+    responses (e.g. chat completions) are not accidentally consumed at
+    INFO level.
+    """
+    if not _is_debug_enabled():
+        return
 
-        try:
-            if response.headers.get("content-type", "").startswith("application/json"):
-                response_body = response.json()
-                response_str = json.dumps(response_body, indent=2)
-                logger.debug(f"Response Body (Full):\n{response_str}")
-            else:
-                response_text = response.text
-                logger.debug(f"Response Text (Full):\n{response_text}")
-        except Exception as e:
-            logger.debug(f"Could not parse response: {e}")
-            logger.debug(f"Raw response (Full): {response.text}")
+    if request_id is None:
+        request_id = "unknown"
 
-        logger.debug(f"{'='*60}\n")
+    extra: Dict[str, Any] = {
+        "event": "api_response",
+        "request_id": request_id,
+        "status_code": response.status_code,
+        "url": str(response.url),
+    }
+
+    try:
+        body_text = response.text
+        if len(body_text) > _RESPONSE_BODY_MAX_LEN:
+            extra["response_body"] = (
+                body_text[:_RESPONSE_BODY_MAX_LEN]
+                + f"...[{len(body_text)} chars total]"
+            )
+        else:
+            extra["response_body"] = body_text
+    except Exception:
+        extra["response_body"] = "<unreadable>"
+
+    logger.bind(**extra).debug(
+        "API response: {status_code} {url}",
+        status_code=response.status_code,
+        url=str(response.url),
+    )

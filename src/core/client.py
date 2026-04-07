@@ -8,6 +8,7 @@ from typing import AsyncIterator
 import httpx
 from fastmcp import Context, FastMCP
 from fastmcp.server.dependencies import get_http_headers
+from loguru import logger
 
 from .config import Config, REQUEST_TIMEOUT_SECONDS
 
@@ -18,6 +19,12 @@ class CodeAliveContext:
     client: httpx.AsyncClient
     api_key: str
     base_url: str
+
+
+# Module-level readiness state for the /ready endpoint.
+# Set to True once the lifespan context (httpx client) is initialized,
+# reset to False on shutdown.
+_server_ready: bool = False
 
 
 def get_api_key_from_context(ctx: Context) -> str:
@@ -51,13 +58,12 @@ async def codealive_lifespan(server: FastMCP) -> AsyncIterator[CodeAliveContext]
     """Manage CodeAlive API client lifecycle."""
     config = Config.from_environment()
 
-    print(f"CodeAlive MCP Server starting in {config.transport_mode.upper()} mode:")
-    if config.transport_mode == "stdio":
-        print(f"  - API Key: {'*' * 5}{config.api_key[-5:] if config.api_key else 'Not set'}")
-    else:
-        print(f"  - API Keys: Extracted from Authorization headers per request")
-    print(f"  - Base URL: {config.base_url}")
-    print(f"  - SSL Verification: {'Enabled' if config.verify_ssl else 'Disabled'}")
+    logger.info(
+        "CodeAlive MCP Server starting in {mode} mode",
+        mode=config.transport_mode.upper(),
+        base_url=config.base_url,
+        ssl_verification=config.verify_ssl,
+    )
 
     # Create client
     if config.transport_mode == "stdio":
@@ -82,11 +88,14 @@ async def codealive_lifespan(server: FastMCP) -> AsyncIterator[CodeAliveContext]
             verify=config.verify_ssl,
         )
 
+    global _server_ready
     try:
+        _server_ready = True
         yield CodeAliveContext(
             client=client,
             api_key="",  # Will be set per-request in HTTP mode
             base_url=config.base_url
         )
     finally:
+        _server_ready = False
         await client.aclose()

@@ -1,0 +1,103 @@
+{
+  "manifest_version": "0.4",
+  "name": "codealive-mcp",
+  "display_name": "CodeAlive",
+  "version": "0.3.0",
+  "description": "Semantic code search and codebase Q&A for Claude Desktop using your CodeAlive account or self-hosted deployment.",
+  "long_description": "CodeAlive gives Claude Desktop access to semantic code search, artifact fetch, repository discovery, and architecture-aware codebase Q&A. This extension runs locally via MCP and supports both CodeAlive Cloud and self-hosted deployments.",
+  "author": {
+    "name": "CodeAlive AI",
+    "email": "hello@codealive.ai",
+    "url": "https://www.codealive.ai/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CodeAlive-AI/codealive-mcp"
+  },
+  "homepage": "https://www.codealive.ai/",
+  "documentation": "https://docs.codealive.ai/integrations/mcp/claude-desktop",
+  "support": "https://github.com/CodeAlive-AI/codealive-mcp/issues",
+  "license": "MIT",
+  "privacy_policies": [
+    "https://www.codealive.ai/privacy/"
+  ],
+  "keywords": [
+    "mcp",
+    "code-search",
+    "semantic-search",
+    "codebase",
+    "claude-desktop"
+  ],
+  "server": {
+    "type": "uv",
+    "entry_point": "src/codealive_mcp_server.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${__dirname}",
+        "src/codealive_mcp_server.py",
+        "--transport",
+        "stdio"
+      ],
+      "env": {
+        "CODEALIVE_API_KEY": "${user_config.api_key}",
+        "CODEALIVE_BASE_URL": "${user_config.base_url}",
+        "CODEALIVE_IGNORE_SSL": "${user_config.ignore_ssl}"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "get_data_sources",
+      "description": "List indexed repositories and workspaces that are ready for search and chat."
+    },
+    {
+      "name": "codebase_search",
+      "description": "Search indexed code semantically across repositories and workspaces."
+    },
+    {
+      "name": "fetch_artifacts",
+      "description": "Fetch full source for specific search results when you need the underlying code."
+    },
+    {
+      "name": "codebase_consultant",
+      "description": "Ask architecture and implementation questions with full codebase context."
+    },
+    {
+      "name": "get_artifact_relationships",
+      "description": "Inspect relationships between artifacts returned by CodeAlive search."
+    }
+  ],
+  "user_config": {
+    "api_key": {
+      "type": "string",
+      "title": "CodeAlive API Key",
+      "description": "Bearer token for your CodeAlive Cloud or self-hosted deployment.",
+      "sensitive": true,
+      "required": true
+    },
+    "base_url": {
+      "type": "string",
+      "title": "CodeAlive Base URL",
+      "description": "Deployment origin for CodeAlive. Use the root URL, for example https://codealive.yourcompany.com. Values ending with /api are accepted and normalized automatically.",
+      "default": "https://app.codealive.ai",
+      "required": true
+    },
+    "ignore_ssl": {
+      "type": "boolean",
+      "title": "Ignore TLS Errors",
+      "description": "Disable TLS certificate validation for development or self-signed test environments only.",
+      "default": false
+    }
+  },
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ]
+  }
+}

@@ -5,9 +5,15 @@ description = "MCP server for the CodeAlive API"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "fastmcp==2.14.4",
+    "fastmcp==3.2.0",
     "httpx==0.28.1",
     "python-dotenv==1.2.1",
+    "loguru==0.7.3",
+    "opentelemetry-api==1.39.1",
+    "opentelemetry-sdk==1.39.1",
+    "opentelemetry-exporter-otlp-proto-http==1.39.1",
+    "opentelemetry-instrumentation-httpx==0.60b1",
+    "opentelemetry-semantic-conventions==0.60b1",
 ]
 
 [project.optional-dependencies]
@@ -31,6 +37,7 @@ packages = ["src"]
 package-dir = {"" = "."}
 
 [tool.setuptools_scm]
+fallback_version = "0.3.0"
 
 [tool.uv]
 required-version = "==0.11.2"

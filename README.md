@@ -298,9 +298,26 @@ Create `.vscode/mcp.json` in your workspace:
 <details>
 <summary><b>Claude Desktop</b></summary>
 
-> **Note:** Claude Desktop remote MCP requires OAuth authentication. Use Docker option for Bearer token support.
+> **Recommended:** use the native Claude Desktop extension bundle (`.mcpb`) for one-click install, secure token storage, and self-hosted `baseUrl` configuration. Keep Docker (STDIO) as a fallback.
 
-**Docker (STDIO)**
+**Native desktop extension (`.mcpb`)**
+
+1. Build the bundle from this repository:
+   ```bash
+   npm install -g @anthropic-ai/mcpb
+   mcpb pack
+   ```
+
+2. In Claude Desktop, open **Settings → Extensions → Install Extension...**
+
+3. Select the generated `.mcpb` file and configure:
+   - **CodeAlive API Key**: your bearer token
+   - **CodeAlive Base URL**: your deployment origin, for example `https://codealive.yourcompany.com`
+   - **Ignore TLS Errors**: only for dev/self-signed environments
+
+   `https://host` is preferred. `https://host/api` is also accepted and normalized automatically.
+
+**Docker (STDIO) fallback**
 
 1. Edit your config file:
    - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -1026,6 +1043,12 @@ Replace `your-server:8000` with your actual deployment URL and port.
 ## 📦 Publishing to MCP Registry
 
 For maintainers: see [DEPLOYMENT.md](DEPLOYMENT.md) for instructions on publishing new versions to the MCP Registry.
+
+---
+
+## Privacy Policy
+
+CodeAlive processes the repositories and queries you send through this extension in order to provide semantic search and codebase analysis. For complete privacy details, see [CodeAlive Privacy Policy](https://www.codealive.ai/privacy/).
 
 ---
 
