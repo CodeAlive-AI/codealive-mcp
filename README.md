@@ -298,7 +298,7 @@ Create `.vscode/mcp.json` in your workspace:
 <details>
 <summary><b>Claude Desktop</b></summary>
 
-> **Note:** Claude Desktop remote MCP requires OAuth authentication. Use Docker option for Bearer token support.
+> **Note:** This setup adds CodeAlive as a local MCP server in `claude_desktop_config.json` using Docker (STDIO). If you prefer Claude Desktop remote connectors, configure them in Claude Desktop settings instead.
 
 **Docker (STDIO)**
 
