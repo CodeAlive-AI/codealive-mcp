@@ -5,15 +5,14 @@ n8n sends extra parameters (sessionId, action, chatInput, toolCallId) that aren'
 of the tool schema. This middleware strips them before FastMCP validates the function signature.
 """
 
-import logging
 from typing import TYPE_CHECKING
+
+from loguru import logger
 
 from fastmcp.server.middleware import Middleware
 
 if TYPE_CHECKING:
     from fastmcp.server.middleware import MiddlewareContext, CallNext
-
-logger = logging.getLogger("n8n-middleware")
 
 # Extra parameters that n8n sends but aren't part of the tool schema
 EXTRA_KEYS = {"sessionId", "action", "chatInput", "toolCallId"}

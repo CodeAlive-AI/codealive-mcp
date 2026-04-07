@@ -12,6 +12,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
+from loguru import logger
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -24,8 +25,8 @@ load_dotenv(dotenv_path=dotenv_path)
 sys.path.insert(0, str(Path(__file__).parent))
 
 # Import core components
-from core import codealive_lifespan, setup_debug_logging
-from middleware import N8NRemoveParametersMiddleware
+from core import codealive_lifespan, setup_logging, setup_debug_logging, init_tracing
+from middleware import N8NRemoveParametersMiddleware, ObservabilityMiddleware
 from tools import codebase_consultant, get_data_sources, fetch_artifacts, codebase_search, get_artifact_relationships
 
 # Initialize FastMCP server with lifespan and enhanced system instructions
@@ -78,9 +79,9 @@ mcp = FastMCP(
     lifespan=codealive_lifespan
 )
 
-# Register middleware to handle n8n extra parameters
-# This must be registered BEFORE tools to intercept tool calls
+# Register middleware — order matters: n8n cleanup runs first, then tracing wraps the clean call
 mcp.add_middleware(N8NRemoveParametersMiddleware())
+mcp.add_middleware(ObservabilityMiddleware())
 
 
 # Add health check endpoint for AWS ALB
@@ -92,6 +93,39 @@ async def health_check(request: Request) -> JSONResponse:
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "service": "codealive-mcp-server"
     })
+
+
+# Readiness endpoint — verifies the lifespan context (httpx client) is up
+@mcp.custom_route("/ready", methods=["GET"])
+async def readiness_check(request: Request) -> JSONResponse:
+    """Readiness probe: returns 200 only when the server can accept tool calls."""
+    try:
+        # Access the lifespan context via the app state that FastMCP injects
+        app_state = request.app.state
+        # FastMCP stores the lifespan context; if it's missing the server isn't ready
+        ctx = getattr(app_state, "lifespan_context", None)
+        if ctx is None:
+            return JSONResponse(
+                {"status": "not_ready", "reason": "lifespan not initialized"},
+                status_code=503,
+            )
+        # Check that the httpx client exists and isn't closed
+        client = getattr(ctx, "client", None)
+        if client is None or client.is_closed:
+            return JSONResponse(
+                {"status": "not_ready", "reason": "http client unavailable"},
+                status_code=503,
+            )
+        return JSONResponse({
+            "status": "ready",
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "service": "codealive-mcp-server",
+        })
+    except Exception as exc:
+        return JSONResponse(
+            {"status": "not_ready", "reason": str(exc)},
+            status_code=503,
+        )
 
 
 # Register tools
@@ -115,32 +149,39 @@ def main():
 
     args = parser.parse_args()
 
+    # Bootstrap logging early (before any log output)
+    debug = args.debug
+    if debug:
+        os.environ["DEBUG_MODE"] = "true"
+    setup_logging(debug=debug)
+
+    # Bootstrap OTel tracing
+    init_tracing()
+
     # Command line arguments take precedence over .env file/environment variables
     if args.api_key:
         os.environ["CODEALIVE_API_KEY"] = args.api_key
 
     if args.base_url:
         os.environ["CODEALIVE_BASE_URL"] = args.base_url
-        print(f"Using base URL from command line: {args.base_url}")
+        logger.info("Using base URL from command line: {url}", url=args.base_url)
 
     # Disable SSL verification if explicitly requested or in debug mode
-    if args.ignore_ssl or args.debug:
+    if args.ignore_ssl or debug:
         os.environ["CODEALIVE_IGNORE_SSL"] = "true"
         if args.ignore_ssl:
-            print("SSL certificate validation disabled by --ignore-ssl flag")
-        elif args.debug:
-            print("SSL certificate validation disabled in debug mode")
+            logger.warning("SSL certificate validation disabled by --ignore-ssl flag")
+        elif debug:
+            logger.warning("SSL certificate validation disabled in debug mode")
 
-    # Debug environment if requested
-    if args.debug:
-        os.environ["DEBUG_MODE"] = "true"
-        setup_debug_logging()
-        print("\nDEBUG MODE ENABLED")
-        print("Environment:")
-        print(f"  - Current working dir: {os.getcwd()}")
-        print(f"  - Script location: {__file__}")
-        print(f"  - Dotenv path: {dotenv_path}")
-        print(f"  - Dotenv file exists: {os.path.exists(dotenv_path)}")
+    if debug:
+        logger.debug(
+            "Debug environment",
+            cwd=os.getcwd(),
+            script=__file__,
+            dotenv_path=str(dotenv_path),
+            dotenv_exists=os.path.exists(dotenv_path),
+        )
 
     # Set transport mode for validation
     os.environ["TRANSPORT_MODE"] = args.transport
@@ -151,21 +192,25 @@ def main():
     if args.transport == "stdio":
         # STDIO mode: require API key in environment
         if not api_key:
-            print("ERROR: STDIO mode requires CODEALIVE_API_KEY environment variable.")
-            print("Please set this in your .env file or environment.")
+            logger.error("STDIO mode requires CODEALIVE_API_KEY environment variable")
             sys.exit(1)
-        print(f"STDIO mode: Using API key from environment (ends with: ...{api_key[-4:] if len(api_key) > 4 else '****'})")
+        logger.info(
+            "STDIO mode: API key from environment (ends with ...{suffix})",
+            suffix=api_key[-4:] if len(api_key) > 4 else "****",
+        )
     else:
         # HTTP mode: API keys should be provided via Authorization headers
         if api_key:
-            print("WARNING: HTTP mode detected CODEALIVE_API_KEY in environment.")
-            print("In production, API keys should be provided via Authorization: Bearer headers.")
-            print("Environment variable will be ignored in HTTP mode.")
-        print("HTTP mode: API keys will be extracted from Authorization: Bearer headers")
+            logger.warning(
+                "HTTP mode detected CODEALIVE_API_KEY in environment — "
+                "it will be ignored; use Authorization: Bearer headers instead"
+            )
+        logger.info("HTTP mode: API keys extracted from Authorization: Bearer headers")
 
     if not base_url:
-        print("WARNING: CODEALIVE_BASE_URL environment variable is not set, using default.")
-        print("CodeAlive will connect to the production API at https://app.codealive.ai")
+        logger.info(
+            "CODEALIVE_BASE_URL not set, using default: https://app.codealive.ai"
+        )
 
     # Run the server with the selected transport
     if args.transport == "http":

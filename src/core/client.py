@@ -8,6 +8,7 @@ from typing import AsyncIterator
 import httpx
 from fastmcp import Context, FastMCP
 from fastmcp.server.dependencies import get_http_headers
+from loguru import logger
 
 from .config import Config, REQUEST_TIMEOUT_SECONDS
 
@@ -51,13 +52,12 @@ async def codealive_lifespan(server: FastMCP) -> AsyncIterator[CodeAliveContext]
     """Manage CodeAlive API client lifecycle."""
     config = Config.from_environment()
 
-    print(f"CodeAlive MCP Server starting in {config.transport_mode.upper()} mode:")
-    if config.transport_mode == "stdio":
-        print(f"  - API Key: {'*' * 5}{config.api_key[-5:] if config.api_key else 'Not set'}")
-    else:
-        print(f"  - API Keys: Extracted from Authorization headers per request")
-    print(f"  - Base URL: {config.base_url}")
-    print(f"  - SSL Verification: {'Enabled' if config.verify_ssl else 'Disabled'}")
+    logger.info(
+        "CodeAlive MCP Server starting in {mode} mode",
+        mode=config.transport_mode.upper(),
+        base_url=config.base_url,
+        ssl_verification=config.verify_ssl,
+    )
 
     # Create client
     if config.transport_mode == "stdio":
