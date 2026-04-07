@@ -7,10 +7,26 @@ from fastmcp import Context
 from core.config import REQUEST_TIMEOUT_SECONDS
 
 
+def _method_prefix(method: Optional[str]) -> str:
+    """Build a `[method] ` prefix for log/error messages, empty if no method given."""
+    return f"[{method}] " if method else ""
+
+
+def format_validation_error(method: str, message: str) -> str:
+    """Format a validation error message with the MCP tool/method name prefix.
+
+    Use this for early-return validation errors that don't pass through
+    `handle_api_error` so the originating tool is still visible in the message.
+    """
+    return f"{_method_prefix(method)}Error: {message}"
+
+
 async def handle_api_error(
     ctx: Context,
     error: Exception,
-    operation: str = "API operation"
+    operation: str = "API operation",
+    *,
+    method: Optional[str] = None,
 ) -> str:
     """
     Handle API errors consistently across all tools.
@@ -19,10 +35,15 @@ async def handle_api_error(
         ctx: FastMCP context for logging
         error: The exception that occurred
         operation: Description of the operation that failed
+        method: Name of the MCP tool/method that triggered the error.
+                When provided, every returned and logged message is prefixed
+                with `[method]` so failures are easy to attribute.
 
     Returns:
-        User-friendly error message string
+        User-friendly error message string, prefixed with `[method]` when given.
     """
+    prefix = _method_prefix(method)
+
     # Handle timeout errors first
     if isinstance(error, httpx.TimeoutException):
         timeout_minutes = int(REQUEST_TIMEOUT_SECONDS // 60)
@@ -30,8 +51,8 @@ async def handle_api_error(
             f"Request timeout during {operation}: The CodeAlive service did not respond within {timeout_minutes} minutes. "
             "This may happen due to temporarily overloaded LLMs. Please try again later."
         )
-        await ctx.error(error_msg)
-        return f"Error: {error_msg}"
+        await ctx.error(f"{prefix}{error_msg}")
+        return f"{prefix}Error: {error_msg}"
 
     if isinstance(error, httpx.HTTPStatusError):
         error_code = error.response.status_code
@@ -56,12 +77,12 @@ async def handle_api_error(
         else:
             error_msg = f"HTTP error: {error_code} - {error_detail[:200]}"  # Limit detail length
 
-        await ctx.error(error_msg)
-        return f"Error: {error_msg}"
+        await ctx.error(f"{prefix}{error_msg}")
+        return f"{prefix}Error: {error_msg}"
     else:
         error_msg = f"Error during {operation}: {str(error)}"
-        await ctx.error(error_msg)
-        return f"Error: {error_msg}. Please check your input parameters and try again."
+        await ctx.error(f"{prefix}{error_msg}")
+        return f"{prefix}Error: {error_msg}. Please check your input parameters and try again."
 
 
 def normalize_data_source_names(data_sources) -> list:

@@ -10,6 +10,9 @@ from fastmcp import Context
 from core import CodeAliveContext, get_api_key_from_context, log_api_request, log_api_response
 from utils import handle_api_error
 
+# MCP tool/method name surfaced in every error/log message from this module.
+_TOOL_NAME = "fetch_artifacts"
+
 
 async def fetch_artifacts(
     ctx: Context,
@@ -65,10 +68,10 @@ async def fetch_artifacts(
           (inheritance, references), use `get_artifact_relationships`.
     """
     if not identifiers:
-        return "<error>At least one identifier is required.</error>"
+        return f"<error>[{_TOOL_NAME}] At least one identifier is required.</error>"
 
     if len(identifiers) > 20:
-        return "<error>Maximum 20 identifiers per request. Please reduce the number of identifiers.</error>"
+        return f"<error>[{_TOOL_NAME}] Maximum 20 identifiers per request. Please reduce the number of identifiers.</error>"
 
     context: CodeAliveContext = ctx.request_context.lifespan_context
 
@@ -105,7 +108,9 @@ async def fetch_artifacts(
         return _build_artifacts_xml(artifacts_data)
 
     except (httpx.HTTPStatusError, Exception) as e:
-        error_msg = await handle_api_error(ctx, e, "fetch artifacts")
+        error_msg = await handle_api_error(
+            ctx, e, "fetch artifacts", method=_TOOL_NAME
+        )
         return f"<error>{error_msg}</error>"
 
 

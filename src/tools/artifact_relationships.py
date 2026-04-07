@@ -10,6 +10,9 @@ from fastmcp import Context
 from core import CodeAliveContext, get_api_key_from_context, log_api_request, log_api_response
 from utils import handle_api_error
 
+# MCP tool/method name surfaced in every error/log message from this module.
+_TOOL_NAME = "get_artifact_relationships"
+
 # Map MCP profile names to backend enum values
 PROFILE_MAP = {
     "callsOnly": "CallsOnly",
@@ -66,12 +69,12 @@ async def get_artifact_relationships(
         <artifact_relationships sourceIdentifier="..." profile="callsOnly" found="false"/>
     """
     if not identifier:
-        return "<error>Artifact identifier is required.</error>"
+        return f"<error>[{_TOOL_NAME}] Artifact identifier is required.</error>"
 
     api_profile = PROFILE_MAP.get(profile)
     if api_profile is None:
         supported = ", ".join(PROFILE_MAP.keys())
-        return f'<error>Unsupported profile "{profile}". Use one of: {supported}</error>'
+        return f'<error>[{_TOOL_NAME}] Unsupported profile "{profile}". Use one of: {supported}</error>'
 
     context: CodeAliveContext = ctx.request_context.lifespan_context
 
@@ -100,7 +103,9 @@ async def get_artifact_relationships(
         return _build_relationships_xml(response.json())
 
     except (httpx.HTTPStatusError, Exception) as e:
-        error_msg = await handle_api_error(ctx, e, "get artifact relationships")
+        error_msg = await handle_api_error(
+            ctx, e, "get artifact relationships", method=_TOOL_NAME
+        )
         return f"<error>{error_msg}</error>"
 
 

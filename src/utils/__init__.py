@@ -3,6 +3,7 @@
 from .response_transformer import transform_search_response_to_xml
 from .errors import (
     handle_api_error,
+    format_validation_error,
     format_data_source_names,
     normalize_data_source_names,
 )
@@ -10,6 +11,7 @@ from .errors import (
 __all__ = [
     'transform_search_response_to_xml',
     'handle_api_error',
+    'format_validation_error',
     'format_data_source_names',
     'normalize_data_source_names',
 ]

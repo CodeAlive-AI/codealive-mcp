@@ -13,6 +13,9 @@ from utils import (
     normalize_data_source_names,
 )
 
+# MCP tool/method name surfaced in every error/log message from this module.
+_TOOL_NAME = "codebase_search"
+
 
 async def codebase_search(
     ctx: Context,
@@ -75,7 +78,7 @@ async def codebase_search(
 
     # Validate inputs
     if not query or not query.strip():
-        return "<error>Query cannot be empty. Please provide a search term, function name, or description of the code you're looking for.</error>"
+        return f"<error>[{_TOOL_NAME}] Query cannot be empty. Please provide a search term, function name, or description of the code you're looking for.</error>"
 
     if not data_source_names or len(data_source_names) == 0:
         await ctx.info("No data source names provided. If the API key has exactly one assigned data source, that will be used as default.")
@@ -85,7 +88,7 @@ async def codebase_search(
 
         # Map input mode to backend's expected enum values
         if normalized_mode not in ["auto", "fast", "deep"]:
-            await ctx.warning(f"Invalid search mode: {mode}. Valid modes are 'auto', 'fast', and 'deep'. Using 'auto' instead.")
+            await ctx.warning(f"[{_TOOL_NAME}] Invalid search mode: {mode}. Valid modes are 'auto', 'fast', and 'deep'. Using 'auto' instead.")
             normalized_mode = "auto"
 
         # Log the search attempt
@@ -146,7 +149,9 @@ async def codebase_search(
         return xml_content
 
     except (httpx.HTTPStatusError, Exception) as e:
-        error_msg = await handle_api_error(ctx, e, "code search")
+        error_msg = await handle_api_error(
+            ctx, e, "code search", method=_TOOL_NAME
+        )
         if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 404:
-            error_msg = f"Error: Not found (404): One or more data sources could not be found. Check your data_sources."
+            error_msg = f"[{_TOOL_NAME}] Error: Not found (404): One or more data sources could not be found. Check your data_sources."
         return f"<error>{error_msg}</error>"

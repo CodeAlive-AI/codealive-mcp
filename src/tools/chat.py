@@ -10,9 +10,13 @@ from fastmcp import Context
 from core import CodeAliveContext, get_api_key_from_context, log_api_request, log_api_response
 from utils import (
     handle_api_error,
+    format_validation_error,
     format_data_source_names,
     normalize_data_source_names,
 )
+
+# MCP tool/method name surfaced in every error/log message from this module.
+_TOOL_NAME = "codebase_consultant"
 
 
 async def codebase_consultant(
@@ -81,7 +85,10 @@ async def codebase_consultant(
     data_sources = normalize_data_source_names(data_sources)
 
     if not question or not question.strip():
-        return "Error: No question provided. Please provide a question to ask the consultant."
+        return format_validation_error(
+            _TOOL_NAME,
+            "No question provided. Please provide a question to ask the consultant.",
+        )
 
     # Validate that either conversation_id or data_sources is provided
     if not conversation_id and (not data_sources or len(data_sources) == 0):
@@ -171,7 +178,11 @@ async def codebase_consultant(
         except Exception as streaming_error:
             # Include conversation and message IDs in streaming error response
             error_context = _format_metadata_context(conversation_metadata)
-            return f"Error during streaming: {str(streaming_error)} {error_context}"
+            error_msg = (
+                f"[{_TOOL_NAME}] Error during streaming: {str(streaming_error)}"
+            )
+            await ctx.error(error_msg)
+            return f"{error_msg} {error_context}"
 
         # Append conversation ID info to the response if we got one and it's a new conversation
         if conversation_metadata.get("conversationId") and not conversation_id:
@@ -181,9 +192,11 @@ async def codebase_consultant(
         return full_response or "No content returned from the API. Please check that your data sources are accessible and try again."
 
     except (httpx.HTTPStatusError, Exception) as e:
-        error_msg = await handle_api_error(ctx, e, "chat completion")
+        error_msg = await handle_api_error(
+            ctx, e, "chat completion", method=_TOOL_NAME
+        )
         if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 404:
-            return "Error: Not found (404): The requested resource could not be found. Check your conversation_id or data_sources."
+            return f"[{_TOOL_NAME}] Error: Not found (404): The requested resource could not be found. Check your conversation_id or data_sources."
         return error_msg
 
 

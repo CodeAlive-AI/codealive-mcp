@@ -9,6 +9,9 @@ from fastmcp import Context
 from core import CodeAliveContext, get_api_key_from_context, log_api_request, log_api_response
 from utils import handle_api_error
 
+# MCP tool/method name surfaced in every error/log message from this module.
+_TOOL_NAME = "get_data_sources"
+
 # alive_only refers to ready_only. leaved as is for backward compatibility.
 async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
     """
@@ -125,4 +128,6 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
         return result
 
     except (httpx.HTTPStatusError, Exception) as e:
-        return await handle_api_error(ctx, e, "retrieving data sources")
+        return await handle_api_error(
+            ctx, e, "retrieving data sources", method=_TOOL_NAME
+        )
