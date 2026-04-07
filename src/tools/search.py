@@ -118,7 +118,12 @@ async def codebase_search(
 
         api_key = get_api_key_from_context(ctx)
 
-        headers = {"Authorization": f"Bearer {api_key}"}
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "X-CodeAlive-Integration": "mcp",
+            "X-CodeAlive-Tool": "codebase_search",
+            "X-CodeAlive-Client": "fastmcp",
+        }
 
         # Log the request
         full_url = urljoin(context.base_url, "/api/search")

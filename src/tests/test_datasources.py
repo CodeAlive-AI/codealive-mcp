@@ -72,11 +72,15 @@ async def test_get_data_sources_removes_repository_ids_from_workspaces(mock_get_
     assert workspace["name"] == "Test Workspace"
     assert "repositoryIds" not in workspace, "repositoryIds should be removed from workspace"
 
-    # Verify API was called correctly
-    mock_client.get.assert_called_once_with(
-        "/api/datasources/ready",
-        headers={"Authorization": "Bearer test-key"}
-    )
+    # Verify API was called correctly. Headers include CodeAlive integration
+    # markers added on every request, so assert on the relevant subset.
+    mock_client.get.assert_called_once()
+    call_args = mock_client.get.call_args
+    assert call_args.args[0] == "/api/datasources/ready"
+    headers = call_args.kwargs["headers"]
+    assert headers["Authorization"] == "Bearer test-key"
+    assert headers["X-CodeAlive-Tool"] == "get_data_sources"
+    assert headers["X-CodeAlive-Integration"] == "mcp"
 
 
 @pytest.mark.asyncio

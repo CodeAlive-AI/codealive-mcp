@@ -84,7 +84,12 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
         # Determine the endpoint based on ready_only flag
         endpoint = "/api/datasources/ready" if alive_only else "/api/datasources/all"
 
-        headers = {"Authorization": f"Bearer {api_key}"}
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "X-CodeAlive-Integration": "mcp",
+            "X-CodeAlive-Tool": "get_data_sources",
+            "X-CodeAlive-Client": "fastmcp",
+        }
 
         # Log the request
         full_url = urljoin(context.base_url, endpoint)

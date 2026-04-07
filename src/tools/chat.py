@@ -109,7 +109,12 @@ async def codebase_consultant(
         await ctx.info(f"Consulting about: '{question[:100]}...'" if len(question) > 100 else f"Consulting about: '{question}'" +
                        (f" (continuing conversation {conversation_id})" if conversation_id else ""))
 
-        headers = {"Authorization": f"Bearer {api_key}"}
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "X-CodeAlive-Integration": "mcp",
+            "X-CodeAlive-Tool": "codebase_consultant",
+            "X-CodeAlive-Client": "fastmcp",
+        }
 
         # Log the request
         full_url = urljoin(context.base_url, "/api/chat/completions")

@@ -74,7 +74,12 @@ async def fetch_artifacts(
 
     try:
         api_key = get_api_key_from_context(ctx)
-        headers = {"Authorization": f"Bearer {api_key}"}
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "X-CodeAlive-Integration": "mcp",
+            "X-CodeAlive-Tool": "fetch_artifacts",
+            "X-CodeAlive-Client": "fastmcp",
+        }
 
         body = {"identifiers": identifiers}
 
