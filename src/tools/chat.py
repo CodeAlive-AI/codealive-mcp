@@ -193,10 +193,15 @@ async def codebase_consultant(
 
     except (httpx.HTTPStatusError, Exception) as e:
         error_msg = await handle_api_error(
-            ctx, e, "chat completion", method=_TOOL_NAME
+            ctx, e, "chat completion", method=_TOOL_NAME,
+            recovery_hints={
+                404: (
+                    "(1) if continuing a conversation, verify conversation_id matches one returned by an earlier call, "
+                    "(2) if starting a new conversation, call get_data_sources to list valid data source names, "
+                    "(3) drop conversation_id and data_sources to fall back to the API key's default"
+                ),
+            },
         )
-        if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 404:
-            return f"[{_TOOL_NAME}] Error: Not found (404): The requested resource could not be found. Check your conversation_id or data_sources."
         return error_msg
 
 

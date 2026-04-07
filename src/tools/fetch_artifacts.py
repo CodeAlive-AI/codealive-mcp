@@ -108,7 +108,14 @@ async def fetch_artifacts(
 
     except (httpx.HTTPStatusError, Exception) as e:
         error_msg = await handle_api_error(
-            ctx, e, "fetch artifacts", method=_TOOL_NAME
+            ctx, e, "fetch artifacts", method=_TOOL_NAME,
+            recovery_hints={
+                404: (
+                    "(1) verify the identifiers came from a recent codebase_search call (do not invent them), "
+                    "(2) re-run codebase_search to get fresh identifiers — the index may have changed, "
+                    "(3) for local repos in your working directory, use Read() on the file path instead"
+                ),
+            },
         )
         return f"<error>{error_msg}</error>"
 

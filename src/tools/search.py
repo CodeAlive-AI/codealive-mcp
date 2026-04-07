@@ -164,8 +164,13 @@ async def codebase_search(
 
     except (httpx.HTTPStatusError, Exception) as e:
         error_msg = await handle_api_error(
-            ctx, e, "code search", method=_TOOL_NAME
+            ctx, e, "code search", method=_TOOL_NAME,
+            recovery_hints={
+                404: (
+                    "(1) call get_data_sources to list available data source names, "
+                    "(2) check spelling and case of the names you passed in data_sources, "
+                    "(3) drop data_sources entirely to fall back to the API key's default"
+                ),
+            },
         )
-        if isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 404:
-            error_msg = f"[{_TOOL_NAME}] Error: Not found (404): One or more data sources could not be found. Check your data_sources."
         return json.dumps({"error": error_msg}, separators=(",", ":"))

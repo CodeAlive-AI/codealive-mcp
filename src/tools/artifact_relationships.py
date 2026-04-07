@@ -117,7 +117,14 @@ async def get_artifact_relationships(
 
     except (httpx.HTTPStatusError, Exception) as e:
         error_msg = await handle_api_error(
-            ctx, e, "get artifact relationships", method=_TOOL_NAME
+            ctx, e, "get artifact relationships", method=_TOOL_NAME,
+            recovery_hints={
+                404: (
+                    "(1) verify the identifier came from a recent codebase_search or fetch_artifacts result, "
+                    "(2) call codebase_search again to get a fresh identifier — the index may have changed, "
+                    "(3) check that the artifact is a function/class (relationships are not available for non-symbol artifacts)"
+                ),
+            },
         )
         return json.dumps({"error": error_msg}, separators=(",", ":"))
 

@@ -1,10 +1,30 @@
-"""Error handling utilities for CodeAlive MCP server."""
+"""Error handling utilities for CodeAlive MCP server.
 
-from typing import Optional
+Errors emitted to the model follow a structured shape so the LLM can decide
+**whether to retry** and **what to try next**:
+
+    [<tool>] Error: <label>. Retry: yes|no [(<window>)]. Try: (1) ... (2) ...
+
+The ``Retry:`` marker is critical — without it the model can loop on permanent
+errors like 401/404, burning tokens and frustrating the user. The ``Try: ...``
+hint gives the model a concrete next action instead of hallucinating one.
+
+Per-tool callers can override the default ``Try:`` text via ``recovery_hints``
+when a generic hint isn't actionable enough — e.g. a 404 from ``codebase_search``
+should suggest ``get_data_sources``, while a 404 from ``codebase_consultant``
+should suggest checking ``conversation_id``.
+"""
+
+from dataclasses import dataclass
+from typing import Mapping, Optional
+
 import httpx
 from fastmcp import Context
 
 from core.config import REQUEST_TIMEOUT_SECONDS
+
+# GitHub Issues URL is verified in README.md and manifest.json — safe to embed.
+_ISSUES_URL = "https://github.com/CodeAlive-AI/codealive-mcp/issues"
 
 
 def _method_prefix(method: Optional[str]) -> str:
@@ -21,26 +41,155 @@ def format_validation_error(method: str, message: str) -> str:
     return f"{_method_prefix(method)}Error: {message}"
 
 
+# ---------------------------------------------------------------------------
+# Status-code templates
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class _ErrorTemplate:
+    """Template for an HTTP-status-mapped error message.
+
+    Attributes:
+        label:        Human-readable status description prefixed by the code,
+                      e.g. ``"Authentication error (401): Invalid API key..."``.
+        retryable:    Whether the LLM should ever retry this on its own.
+        retry_window: Short, concrete wait hint (only meaningful when retryable),
+                      e.g. ``"wait 30–60s and retry"``.
+        default_hint: Generic ``Try: ...`` text used when no per-tool override
+                      is provided via ``recovery_hints``.
+    """
+    label: str
+    retryable: bool
+    retry_window: Optional[str]
+    default_hint: str
+
+
+_ERROR_TEMPLATES: dict[int, _ErrorTemplate] = {
+    401: _ErrorTemplate(
+        label="Authentication error (401): Invalid API key or insufficient permissions",
+        retryable=False,
+        retry_window=None,
+        default_hint=(
+            "(1) verify the CODEALIVE_API_KEY environment variable is set and not empty, "
+            "(2) confirm the key has not expired or been revoked, "
+            "(3) regenerate the key in your CodeAlive account settings"
+        ),
+    ),
+    403: _ErrorTemplate(
+        label="Authorization error (403): You don't have permission to access this resource",
+        retryable=False,
+        retry_window=None,
+        default_hint=(
+            "(1) verify the API key has access to the requested data source, "
+            "(2) ask the CodeAlive workspace admin to grant access, "
+            "(3) call get_data_sources to see what this key can read"
+        ),
+    ),
+    404: _ErrorTemplate(
+        label="Not found error (404): The requested resource could not be found",
+        retryable=False,
+        retry_window=None,
+        default_hint=(
+            "(1) call get_data_sources to see available data source names, "
+            "(2) check spelling and case, "
+            "(3) verify any identifiers were returned by a recent codebase_search"
+        ),
+    ),
+    422: _ErrorTemplate(
+        label="Data source not ready (422): The requested data source is still being indexed",
+        retryable=True,
+        retry_window="wait 1–5 minutes and retry",
+        default_hint=(
+            "(1) wait for indexing to complete before retrying, "
+            "(2) call get_data_sources(alive_only=false) to check the processing state, "
+            "(3) try a different data source if available"
+        ),
+    ),
+    429: _ErrorTemplate(
+        label="Rate limit exceeded (429): Too many requests, please try again later",
+        retryable=True,
+        retry_window="wait 30–60s and retry",
+        default_hint=(
+            "(1) wait at least 30 seconds before retrying, "
+            "(2) reduce request frequency if this happens repeatedly, "
+            "(3) batch related questions into a single codebase_consultant call"
+        ),
+    ),
+    500: _ErrorTemplate(
+        label="Server error (500): The CodeAlive service encountered an issue",
+        retryable=True,
+        retry_window="retry once after a few seconds",
+        default_hint=(
+            "(1) retry the call once, "
+            f"(2) if it still fails, the problem is on CodeAlive's side — report it at {_ISSUES_URL} with the request details"
+        ),
+    ),
+    502: _ErrorTemplate(
+        label="Bad gateway (502): The CodeAlive service is temporarily unreachable",
+        retryable=True,
+        retry_window="retry in 10–30s",
+        default_hint=(
+            "(1) wait 10–30 seconds and retry, "
+            "(2) if the error persists for more than a few minutes, the upstream service is down — stop retrying"
+        ),
+    ),
+    503: _ErrorTemplate(
+        label="Service unavailable (503): The CodeAlive service is under maintenance",
+        retryable=True,
+        retry_window="retry in 30–60s",
+        default_hint=(
+            "(1) wait 30–60 seconds and retry, "
+            f"(2) if persistent, report at {_ISSUES_URL}"
+        ),
+    ),
+}
+
+
+def _format_error(template: _ErrorTemplate, hint: str) -> str:
+    """Render a template + hint as the user-facing error string."""
+    if template.retryable:
+        retry_marker = "Retry: yes"
+        if template.retry_window:
+            retry_marker = f"Retry: yes ({template.retry_window})"
+    else:
+        retry_marker = "Retry: no — fix the input or credentials, do not loop"
+    return f"{template.label}. {retry_marker}. Try: {hint}"
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
 async def handle_api_error(
     ctx: Context,
     error: Exception,
     operation: str = "API operation",
     *,
     method: Optional[str] = None,
+    recovery_hints: Optional[Mapping[int, str]] = None,
 ) -> str:
     """
     Handle API errors consistently across all tools.
 
+    The returned string is structured so the LLM can act on it without
+    hallucinating: it always carries the HTTP code, an explicit ``Retry: yes|no``
+    marker, and a numbered ``Try: ...`` recovery hint.
+
     Args:
-        ctx: FastMCP context for logging
-        error: The exception that occurred
-        operation: Description of the operation that failed
-        method: Name of the MCP tool/method that triggered the error.
-                When provided, every returned and logged message is prefixed
-                with `[method]` so failures are easy to attribute.
+        ctx: FastMCP context for logging.
+        error: The exception that occurred.
+        operation: Description of the operation that failed (used in timeout
+            and generic-exception messages).
+        method: Name of the MCP tool/method that triggered the error. When
+            provided, every returned and logged message is prefixed with
+            ``[method]`` so failures are easy to attribute.
+        recovery_hints: Optional per-tool overrides for the ``Try: ...`` text,
+            keyed by HTTP status code. Use this when a generic hint isn't
+            enough — e.g. ``codebase_consultant`` overrides 404 with
+            ``"check the conversation_id"``.
 
     Returns:
-        User-friendly error message string, prefixed with `[method]` when given.
+        User-friendly error message string, prefixed with ``[method]`` when given.
     """
     prefix = _method_prefix(method)
 
@@ -48,8 +197,11 @@ async def handle_api_error(
     if isinstance(error, httpx.TimeoutException):
         timeout_minutes = int(REQUEST_TIMEOUT_SECONDS // 60)
         error_msg = (
-            f"Request timeout during {operation}: The CodeAlive service did not respond within {timeout_minutes} minutes. "
-            "This may happen due to temporarily overloaded LLMs. Please try again later."
+            f"Request timeout during {operation}: The CodeAlive service did not respond "
+            f"within {timeout_minutes} minutes. Retry: yes (wait 30s and retry once). "
+            "Try: (1) retry the same call after 30 seconds, "
+            "(2) reduce the scope of the query (fewer data_sources, shorter question), "
+            "(3) if it still times out, the LLM upstream may be overloaded — stop retrying and try again later"
         )
         await ctx.error(f"{prefix}{error_msg}")
         return f"{prefix}Error: {error_msg}"
@@ -58,31 +210,37 @@ async def handle_api_error(
         error_code = error.response.status_code
         error_detail = error.response.text
 
-        # Map status codes to user-friendly messages
-        error_messages = {
-            401: "Authentication error (401): Invalid API key or insufficient permissions",
-            403: "Authorization error (403): You don't have permission to access this resource",
-            404: "Not found error (404): The requested resource could not be found",
-            422: "Data source not ready (422): The requested data source is being processed. Please try again later.",
-            429: "Rate limit exceeded (429): Too many requests, please try again later",
-            500: f"Server error (500): The CodeAlive service encountered an issue",
-            502: "Bad gateway (502): The CodeAlive service is temporarily unavailable",
-            503: "Service unavailable (503): The CodeAlive service is under maintenance",
-        }
-
-        if error_code in error_messages:
-            error_msg = error_messages[error_code]
+        template = _ERROR_TEMPLATES.get(error_code)
+        if template is not None:
+            hint = (recovery_hints or {}).get(error_code, template.default_hint)
+            error_msg = _format_error(template, hint)
         elif error_code >= 500:
-            error_msg = f"Server error ({error_code}): The CodeAlive service encountered an issue"
+            # Unknown 5xx — treat as retryable server error
+            error_msg = (
+                f"Server error ({error_code}): The CodeAlive service encountered an issue. "
+                "Retry: yes (retry once after a few seconds). "
+                "Try: (1) retry the call once, "
+                f"(2) report a persistent error at {_ISSUES_URL}"
+            )
         else:
-            error_msg = f"HTTP error: {error_code} - {error_detail[:200]}"  # Limit detail length
+            # Unknown 4xx — keep raw detail (truncated) and a conservative hint
+            error_msg = (
+                f"HTTP error: {error_code} - {error_detail[:200]}. "
+                "Retry: no — fix the input. "
+                "Try: review the parameters you passed and try a different value"
+            )
 
         await ctx.error(f"{prefix}{error_msg}")
         return f"{prefix}Error: {error_msg}"
     else:
-        error_msg = f"Error during {operation}: {str(error)}"
+        error_msg = (
+            f"Error during {operation}: {str(error)}. "
+            "Retry: no — fix the input. "
+            "Try: (1) check the parameters you passed for type errors or typos, "
+            "(2) confirm the tool was called with the schema described in its docstring"
+        )
         await ctx.error(f"{prefix}{error_msg}")
-        return f"{prefix}Error: {error_msg}. Please check your input parameters and try again."
+        return f"{prefix}Error: {error_msg}"
 
 
 def normalize_data_source_names(data_sources) -> list:
@@ -144,4 +302,3 @@ def format_data_source_names(data_sources: Optional[list]) -> list:
             formatted.append(str(ds))
 
     return formatted
-

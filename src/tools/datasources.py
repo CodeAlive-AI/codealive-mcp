@@ -129,6 +129,13 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
 
     except (httpx.HTTPStatusError, Exception) as e:
         error_msg = await handle_api_error(
-            ctx, e, "retrieving data sources", method=_TOOL_NAME
+            ctx, e, "retrieving data sources", method=_TOOL_NAME,
+            recovery_hints={
+                # 422 means *some* sources are still indexing — surface alive_only=false as the next step
+                422: (
+                    "(1) call get_data_sources(alive_only=false) to see which sources are still being processed, "
+                    "(2) wait a few minutes for indexing to complete and retry"
+                ),
+            },
         )
         return json.dumps({"error": error_msg}, separators=(",", ":"))
