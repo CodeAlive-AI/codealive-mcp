@@ -29,8 +29,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
-          pip install pytest pytest-asyncio pytest-mock pytest-cov jsonschema
+          pip install -e ".[test]"
+          pip install jsonschema
 
       - name: Run tests
         run: |
@@ -45,9 +45,39 @@ jobs:
             junit/test-results.xml
             coverage.xml
 
+  package:
+    name: Package Extension
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.11'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build MCPB bundle
+        run: |
+          mkdir -p dist
+          npx -y @anthropic-ai/mcpb pack . dist/codealive-mcp.mcpb
+
+      - name: Verify MCPB bundle contents
+        run: |
+          python scripts/verify_mcpb.py dist/codealive-mcp.mcpb
+
+      - name: Upload MCPB artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: codealive-mcpb
+          path: dist/codealive-mcp.mcpb
+
   docker:
     name: Build & Push Docker
-    needs: test
+    needs: [test, package]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

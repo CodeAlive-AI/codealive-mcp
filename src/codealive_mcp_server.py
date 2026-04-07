@@ -112,12 +112,29 @@ async def readiness_check(request: Request) -> JSONResponse:
     )
 
 
-# Register tools
-mcp.tool()(codebase_consultant)
-mcp.tool()(get_data_sources)
-mcp.tool()(codebase_search)
-mcp.tool()(fetch_artifacts)
-mcp.tool()(get_artifact_relationships)
+# Register tools with metadata suitable for Claude Desktop and MCP directories.
+_READ_ONLY_TOOL = {"readOnlyHint": True}
+
+mcp.tool(
+    title="Consult Codebase",
+    annotations=_READ_ONLY_TOOL,
+)(codebase_consultant)
+mcp.tool(
+    title="List Data Sources",
+    annotations=_READ_ONLY_TOOL,
+)(get_data_sources)
+mcp.tool(
+    title="Search Codebase",
+    annotations=_READ_ONLY_TOOL,
+)(codebase_search)
+mcp.tool(
+    title="Fetch Artifacts",
+    annotations=_READ_ONLY_TOOL,
+)(fetch_artifacts)
+mcp.tool(
+    title="Inspect Artifact Relationships",
+    annotations=_READ_ONLY_TOOL,
+)(get_artifact_relationships)
 
 
 def main():
