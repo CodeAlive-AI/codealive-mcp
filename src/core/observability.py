@@ -9,6 +9,7 @@ HTTPX client instrumentation is always enabled so outbound HTTP calls
 automatically get ``traceparent`` headers injected.
 """
 
+import atexit
 import os
 
 from loguru import logger
@@ -54,6 +55,9 @@ def init_tracing() -> None:
         trace.set_tracer_provider(provider)
 
         logger.info("OTel tracing enabled (no exporter configured)")
+
+    # Flush pending spans on process exit
+    atexit.register(provider.shutdown)
 
     # Auto-instrument httpx so outbound requests carry traceparent
     HTTPXClientInstrumentor().instrument()

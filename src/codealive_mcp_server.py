@@ -25,7 +25,8 @@ load_dotenv(dotenv_path=dotenv_path)
 sys.path.insert(0, str(Path(__file__).parent))
 
 # Import core components
-from core import codealive_lifespan, setup_logging, setup_debug_logging, init_tracing
+from core import codealive_lifespan, setup_logging, setup_debug_logging, init_tracing, normalize_base_url, _server_ready
+import core.client as _client_module  # for /ready flag access
 from middleware import N8NRemoveParametersMiddleware, ObservabilityMiddleware
 from tools import codebase_consultant, get_data_sources, fetch_artifacts, codebase_search, get_artifact_relationships
 
@@ -95,37 +96,20 @@ async def health_check(request: Request) -> JSONResponse:
     })
 
 
-# Readiness endpoint — verifies the lifespan context (httpx client) is up
+# Readiness endpoint — checks the module-level flag set by codealive_lifespan
 @mcp.custom_route("/ready", methods=["GET"])
 async def readiness_check(request: Request) -> JSONResponse:
-    """Readiness probe: returns 200 only when the server can accept tool calls."""
-    try:
-        # Access the lifespan context via the app state that FastMCP injects
-        app_state = request.app.state
-        # FastMCP stores the lifespan context; if it's missing the server isn't ready
-        ctx = getattr(app_state, "lifespan_context", None)
-        if ctx is None:
-            return JSONResponse(
-                {"status": "not_ready", "reason": "lifespan not initialized"},
-                status_code=503,
-            )
-        # Check that the httpx client exists and isn't closed
-        client = getattr(ctx, "client", None)
-        if client is None or client.is_closed:
-            return JSONResponse(
-                {"status": "not_ready", "reason": "http client unavailable"},
-                status_code=503,
-            )
+    """Readiness probe: returns 200 only when the lifespan context is active."""
+    if _client_module._server_ready:
         return JSONResponse({
             "status": "ready",
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "service": "codealive-mcp-server",
         })
-    except Exception as exc:
-        return JSONResponse(
-            {"status": "not_ready", "reason": str(exc)},
-            status_code=503,
-        )
+    return JSONResponse(
+        {"status": "not_ready", "reason": "lifespan not initialized"},
+        status_code=503,
+    )
 
 
 # Register tools
@@ -163,8 +147,9 @@ def main():
         os.environ["CODEALIVE_API_KEY"] = args.api_key
 
     if args.base_url:
-        os.environ["CODEALIVE_BASE_URL"] = args.base_url
-        logger.info("Using base URL from command line: {url}", url=args.base_url)
+        normalized_base_url = normalize_base_url(args.base_url)
+        os.environ["CODEALIVE_BASE_URL"] = normalized_base_url
+        logger.info("Using base URL from command line: {url}", url=normalized_base_url)
 
     # Disable SSL verification if explicitly requested or in debug mode
     if args.ignore_ssl or debug:

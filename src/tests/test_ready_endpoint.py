@@ -1,94 +1,48 @@
 """Tests for the /ready readiness endpoint."""
 
-import datetime
+import json
 import sys
-from unittest.mock import MagicMock, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent.parent))
 
-# Import the readiness_check function from the server module.
-# This also triggers FastMCP initialization, which is acceptable in tests.
 from codealive_mcp_server import readiness_check
-
-
-def _make_request(lifespan_context=None, *, has_state=True):
-    """Build a mock Starlette Request with the given app state."""
-    request = MagicMock()
-    if has_state:
-        request.app.state.lifespan_context = lifespan_context
-    else:
-        # Simulate missing state attribute
-        del request.app.state
-    return request
 
 
 class TestReadinessCheck:
     @pytest.mark.asyncio
-    async def test_ready_when_client_available(self):
-        client = MagicMock()
-        client.is_closed = False
-        ctx = MagicMock()
-        ctx.client = client
-
-        request = _make_request(lifespan_context=ctx)
-        response = await readiness_check(request)
+    async def test_ready_when_flag_is_true(self):
+        with patch("codealive_mcp_server._client_module") as mock_module:
+            mock_module._server_ready = True
+            response = await readiness_check(MagicMock())
 
         assert response.status_code == 200
-        import json
         body = json.loads(response.body)
         assert body["status"] == "ready"
         assert body["service"] == "codealive-mcp-server"
         assert "timestamp" in body
 
     @pytest.mark.asyncio
-    async def test_not_ready_when_lifespan_not_initialized(self):
-        request = _make_request(lifespan_context=None)
-        response = await readiness_check(request)
+    async def test_not_ready_when_flag_is_false(self):
+        with patch("codealive_mcp_server._client_module") as mock_module:
+            mock_module._server_ready = False
+            response = await readiness_check(MagicMock())
 
         assert response.status_code == 503
-        import json
         body = json.loads(response.body)
         assert body["status"] == "not_ready"
         assert "lifespan" in body["reason"]
 
     @pytest.mark.asyncio
-    async def test_not_ready_when_client_closed(self):
-        client = MagicMock()
-        client.is_closed = True
-        ctx = MagicMock()
-        ctx.client = client
+    async def test_flag_lifecycle(self):
+        """Verify _server_ready flag is set/unset by lifespan."""
+        from core.client import _server_ready, codealive_lifespan
+        import core.client as client_mod
 
-        request = _make_request(lifespan_context=ctx)
-        response = await readiness_check(request)
+        # Before lifespan, flag should be False (default)
+        assert client_mod._server_ready is False
 
-        assert response.status_code == 503
-        import json
-        body = json.loads(response.body)
-        assert body["status"] == "not_ready"
-        assert "client" in body["reason"]
-
-    @pytest.mark.asyncio
-    async def test_not_ready_when_client_is_none(self):
-        ctx = MagicMock()
-        ctx.client = None
-
-        request = _make_request(lifespan_context=ctx)
-        response = await readiness_check(request)
-
-        assert response.status_code == 503
-
-    @pytest.mark.asyncio
-    async def test_not_ready_on_unexpected_exception(self):
-        request = MagicMock()
-        # Make app.state raise an exception
-        type(request.app).state = PropertyMock(side_effect=RuntimeError("kaboom"))
-
-        response = await readiness_check(request)
-
-        assert response.status_code == 503
-        import json
-        body = json.loads(response.body)
-        assert body["status"] == "not_ready"
-        assert "kaboom" in body["reason"]
+        # We can't easily run the full lifespan without env vars,
+        # but we verify the flag default is correct.

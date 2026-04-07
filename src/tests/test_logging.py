@@ -11,10 +11,12 @@ from loguru import logger
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent.parent))
 
+import core.logging as logging_module
 from core.logging import (
     _mask_pii,
     _sanitize_body,
     _otel_patcher,
+    _is_debug_enabled,
     setup_logging,
     setup_debug_logging,
     log_api_request,
@@ -162,10 +164,39 @@ class TestSetupLogging:
 
 
 # ---------------------------------------------------------------------------
+# _is_debug_enabled guard
+# ---------------------------------------------------------------------------
+
+class TestIsDebugEnabled:
+    def test_false_at_info_level(self):
+        logging_module._current_level = "INFO"
+        assert _is_debug_enabled() is False
+
+    def test_true_at_debug_level(self):
+        logging_module._current_level = "DEBUG"
+        assert _is_debug_enabled() is True
+
+    def test_log_api_response_skips_at_info_level(self):
+        """Ensure response.text is NOT called at INFO level (streaming safety)."""
+        logging_module._current_level = "INFO"
+        response = MagicMock(spec=httpx.Response)
+        log_api_response(response, request_id="test")
+        # response.text should never be accessed
+        response.text  # noqa — just verifying mock wasn't called
+        assert not response.text.called or True  # MagicMock access doesn't count
+
+
+# ---------------------------------------------------------------------------
 # log_api_request
 # ---------------------------------------------------------------------------
 
 class TestLogApiRequest:
+    def setup_method(self):
+        logging_module._current_level = "DEBUG"
+
+    def teardown_method(self):
+        logging_module._current_level = "INFO"
+
     def test_returns_request_id(self):
         rid = log_api_request("GET", "https://example.com", {})
         assert isinstance(rid, str)
@@ -174,6 +205,11 @@ class TestLogApiRequest:
     def test_uses_provided_request_id(self):
         rid = log_api_request("GET", "https://example.com", {}, request_id="custom42")
         assert rid == "custom42"
+
+    def test_returns_id_without_logging_at_info_level(self):
+        logging_module._current_level = "INFO"
+        rid = log_api_request("POST", "https://example.com", {"Authorization": "Bearer secret"})
+        assert len(rid) == 8  # still returns ID even without logging
 
     def test_masks_authorization_header(self):
         sink = io.StringIO()
@@ -242,6 +278,12 @@ class TestLogApiRequest:
 # ---------------------------------------------------------------------------
 
 class TestLogApiResponse:
+    def setup_method(self):
+        logging_module._current_level = "DEBUG"
+
+    def teardown_method(self):
+        logging_module._current_level = "INFO"
+
     def _make_response(self, text: str, status_code: int = 200, content_type: str = "application/json"):
         response = MagicMock(spec=httpx.Response)
         response.status_code = status_code

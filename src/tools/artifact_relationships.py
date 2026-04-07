@@ -80,7 +80,12 @@ async def get_artifact_relationships(
 
     try:
         api_key = get_api_key_from_context(ctx)
-        headers = {"Authorization": f"Bearer {api_key}"}
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "X-CodeAlive-Integration": "mcp",
+            "X-CodeAlive-Tool": "get_artifact_relationships",
+            "X-CodeAlive-Client": "fastmcp",
+        }
 
         body = {
             "identifier": identifier,

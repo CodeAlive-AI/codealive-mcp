@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 
 import httpx
 from loguru import logger
+from opentelemetry import trace as otel_trace
 
 # ---------------------------------------------------------------------------
 # PII masking
@@ -52,9 +53,7 @@ def _sanitize_body(body: Dict[str, Any]) -> Dict[str, Any]:
 def _otel_patcher(record: dict) -> None:
     """Inject current OTel trace_id / span_id into every log record."""
     try:
-        from opentelemetry import trace
-
-        span = trace.get_current_span()
+        span = otel_trace.get_current_span()
         ctx = span.get_span_context()
         if ctx and ctx.trace_id:
             record["extra"]["trace_id"] = format(ctx.trace_id, "032x")
@@ -85,6 +84,18 @@ class _InterceptHandler(logging.Handler):
 
 
 # ---------------------------------------------------------------------------
+# Minimum-level check
+# ---------------------------------------------------------------------------
+
+_current_level: str = "INFO"
+
+
+def _is_debug_enabled() -> bool:
+    """Fast check whether DEBUG-level logs are active."""
+    return _current_level == "DEBUG"
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
@@ -94,22 +105,23 @@ def setup_logging(debug: bool = False) -> None:
     Also installs an intercept handler so that stdlib ``logging`` messages
     (e.g. from uvicorn, httpx, n8n middleware) are routed through loguru.
     """
+    global _current_level
     logger.remove()
 
-    level = "DEBUG" if debug else "INFO"
+    _current_level = "DEBUG" if debug else "INFO"
 
     logger.configure(patcher=_otel_patcher)
 
     logger.add(
         sys.stderr,
-        level=level,
+        level=_current_level,
         serialize=True,
     )
 
     # Intercept stdlib logging
     logging.basicConfig(handlers=[_InterceptHandler()], level=0, force=True)
 
-    logger.info("Logging initialized at {level} level", level=level)
+    logger.info("Logging initialized at {level} level", level=_current_level)
 
 
 def setup_debug_logging() -> bool:
@@ -136,6 +148,9 @@ def log_api_request(
     """
     if request_id is None:
         request_id = str(uuid.uuid4())[:8]
+
+    if not _is_debug_enabled():
+        return request_id
 
     safe_headers = {
         k: ("Bearer ***" if k.lower() == "authorization" else v)
@@ -176,7 +191,16 @@ def log_api_response(
     response: httpx.Response,
     request_id: Optional[str] = None,
 ) -> None:
-    """Log an API response at DEBUG level with body truncation."""
+    """Log an API response at DEBUG level with body truncation.
+
+    IMPORTANT: This function reads ``response.text`` which consumes the
+    response body.  It is guarded by a level check so that streaming
+    responses (e.g. chat completions) are not accidentally consumed at
+    INFO level.
+    """
+    if not _is_debug_enabled():
+        return
+
     if request_id is None:
         request_id = "unknown"
 

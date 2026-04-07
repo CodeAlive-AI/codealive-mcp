@@ -21,6 +21,12 @@ class CodeAliveContext:
     base_url: str
 
 
+# Module-level readiness state for the /ready endpoint.
+# Set to True once the lifespan context (httpx client) is initialized,
+# reset to False on shutdown.
+_server_ready: bool = False
+
+
 def get_api_key_from_context(ctx: Context) -> str:
     """Extract API key based on transport mode."""
     try:
@@ -82,11 +88,14 @@ async def codealive_lifespan(server: FastMCP) -> AsyncIterator[CodeAliveContext]
             verify=config.verify_ssl,
         )
 
+    global _server_ready
     try:
+        _server_ready = True
         yield CodeAliveContext(
             client=client,
             api_key="",  # Will be set per-request in HTTP mode
             base_url=config.base_url
         )
     finally:
+        _server_ready = False
         await client.aclose()
