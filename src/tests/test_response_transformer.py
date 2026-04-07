@@ -60,8 +60,8 @@ class TestJsonTransformer:
         }
 
     def _is_compact(self, payload: str) -> bool:
-        """Compact JSON has no spaces after separators."""
-        return ", " not in payload and ": " not in payload
+        """Compact JSON round-trips byte-for-byte through the compact serializer."""
+        return payload == json.dumps(json.loads(payload), separators=(",", ":"))
 
     def test_returns_compact_json_string(self, sample_search_response):
         """Output is a parseable, compact JSON string."""
@@ -119,11 +119,27 @@ class TestJsonTransformer:
 
     def test_empty_response(self):
         result = transform_search_response_to_json({"results": []})
-        assert result == '{"results":[]}'
+        data = json.loads(result)
+        assert data["results"] == []
+        assert "fetch_artifacts" in data["hint"]
 
     def test_no_results_key(self):
         result = transform_search_response_to_json({})
-        assert result == '{"results":[]}'
+        data = json.loads(result)
+        assert data["results"] == []
+        assert "fetch_artifacts" in data["hint"]
+
+    def test_hint_present_in_every_response(self, sample_search_response):
+        """Every response carries a hint instructing the agent to load real content."""
+        result = transform_search_response_to_json(sample_search_response)
+        data = json.loads(result)
+        assert "hint" in data
+        # The hint must redirect the agent away from `description` and toward
+        # the source of truth (`fetch_artifacts` / `Read()` content).
+        hint = data["hint"]
+        assert "fetch_artifacts" in hint
+        assert "description" in hint
+        assert "Read()" in hint
 
     def test_snippet_fallback_when_no_description(self):
         response = {

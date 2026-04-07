@@ -202,6 +202,31 @@ When adding a new tool, ensure:
 4. Errors go through `handle_api_error(ctx, e, "description", method=_TOOL_NAME)` — this ensures the `[tool_name]` prefix in error messages
 5. The middleware automatically wraps the tool in an OTel span — no manual span creation needed
 
+## Tool Response Conventions
+
+### Hint other MCP tools when the response implies a follow-up call
+
+If a tool's response is **meant to be used as input to another MCP tool**, the
+response itself MUST embed a `hint` (or equivalent) directing the agent to that
+follow-up tool. The hint should explain *what to call next, with what value,
+and why*. Do NOT rely on the agent to remember workflow rules from the tool
+description alone — descriptions are not always re-read mid-conversation, but
+the response is always in front of the model when it decides what to do next.
+
+Examples in this repo:
+- `codebase_search` returns a `hint` field telling the agent that `description`
+  is a triage pointer only and that real understanding must come from
+  `fetch_artifacts(identifier)` or a local `Read(path)`. Implementation:
+  `_SEARCH_HINT` in `src/utils/response_transformer.py`.
+- `fetch_artifacts` emits a `<hint>…get_artifact_relationships…</hint>` element
+  whenever an artifact has call relationships, telling the agent it can drill
+  down further. Implementation: `_build_artifacts_xml` in
+  `src/tools/fetch_artifacts.py`.
+
+When you add or change a tool whose output is structurally a "pointer" to data
+held by another tool (identifiers, IDs, references), add or update the hint in
+the same change. If you remove a follow-up workflow, remove the stale hint too.
+
 ## Testing Best Practices
 
 The project has **183 tests** across three tiers: unit tests, e2e tool tests, and smoke tests.

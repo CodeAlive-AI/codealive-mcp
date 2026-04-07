@@ -32,12 +32,14 @@ async def codebase_search(
     **PREREQUISITE**: Call `get_data_sources` FIRST to discover data source names,
     UNLESS the user has explicitly provided specific names (e.g., "search in my-repo").
 
-    **WORKFLOW** (search → review → get content):
+    **WORKFLOW** (search → triage → load real content):
       1. Call `codebase_search` → returns compact JSON with paths, descriptions, identifiers
-      2. Review descriptions to decide which results matter
-      3. Get full content:
+      2. Use `description` ONLY to triage which results look relevant — it is a
+         pointer, NOT the source of truth. Do not draw conclusions from it.
+      3. For every artifact that looks relevant, load the real source:
          - Local repos (in your working directory): use `Read()` on the file paths
          - External repos (not locally accessible): use `fetch_artifacts` with identifiers
+         Base your understanding only on the `content` returned by step 3.
 
     **WHEN TO USE vs local tools:**
       USE `codebase_search`: natural-language questions, semantic exploration, cross-repo patterns
@@ -64,13 +66,17 @@ async def codebase_search(
                             - "full": Richer description — use when deciding which results to fetch.
 
     Returns:
-        Compact JSON with search results. Each result includes path, line numbers, kind,
-        identifier, contentByteSize, and description. Use identifiers with `fetch_artifacts`
-        to get full content for external repos, or `Read()` for local files.
+        Compact JSON with search results plus a `hint` field reminding the agent to
+        load real content via `fetch_artifacts`/`Read()` before drawing conclusions.
+        Each result includes path, line numbers, kind, identifier, contentByteSize,
+        and description. **`description` is a triage pointer only — never the source
+        of truth.** Use identifiers with `fetch_artifacts` to get full content for
+        external repos, or `Read()` for local files.
 
         Shape:
             {"results":[{"path":"...","startLine":...,"endLine":...,"kind":"...",
-                         "identifier":"...","contentByteSize":...,"description":"..."}]}
+                         "identifier":"...","contentByteSize":...,"description":"..."}],
+             "hint":"..."}
 
     Note:
         - Searches the INDEXED version of repositories, NOT local files

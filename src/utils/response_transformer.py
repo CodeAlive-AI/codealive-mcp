@@ -4,6 +4,21 @@ import json
 from typing import Dict, Any, List, Optional
 
 
+# Hint embedded in every codebase_search response. Tells the agent that
+# `description` is only a pointer for triage and that the source of truth
+# is the full content returned by `fetch_artifacts` (or a local `Read()`
+# for repos in the working directory).
+_SEARCH_HINT = (
+    "`description` is only a triage hint to help you decide which artifacts "
+    "deserve a closer look — DO NOT base your understanding of the code on it. "
+    "For every artifact you consider relevant you MUST load the real source "
+    "via `fetch_artifacts` (using the `identifier`) for external repos, or "
+    "`Read()` on the file path for repos in the local working directory. "
+    "Treat only the `content` returned by `fetch_artifacts` (or `Read()`) as "
+    "ground truth."
+)
+
+
 def transform_search_response_to_json(
     search_results: Dict[str, Any],
 ) -> str:
@@ -14,17 +29,18 @@ def transform_search_response_to_json(
         search_results: Raw search API response from CodeAlive
 
     Returns:
-        Compact JSON string with the search results.
+        Compact JSON string with the search results and an embedded hint
+        instructing the agent to fetch real content via ``fetch_artifacts``.
     """
     if not isinstance(search_results, dict) or "results" not in search_results:
-        return '{"results":[]}'
+        return json.dumps(
+            {"results": [], "hint": _SEARCH_HINT}, separators=(",", ":")
+        )
 
     results = search_results.get("results", [])
-    if not results:
-        return '{"results":[]}'
 
     formatted_results: List[Dict[str, Any]] = []
-    for result in results:
+    for result in results or []:
         kind = result.get("kind", "")
 
         # Skip folders - they don't provide value
@@ -37,7 +53,10 @@ def transform_search_response_to_json(
 
         formatted_results.append(_build_result_dict(path, result))
 
-    return json.dumps({"results": formatted_results}, separators=(",", ":"))
+    return json.dumps(
+        {"results": formatted_results, "hint": _SEARCH_HINT},
+        separators=(",", ":"),
+    )
 
 
 def _extract_path_from_result(result: Dict) -> Optional[str]:

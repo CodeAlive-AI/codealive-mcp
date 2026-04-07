@@ -53,10 +53,9 @@ async def test_codebase_search_returns_compact_json(mock_get_api_key):
     )
 
     assert isinstance(result, str)
-    # Compact JSON: no spaces after separators
-    assert ", " not in result and ": " not in result
-
     data = json.loads(result)
+    # Compact JSON: round-trips byte-for-byte through the compact serializer
+    assert result == json.dumps(data, separators=(",", ":"))
     assert len(data["results"]) == 1
     assert data["results"][0]["path"] == "path/auth.py"
     assert data["results"][0]["identifier"] == "owner/repo::path/auth.py::authenticate_user"

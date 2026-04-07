@@ -194,11 +194,13 @@ class TestCodebaseSearchE2E:
             )
 
         text = _text(result)
-        # Compact JSON: no spaces after separators
-        assert ", " not in text and ": " not in text
         data = json.loads(text)
+        # Compact JSON: round-trips byte-for-byte through the compact serializer
+        assert text == json.dumps(data, separators=(",", ":"))
         assert data["results"][0]["path"] == "src/auth.py"
         assert "AuthService" in data["results"][0]["identifier"]
+        # Hint must always be present and instruct the agent to fetch real content
+        assert "fetch_artifacts" in data["hint"]
 
     @pytest.mark.asyncio
     async def test_empty_query_returns_error(self):
@@ -225,7 +227,9 @@ class TestCodebaseSearchE2E:
             )
 
         text = _text(result)
-        assert text == '{"results":[]}'
+        data = json.loads(text)
+        assert data["results"] == []
+        assert "fetch_artifacts" in data["hint"]
 
     @pytest.mark.asyncio
     async def test_deep_mode_forwarded(self):
