@@ -1,6 +1,8 @@
 .git
 .github
 .idea
+.claude
+.claude-plugin
 .pytest_cache
 .venv
 __pycache__
@@ -9,12 +11,15 @@ __pycache__
 *.pyd
 *.log
 .env
+.env.*
+.mcpregistry_*
 logs
 codealive_mcp.egg-info
 codealive-context-engine
 plugins
 src/tests
 smoke_test.py
+uv.lock
 docker-compose.example.yml
 server.json
 smithery.yaml
