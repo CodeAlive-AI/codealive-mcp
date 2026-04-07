@@ -183,9 +183,9 @@ args = ["run", "--rm", "-i",
         "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"]
 ```
 
-**Experimental: Streamable HTTP (requires experimental_use_rmcp_client)**
+**Experimental: Streamable HTTP (requires `[features].rmcp_client = true`)**
 
-> **Note:** Streamable HTTP support requires enabling the experimental Rust MCP client in your Codex configuration.
+> **Note:** Streamable HTTP support requires `rmcp_client = true` under a `[features]` section in your Codex configuration.
 
 ```toml
 [mcp_servers.codealive]
