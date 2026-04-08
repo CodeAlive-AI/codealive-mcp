@@ -1,16 +1,16 @@
-"""Test suite for codebase consultant tool."""
+"""Test suite for chat tool and legacy consultant alias."""
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import json
 from fastmcp import Context
-from tools.chat import codebase_consultant
+from tools.chat import chat, codebase_consultant
 
 
 @pytest.mark.asyncio
 @patch('tools.chat.get_api_key_from_context')
-async def test_consultant_with_simple_names(mock_get_api_key):
-    """Test codebase consultant with simple string names."""
+async def test_chat_with_simple_names(mock_get_api_key):
+    """Test chat with simple string names."""
     mock_get_api_key.return_value = "test_key"
 
     ctx = MagicMock(spec=Context)
@@ -40,7 +40,7 @@ async def test_consultant_with_simple_names(mock_get_api_key):
     ctx.request_context.lifespan_context = mock_codealive_context
 
     # Test with simple string names
-    result = await codebase_consultant(
+    result = await chat(
         ctx=ctx,
         question="Test question",
         data_sources=["repo123", "repo456"]
@@ -57,12 +57,13 @@ async def test_consultant_with_simple_names(mock_get_api_key):
     ]
 
     assert result == "Hello world"
+    assert call_args.kwargs["headers"]["X-CodeAlive-Tool"] == "chat"
 
 
 @pytest.mark.asyncio
 @patch('tools.chat.get_api_key_from_context')
-async def test_consultant_preserves_string_names(mock_get_api_key):
-    """Test codebase consultant preserves string names."""
+async def test_consultant_alias_preserves_string_names(mock_get_api_key):
+    """Test deprecated consultant alias preserves behavior."""
     mock_get_api_key.return_value = "test_key"
 
     ctx = MagicMock(spec=Context)
@@ -109,8 +110,8 @@ async def test_consultant_preserves_string_names(mock_get_api_key):
 
 @pytest.mark.asyncio
 @patch('tools.chat.get_api_key_from_context')
-async def test_consultant_with_conversation_id(mock_get_api_key):
-    """Test codebase consultant with existing conversation ID."""
+async def test_chat_with_conversation_id(mock_get_api_key):
+    """Test chat with existing conversation ID."""
     mock_get_api_key.return_value = "test_key"
 
     ctx = MagicMock(spec=Context)
@@ -134,7 +135,7 @@ async def test_consultant_with_conversation_id(mock_get_api_key):
 
     ctx.request_context.lifespan_context = mock_codealive_context
 
-    result = await codebase_consultant(
+    result = await chat(
         ctx=ctx,
         question="Follow up",
         conversation_id="conv_123"
@@ -153,7 +154,7 @@ async def test_consultant_with_conversation_id(mock_get_api_key):
 
 @pytest.mark.asyncio
 @patch('tools.chat.get_api_key_from_context')
-async def test_consultant_empty_question_validation(mock_get_api_key):
+async def test_chat_empty_question_validation(mock_get_api_key):
     """Test validation of empty question."""
     mock_get_api_key.return_value = "test_key"
 
@@ -161,11 +162,11 @@ async def test_consultant_empty_question_validation(mock_get_api_key):
     ctx.request_context.lifespan_context = MagicMock()
 
     # Test with empty question
-    result = await codebase_consultant(ctx=ctx, question="")
+    result = await chat(ctx=ctx, question="")
     assert "Error: No question provided" in result
 
     # Test with whitespace only
-    result = await codebase_consultant(ctx=ctx, question="   ")
+    result = await chat(ctx=ctx, question="   ")
     assert "Error: No question provided" in result
 
 
@@ -174,8 +175,8 @@ async def test_consultant_empty_question_validation(mock_get_api_key):
 @pytest.mark.asyncio
 @patch('tools.chat.get_api_key_from_context')
 @patch('tools.chat.handle_api_error')
-async def test_consultant_error_handling(mock_handle_error, mock_get_api_key):
-    """Test error handling in codebase consultant."""
+async def test_chat_error_handling(mock_handle_error, mock_get_api_key):
+    """Test error handling in chat."""
     mock_get_api_key.return_value = "test_key"
     mock_handle_error.return_value = "Error: Authentication failed"
 
@@ -191,7 +192,7 @@ async def test_consultant_error_handling(mock_handle_error, mock_get_api_key):
 
     ctx.request_context.lifespan_context = mock_codealive_context
 
-    result = await codebase_consultant(
+    result = await chat(
         ctx=ctx,
         question="Test",
         data_sources=["repo123"]

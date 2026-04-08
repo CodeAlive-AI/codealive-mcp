@@ -133,7 +133,15 @@ class SmokeTest:
             result = await self.session.list_tools()
             tools = result.tools
 
-            expected_tools = {"codebase_consultant", "get_data_sources", "codebase_search", "fetch_artifacts", "get_artifact_relationships"}
+            expected_tools = {
+                "codebase_consultant",
+                "codebase_search",
+                "fetch_artifacts",
+                "get_artifact_relationships",
+                "get_data_sources",
+                "grep_search",
+                "semantic_search",
+            }
             actual_tools = {tool.name for tool in tools}
 
             if expected_tools == actual_tools:
@@ -179,15 +187,13 @@ class SmokeTest:
             self.print_error(f"Tool execution failed: {str(e)}")
             return False
 
-    async def test_codebase_search(self) -> bool:
-        """Test the codebase_search tool."""
-        self.print_test("codebase_search Tool")
+    async def test_semantic_search(self) -> bool:
+        """Test the semantic_search tool."""
+        self.print_test("semantic_search Tool")
         try:
-            result = await self.session.call_tool("codebase_search", {
+            result = await self.session.call_tool("semantic_search", {
                 "query": "test query",
                 "data_sources": ["test-repo"],
-                "mode": "auto",
-                "description_detail": "short"
             })
 
             if result.isError:
@@ -244,11 +250,9 @@ class SmokeTest:
         self.print_test("Parameter Validation")
         try:
             # Test with invalid parameters
-            result = await self.session.call_tool("codebase_search", {
+            result = await self.session.call_tool("semantic_search", {
                 "query": "",  # Empty query should fail
                 "data_sources": ["test"],
-                "mode": "auto",
-                "description_detail": "short"
             })
 
             # Should get an error about empty query
@@ -282,7 +286,7 @@ class SmokeTest:
                 await self.test_server_connection()
                 await self.test_list_tools()
                 await self.test_get_data_sources()
-                await self.test_codebase_search()
+                await self.test_semantic_search()
                 await self.test_codebase_consultant()
                 await self.test_parameter_validation()
 

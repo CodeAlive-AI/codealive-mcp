@@ -20,11 +20,14 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core import CodeAliveContext
 from tools import (
+    chat,
     codebase_consultant,
     codebase_search,
     fetch_artifacts,
+    grep_search,
     get_artifact_relationships,
     get_data_sources,
+    semantic_search,
 )
 
 
@@ -64,7 +67,10 @@ def _server(routes: dict) -> FastMCP:
     mcp = FastMCP("E2E Test Server", lifespan=lifespan)
     mcp.tool()(get_data_sources)
     mcp.tool()(codebase_search)
+    mcp.tool()(semantic_search)
+    mcp.tool()(grep_search)
     mcp.tool()(fetch_artifacts)
+    mcp.tool()(chat)
     mcp.tool()(codebase_consultant)
     mcp.tool()(get_artifact_relationships)
     return mcp
@@ -265,6 +271,105 @@ class TestCodebaseSearchE2E:
 
 
 # ---------------------------------------------------------------------------
+# semantic_search
+# ---------------------------------------------------------------------------
+
+class TestSemanticSearchE2E:
+    @pytest.mark.asyncio
+    async def test_success_hits_canonical_endpoint(self):
+        def handler(req):
+            assert req.url.params.get("Query") == "auth service"
+            assert req.url.params.get("MaxResults") == "7"
+            assert req.url.params.get_list("Names") == ["backend"]
+            assert req.url.params.get_list("Paths") == ["src/auth.py"]
+            assert req.url.params.get_list("Extensions") == [".py"]
+            assert req.headers["X-CodeAlive-Tool"] == "semantic_search"
+            return httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {
+                            "identifier": "org/repo::src/auth.py::AuthService",
+                            "kind": "Class",
+                            "description": "Handles authentication",
+                            "contentByteSize": 4200,
+                            "location": {
+                                "path": "src/auth.py",
+                                "range": {"start": {"line": 10}, "end": {"line": 85}},
+                            },
+                        }
+                    ]
+                },
+            )
+
+        mcp = _server({"/api/search/semantic": handler})
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "semantic_search",
+                {
+                    "query": "auth service",
+                    "data_sources": ["backend"],
+                    "paths": ["src/auth.py"],
+                    "extensions": [".py"],
+                    "max_results": 7,
+                },
+            )
+
+        data = json.loads(_text(result))
+        assert data["results"][0]["path"] == "src/auth.py"
+        assert "fetch_artifacts" in data["hint"]
+
+
+# ---------------------------------------------------------------------------
+# grep_search
+# ---------------------------------------------------------------------------
+
+class TestGrepSearchE2E:
+    @pytest.mark.asyncio
+    async def test_success_hits_canonical_endpoint(self):
+        def handler(req):
+            assert req.url.params.get("Query") == "auth\\("
+            assert req.url.params.get("Regex") == "true"
+            assert req.headers["X-CodeAlive-Tool"] == "grep_search"
+            return httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {
+                            "identifier": "org/repo::src/auth.py",
+                            "kind": "File",
+                            "matchCount": 2,
+                            "matches": [
+                                {
+                                    "lineNumber": 15,
+                                    "startColumn": 5,
+                                    "endColumn": 10,
+                                    "lineText": "auth(token)",
+                                }
+                            ],
+                            "location": {
+                                "path": "src/auth.py",
+                                "range": {"start": {"line": 15}, "end": {"line": 15}},
+                            },
+                        }
+                    ]
+                },
+            )
+
+        mcp = _server({"/api/search/grep": handler})
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "grep_search",
+                {"query": "auth\\(", "data_sources": ["backend"], "regex": True},
+            )
+
+        data = json.loads(_text(result))
+        assert data["results"][0]["matchCount"] == 2
+        assert data["results"][0]["matches"][0]["lineNumber"] == 15
+        assert "fetch_artifacts" in data["hint"] or "Read()" in data["hint"]
+
+
+# ---------------------------------------------------------------------------
 # fetch_artifacts
 # ---------------------------------------------------------------------------
 
@@ -361,10 +466,10 @@ class TestFetchArtifactsE2E:
 
 
 # ---------------------------------------------------------------------------
-# codebase_consultant (streaming SSE)
+# chat / codebase_consultant (streaming SSE)
 # ---------------------------------------------------------------------------
 
-class TestCodebaseConsultantE2E:
+class TestChatE2E:
     @staticmethod
     def _sse_body(chunks: list[str], conv_id: str = "conv-42", msg_id: str = "msg-1") -> str:
         """Build an SSE response body with metadata + content chunks + DONE."""
@@ -394,7 +499,7 @@ class TestCodebaseConsultantE2E:
         mcp = _server({"/api/chat/completions": handler})
         async with Client(mcp) as client:
             result = await client.call_tool(
-                "codebase_consultant",
+                "chat",
                 {"question": "How does auth work?", "data_sources": ["backend"]},
             )
 
@@ -415,7 +520,7 @@ class TestCodebaseConsultantE2E:
         mcp = _server({"/api/chat/completions": handler})
         async with Client(mcp) as client:
             result = await client.call_tool(
-                "codebase_consultant",
+                "chat",
                 {"question": "And the error handling?", "conversation_id": "conv-existing"},
             )
 
@@ -427,7 +532,7 @@ class TestCodebaseConsultantE2E:
         mcp = _server({})
         async with Client(mcp) as client:
             result = await client.call_tool(
-                "codebase_consultant", {"question": ""},
+                "chat", {"question": ""},
                 raise_on_error=False,
             )
 
@@ -441,13 +546,30 @@ class TestCodebaseConsultantE2E:
         })
         async with Client(mcp) as client:
             result = await client.call_tool(
-                "codebase_consultant",
+                "chat",
                 {"question": "hello"},
                 raise_on_error=False,
             )
 
         text = _text(result)
         assert "401" in text or "auth" in text.lower()
+
+    @pytest.mark.asyncio
+    async def test_legacy_alias_still_works(self):
+        body = self._sse_body(["Legacy alias"])
+
+        def handler(req):
+            assert req.headers["X-CodeAlive-Tool"] == "codebase_consultant"
+            return httpx.Response(200, text=body, headers={"content-type": "text/event-stream"})
+
+        mcp = _server({"/api/chat/completions": handler})
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "codebase_consultant",
+                {"question": "How does auth work?", "data_sources": ["backend"]},
+            )
+
+        assert "Legacy alias" in _text(result)
 
 
 # ---------------------------------------------------------------------------

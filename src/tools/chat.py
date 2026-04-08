@@ -1,4 +1,8 @@
-"""Chat completions tool implementation."""
+"""Chat completions tool implementation.
+
+The canonical MCP tool name is ``chat``. ``codebase_consultant`` remains as a
+deprecated alias for backward compatibility.
+"""
 
 import json
 from typing import Dict, List, Optional, Union
@@ -8,31 +12,36 @@ import httpx
 from fastmcp import Context
 
 from core import CodeAliveContext, get_api_key_from_context, log_api_request, log_api_response
-from utils import (
-    handle_api_error,
-    format_validation_error,
-    format_data_source_names,
-    normalize_data_source_names,
-)
+from utils import handle_api_error, format_validation_error, format_data_source_names, normalize_data_source_names
 
-# MCP tool/method name surfaced in every error/log message from this module.
-_TOOL_NAME = "codebase_consultant"
+_PRIMARY_TOOL_NAME = "chat"
+_LEGACY_TOOL_NAME = "codebase_consultant"
 
 
-async def codebase_consultant(
+async def chat(
     ctx: Context,
     question: str,
     data_sources: Optional[Union[str, List[str]]] = None,
     conversation_id: Optional[str] = None,
 ) -> str:
     """
-    Consult with an AI expert about your codebase for insights, explanations, and architectural guidance.
+    Ask CodeAlive for a synthesized answer about the indexed codebase.
+
+    This is a slower synthesis tool, not the default discovery workflow.
+    Agents should normally start with `semantic_search` and `grep_search`.
+    If the environment supports subagents and the task needs the highest
+    reliability or depth, prefer an agentic multi-step flow that uses a
+    subagent to combine `semantic_search`, `grep_search`, `fetch_artifacts`,
+    relationship inspection, and local file reads. Use `chat` only when a
+    synthesized answer is worth the extra latency and lower evidence fidelity.
+
+    `chat` can take up to 30 seconds.
 
     **PREREQUISITE**: You MUST call `get_data_sources` FIRST to discover available data source names,
     UNLESS the user has explicitly provided specific data source names OR you are continuing an
     existing conversation with a `conversation_id`.
 
-    This consultant understands your entire codebase and can help with:
+    This tool understands the indexed codebase and can help with:
     - Architecture and design decisions
     - Implementation strategies
     - Code explanations and walkthroughs
@@ -51,34 +60,74 @@ async def codebase_consultant(
                          Example: "conv_6789f123a456b789c123d456"
 
     Returns:
-        Expert analysis and explanation addressing your question.
+        Synthesized analysis and explanation addressing your question.
 
     Examples:
         1. Ask about architecture:
-           codebase_consultant(
+           chat(
              question="What's the best way to add caching to our API?",
              data_sources=["repo123"]
            )
 
         2. Understand implementation:
-           codebase_consultant(
+           chat(
              question="How do the microservices communicate?",
              data_sources=["platform", "payments"]
            )
 
         3. Continue a consultation:
-           codebase_consultant(
+           chat(
              question="What about error handling in that flow?",
              conversation_id="conv_6789f123a456b789c123d456"
            )
 
     Note:
+        - `chat` is usually not needed for simple lookups or evidence gathering
+        - Prefer `semantic_search` and `grep_search` as the default tools
         - Either conversation_id OR data_sources is typically provided
         - When creating a new conversation, data_sources is optional if your API key has exactly one assigned data source
         - When continuing a conversation, conversation_id is required to maintain context
-        - The consultant maintains full conversation history for follow-up questions
+        - The tool maintains full conversation history for follow-up questions
         - Choose workspace names for broad architectural questions or repository names for specific implementation details
     """
+    return await _chat_impl(
+        ctx,
+        question=question,
+        data_sources=data_sources,
+        conversation_id=conversation_id,
+        method_name=_PRIMARY_TOOL_NAME,
+    )
+
+
+async def codebase_consultant(
+    ctx: Context,
+    question: str,
+    data_sources: Optional[Union[str, List[str]]] = None,
+    conversation_id: Optional[str] = None,
+) -> str:
+    """Deprecated alias for `chat`.
+
+    Keep this for backward compatibility with older prompts and MCP clients.
+    New integrations should prefer `chat`, while default discovery should still
+    start with `semantic_search` and `grep_search`.
+    """
+    return await _chat_impl(
+        ctx,
+        question=question,
+        data_sources=data_sources,
+        conversation_id=conversation_id,
+        method_name=_LEGACY_TOOL_NAME,
+    )
+
+
+async def _chat_impl(
+    ctx: Context,
+    *,
+    question: str,
+    data_sources: Optional[Union[str, List[str]]],
+    conversation_id: Optional[str],
+    method_name: str,
+) -> str:
     context: CodeAliveContext = ctx.request_context.lifespan_context
 
     # Normalize data source names (handles Claude Desktop serialization issues)
@@ -86,13 +135,17 @@ async def codebase_consultant(
 
     if not question or not question.strip():
         return format_validation_error(
-            _TOOL_NAME,
-            "No question provided. Please provide a question to ask the consultant.",
+            method_name,
+            "No question provided. Please provide a question to ask the chat tool.",
         )
 
     # Validate that either conversation_id or data_sources is provided
     if not conversation_id and (not data_sources or len(data_sources) == 0):
         await ctx.info("No data sources provided. If the API key has exactly one assigned data source, that will be used as default.")
+    await ctx.info(
+        f"[{method_name}] This synthesized call can take up to 30 seconds. "
+        "Prefer semantic_search and grep_search for default discovery."
+    )
 
     # Transform simple question into message format internally
     messages = [{"role": "user", "content": question}]
@@ -119,7 +172,7 @@ async def codebase_consultant(
         headers = {
             "Authorization": f"Bearer {api_key}",
             "X-CodeAlive-Integration": "mcp",
-            "X-CodeAlive-Tool": "codebase_consultant",
+            "X-CodeAlive-Tool": method_name,
             "X-CodeAlive-Client": "fastmcp",
         }
 
@@ -179,7 +232,7 @@ async def codebase_consultant(
             # Include conversation and message IDs in streaming error response
             error_context = _format_metadata_context(conversation_metadata)
             error_msg = (
-                f"[{_TOOL_NAME}] Error during streaming: {str(streaming_error)}"
+                f"[{method_name}] Error during streaming: {str(streaming_error)}"
             )
             await ctx.error(error_msg)
             return f"{error_msg} {error_context}"
@@ -193,7 +246,7 @@ async def codebase_consultant(
 
     except (httpx.HTTPStatusError, Exception) as e:
         error_msg = await handle_api_error(
-            ctx, e, "chat completion", method=_TOOL_NAME,
+            ctx, e, "chat completion", method=method_name,
             recovery_hints={
                 404: (
                     "(1) if continuing a conversation, verify conversation_id matches one returned by an earlier call, "

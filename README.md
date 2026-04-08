@@ -26,16 +26,24 @@ It allows AI-Coding Agents to:
 Once connected, you'll have access to these powerful tools:
 
 1. **`get_data_sources`** - List your indexed repositories and workspaces
-2. **`codebase_search`** - Semantic code search across your indexed codebase (main/master branch)  
-3. **`codebase_consultant`** - AI consultant with full project expertise
+2. **`semantic_search`** - Canonical semantic search across indexed artifacts
+3. **`grep_search`** - Exact text or regex search with line-level matches
+4. **`fetch_artifacts`** - Load the full source for relevant search hits
+5. **`get_artifact_relationships`** - Expand call graph, inheritance, and reference relationships for one artifact
+6. **`chat`** - Slower synthesized codebase Q&A, typically only after search
+7. **`codebase_search`** - Deprecated legacy semantic search alias kept for backward compatibility
+8. **`codebase_consultant`** - Deprecated alias for `chat`
 
 ## 🎯 Usage Examples
 
 After setup, try these commands with your AI assistant:
 
 - *"Show me all available repositories"* → Uses `get_data_sources`
-- *"Find authentication code in the user service"* → Uses `codebase_search`
-- *"Explain how the payment flow works in this codebase"* → Uses `codebase_consultant`
+- *"Find authentication code in the user service"* → Uses `semantic_search`
+- *"Find the exact regex that matches JWT tokens"* → Uses `grep_search`
+- *"Explain how the payment flow works in this codebase"* → Usually starts with `semantic_search`/`grep_search`, then optionally uses `chat`
+
+`semantic_search` and `grep_search` should be the default tools for most agents. `chat` is a slower synthesis fallback, can take up to 30 seconds, and is usually unnecessary when an agent can run a multi-step workflow with search, fetch, relationships, and local file reads. If your agent supports subagents, the highest-confidence path is to delegate a focused subagent that orchestrates `semantic_search` and `grep_search` first.
 
 ## 📚 Agent Skill
 
@@ -798,10 +806,14 @@ See [JetBrains MCP Documentation](https://www.jetbrains.com/help/ai-assistant/mc
    ```
 
 3. The server automatically handles n8n's extra parameters (sessionId, action, chatInput, toolCallId)
-4. Use the three available tools:
+4. Use the available tools:
    - `get_data_sources` - List available repositories
-   - `codebase_search` - Search code semantically
-   - `codebase_consultant` - Ask questions about code
+   - `semantic_search` - Search code semantically
+   - `grep_search` - Search by exact text or regex
+   - `get_artifact_relationships` - Expand relationships for one artifact
+   - `chat` - Slower synthesized codebase Q&A, usually after search
+   - `codebase_search` - Legacy semantic search alias
+   - `codebase_consultant` - Deprecated alias for `chat`
 
 **Example Workflow:**
 ```
