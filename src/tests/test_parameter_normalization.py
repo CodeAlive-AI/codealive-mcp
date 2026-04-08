@@ -134,13 +134,13 @@ class TestParameterNormalizationIntegration:
         data_sources_param = sig.parameters['data_sources']
         assert 'Union' in str(data_sources_param.annotation) or 'str' in str(data_sources_param.annotation)
 
-    def test_consultant_tool_parameter_handling(self):
-        """Test that consultant tool properly normalizes various parameter formats."""
-        from tools.chat import codebase_consultant
+    def test_chat_tool_parameter_handling(self):
+        """Test that chat tool properly normalizes various parameter formats."""
+        from tools.chat import chat
         import inspect
 
         # Verify the function accepts Union[str, List[str]]
-        sig = inspect.signature(codebase_consultant)
+        sig = inspect.signature(chat)
         data_sources_param = sig.parameters['data_sources']
 
         # The annotation should accept both str and List[str]

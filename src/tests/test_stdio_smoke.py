@@ -94,6 +94,7 @@ async def test_stdio_server_lists_tools_and_uses_normalized_ready_endpoint():
                 tools_result = await session.list_tools()
                 tool_names = sorted(tool.name for tool in tools_result.tools)
                 assert tool_names == [
+                    "chat",
                     "codebase_consultant",
                     "codebase_search",
                     "fetch_artifacts",

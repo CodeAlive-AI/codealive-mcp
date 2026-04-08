@@ -11,8 +11,8 @@ hint gives the model a concrete next action instead of hallucinating one.
 
 Per-tool callers can override the default ``Try:`` text via ``recovery_hints``
 when a generic hint isn't actionable enough — e.g. a 404 from ``semantic_search``
-should suggest ``get_data_sources``, while a 404 from ``codebase_consultant``
-should suggest checking ``conversation_id``.
+should suggest ``get_data_sources``, while a 404 from ``chat`` (or legacy
+``codebase_consultant``) should suggest checking ``conversation_id``.
 """
 
 from dataclasses import dataclass
@@ -112,7 +112,7 @@ _ERROR_TEMPLATES: dict[int, _ErrorTemplate] = {
         default_hint=(
             "(1) wait at least 30 seconds before retrying, "
             "(2) reduce request frequency if this happens repeatedly, "
-            "(3) batch related questions into a single codebase_consultant call"
+            "(3) batch related questions into a single chat call"
         ),
     ),
     500: _ErrorTemplate(
@@ -185,7 +185,7 @@ async def handle_api_error(
             ``[method]`` so failures are easy to attribute.
         recovery_hints: Optional per-tool overrides for the ``Try: ...`` text,
             keyed by HTTP status code. Use this when a generic hint isn't
-            enough — e.g. ``codebase_consultant`` overrides 404 with
+            enough — e.g. ``chat`` overrides 404 with
             ``"check the conversation_id"``.
 
     Returns:

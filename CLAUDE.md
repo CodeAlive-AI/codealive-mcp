@@ -95,7 +95,7 @@ This is a Model Context Protocol (MCP) server that provides AI clients with acce
 ### Core Components
 
 - **`codealive_mcp_server.py`**: Main entry point — bootstraps logging, tracing, registers tools and middleware
-- **Five tools**: `get_data_sources`, `codebase_search`, `fetch_artifacts`, `codebase_consultant`, `get_artifact_relationships`
+- **Eight tools**: `get_data_sources`, `semantic_search`, `grep_search`, `fetch_artifacts`, `get_artifact_relationships`, `chat`, `codebase_search`, `codebase_consultant`
 - **`core/client.py`**: `CodeAliveContext` dataclass + `codealive_lifespan` (httpx.AsyncClient lifecycle, `_server_ready` flag)
 - **`core/logging.py`**: loguru structured JSON logging + PII masking + OTel context injection
 - **`core/observability.py`**: OpenTelemetry TracerProvider setup with OTLP export
@@ -105,7 +105,7 @@ This is a Model Context Protocol (MCP) server that provides AI clients with acce
 
 1. **FastMCP Framework**: Uses FastMCP 3.x with lifespan context, middleware hooks, and built-in `Client` for testing
 2. **HTTP Client Management**: Single persistent `httpx.AsyncClient` with connection pooling, created in lifespan
-3. **Streaming Support**: `codebase_consultant` uses SSE streaming (`response.aiter_lines()`) for chat completions
+3. **Streaming Support**: `chat` and the deprecated `codebase_consultant` alias use SSE streaming (`response.aiter_lines()`) for chat completions
 4. **Environment Configuration**: Supports both .env files and command-line arguments with precedence
 5. **Error Handling**: Centralized in `utils/errors.py` — all tools use `handle_api_error()` with `method=` prefix
 6. **N8N Middleware**: Strips extra parameters (sessionId, action, chatInput, toolCallId) from n8n tool calls before validation
@@ -114,7 +114,7 @@ This is a Model Context Protocol (MCP) server that provides AI clients with acce
 ### Data Flow
 
 1. AI client connects to MCP server via stdio/HTTP transport
-2. Client calls tools (`get_data_sources` → `codebase_search` → `fetch_artifacts` / `codebase_consultant`)
+2. Client calls tools (`get_data_sources` → `semantic_search` / `grep_search` → `fetch_artifacts` / `get_artifact_relationships` → `chat` only if synthesis is still needed)
 3. Middleware chain runs: N8N cleanup → ObservabilityMiddleware (OTel span + log correlation)
 4. Tool translates MCP call to CodeAlive API request (with `X-CodeAlive-*` headers)
 5. Response parsed, formatted as XML or text, returned to AI client
@@ -144,7 +144,7 @@ The server is designed to integrate with:
 - Any MCP-compatible AI client
 
 Key integration considerations:
-- AI clients should use `get_data_sources` first to discover available repositories/workspaces, then use those IDs for targeted search and chat operations
+- AI clients should use `get_data_sources` first to discover available repositories/workspaces, then default to `semantic_search` and `grep_search` for evidence gathering; use `chat` only as a slower synthesis fallback
 - **n8n Integration**: The server includes middleware to automatically strip n8n's extra parameters (sessionId, action, chatInput, toolCallId) from tool calls, so n8n works out of the box without any special configuration
 
 ## Logging Best Practices
@@ -157,7 +157,7 @@ This project uses **loguru** for structured JSON logging. All logs go to **stder
 
 2. **All logs go to stderr.** The stdio MCP transport uses stdout for protocol messages. Any stray `print()` or stdout write will corrupt the MCP protocol and break the client. If you add a new log sink, it must target `sys.stderr`.
 
-3. **Never call `response.text` without a debug guard.** `log_api_response()` is protected by `_is_debug_enabled()` because reading `response.text` consumes the response body. The `codebase_consultant` tool streams SSE via `response.aiter_lines()` — calling `.text` first would silently consume the stream and produce empty results. If you add new response logging, always check `_is_debug_enabled()` first:
+3. **Never call `response.text` without a debug guard.** `log_api_response()` is protected by `_is_debug_enabled()` because reading `response.text` consumes the response body. The `chat` tool and deprecated `codebase_consultant` alias stream SSE via `response.aiter_lines()` — calling `.text` first would silently consume the stream and produce empty results. If you add new response logging, always check `_is_debug_enabled()` first:
    ```python
    if not _is_debug_enabled():
        return  # Do NOT touch response body at INFO level
@@ -269,7 +269,7 @@ Key points:
 - Custom lifespan yields a real `CodeAliveContext` with a mock-backed httpx client
 - `monkeypatch.setenv("CODEALIVE_API_KEY", ...)` for `get_api_key_from_context` fallback
 - Use `raise_on_error=False` when testing error paths, then assert on `result.content[0].text`
-- For SSE streaming (codebase_consultant), return `httpx.Response(200, text=sse_body)` — `aiter_lines()` works on buffered responses
+- For SSE streaming (`chat` / `codebase_consultant`), return `httpx.Response(200, text=sse_body)` — `aiter_lines()` works on buffered responses
 
 ### Unit Test Patterns
 

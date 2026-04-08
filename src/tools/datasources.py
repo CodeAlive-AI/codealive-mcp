@@ -18,7 +18,7 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
     **CALL THIS FIRST**: Gets all available data sources (repositories and workspaces) for the user's account.
 
     This tool MUST be called BEFORE using `semantic_search`, `grep_search`, or
-    `codebase_consultant` to discover available data source names, UNLESS the user
+    `chat` to discover available data source names, UNLESS the user
     has explicitly provided data source names.
 
     A data source is a code repository or workspace that has been indexed by CodeAlive
@@ -75,7 +75,7 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
         5. **Working history**: Have you been reading/editing files that align with this repo?
 
         Use the returned data source names with `semantic_search`, `grep_search`,
-        `codebase_search` (legacy), and `codebase_consultant`.
+        `codebase_search` (legacy), `chat`, and `codebase_consultant` (legacy).
     """
     context: CodeAliveContext = ctx.request_context.lifespan_context
 

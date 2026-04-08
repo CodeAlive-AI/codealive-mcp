@@ -203,12 +203,12 @@ async def test_method_prefix_applied():
 
     result = await handle_api_error(
         ctx, _make_http_error(401), "chat",
-        method="codebase_consultant",
+        method="chat",
     )
 
-    assert result.startswith("[codebase_consultant] Error:")
+    assert result.startswith("[chat] Error:")
     logged = ctx.error.call_args[0][0]
-    assert logged.startswith("[codebase_consultant] ")
+    assert logged.startswith("[chat] ")
 
 
 # ---------------------------------------------------------------------------

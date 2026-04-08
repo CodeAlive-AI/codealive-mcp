@@ -66,12 +66,16 @@
       "description": "Search indexed artifacts by exact text or regex and return line-level matches."
     },
     {
+      "name": "chat",
+      "description": "Synthesized codebase Q&A. Slower and usually not the default choice; prefer semantic_search and grep_search first. Can take up to 30 seconds."
+    },
+    {
       "name": "fetch_artifacts",
       "description": "Fetch full source for specific search results when you need the underlying code."
     },
     {
       "name": "codebase_consultant",
-      "description": "Ask architecture and implementation questions with full codebase context."
+      "description": "Deprecated alias for chat kept for backward compatibility."
     },
     {
       "name": "get_artifact_relationships",
