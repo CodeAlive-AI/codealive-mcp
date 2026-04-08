@@ -20,6 +20,8 @@ async def test_all_tools_are_marked_read_only_with_titles():
         "codebase_consultant": "Consult Codebase",
         "get_data_sources": "List Data Sources",
         "codebase_search": "Search Codebase",
+        "semantic_search": "Semantic Search",
+        "grep_search": "Grep Search",
         "fetch_artifacts": "Fetch Artifacts",
         "get_artifact_relationships": "Inspect Artifact Relationships",
     }

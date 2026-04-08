@@ -28,7 +28,15 @@ sys.path.insert(0, str(Path(__file__).parent))
 from core import codealive_lifespan, setup_logging, setup_debug_logging, init_tracing, normalize_base_url, _server_ready
 import core.client as _client_module  # for /ready flag access
 from middleware import N8NRemoveParametersMiddleware, ObservabilityMiddleware
-from tools import codebase_consultant, get_data_sources, fetch_artifacts, codebase_search, get_artifact_relationships
+from tools import (
+    codebase_consultant,
+    codebase_search,
+    fetch_artifacts,
+    get_artifact_relationships,
+    get_data_sources,
+    grep_search,
+    semantic_search,
+)
 
 # Initialize FastMCP server with lifespan and enhanced system instructions
 mcp = FastMCP(
@@ -45,19 +53,18 @@ mcp = FastMCP(
 
     When working with a codebase, follow this workflow:
     1. First use `get_data_sources` to identify available repositories and workspaces
-    2. Use `codebase_search` to find relevant files — returns paths, descriptions, and identifiers
+    2. Use `semantic_search` for natural-language retrieval by meaning
+    3. Use `grep_search` for literal string or regex matching when the pattern matters
     3. To get full content:
        - For repos in your working directory: use `Read()` on the local files
        - For external repos: use `fetch_artifacts` with identifiers from search results
     4. Use `codebase_consultant` for in-depth analysis and synthesized answers
 
     For effective code exploration:
-    - Start with broad queries to understand the overall structure
-    - Use specific function/class names when looking for particular implementations
-    - Combine natural language with code patterns in your queries
-    - Always use "auto" search mode by default; it intelligently selects the appropriate search depth
-    - IMPORTANT: Only use "deep" search mode for very complex conceptual queries as it's resource-intensive
-    - Use `description_detail="full"` in search when you need richer descriptions before fetching content
+    - Start with broad natural-language queries in `semantic_search` to understand the overall structure
+    - Use `grep_search(regex=false)` for exact strings and `grep_search(regex=true)` for regex patterns
+    - Use specific function/class names or file path scopes when looking for particular implementations
+    - Prefer `semantic_search` over the deprecated `codebase_search` legacy alias
     - Remember that context from previous messages is maintained in the same conversation
 
     Flexible data source usage:
@@ -127,6 +134,14 @@ mcp.tool(
     title="Search Codebase",
     annotations=_READ_ONLY_TOOL,
 )(codebase_search)
+mcp.tool(
+    title="Semantic Search",
+    annotations=_READ_ONLY_TOOL,
+)(semantic_search)
+mcp.tool(
+    title="Grep Search",
+    annotations=_READ_ONLY_TOOL,
+)(grep_search)
 mcp.tool(
     title="Fetch Artifacts",
     annotations=_READ_ONLY_TOOL,

@@ -56,7 +56,15 @@
       },
       {
         "name": "codebase_search",
-        "description": "Search across your entire codebase using natural language queries. Find functions, classes, patterns, and implementations with semantic understanding that goes beyond simple text matching."
+        "description": "Deprecated legacy semantic search tool retained for backward compatibility."
+      },
+      {
+        "name": "semantic_search",
+        "description": "Search across indexed artifacts using natural language queries and semantic retrieval."
+      },
+      {
+        "name": "grep_search",
+        "description": "Search indexed artifacts using exact text or regex patterns and return line-level matches."
       },
       {
         "name": "codebase_consultant",

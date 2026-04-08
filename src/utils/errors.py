@@ -10,7 +10,7 @@ errors like 401/404, burning tokens and frustrating the user. The ``Try: ...``
 hint gives the model a concrete next action instead of hallucinating one.
 
 Per-tool callers can override the default ``Try:`` text via ``recovery_hints``
-when a generic hint isn't actionable enough — e.g. a 404 from ``codebase_search``
+when a generic hint isn't actionable enough — e.g. a 404 from ``semantic_search``
 should suggest ``get_data_sources``, while a 404 from ``codebase_consultant``
 should suggest checking ``conversation_id``.
 """
@@ -92,7 +92,7 @@ _ERROR_TEMPLATES: dict[int, _ErrorTemplate] = {
         default_hint=(
             "(1) call get_data_sources to see available data source names, "
             "(2) check spelling and case, "
-            "(3) verify any identifiers were returned by a recent codebase_search"
+            "(3) verify any identifiers were returned by a recent semantic_search, grep_search, or codebase_search"
         ),
     ),
     422: _ErrorTemplate(

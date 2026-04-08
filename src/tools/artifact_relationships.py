@@ -41,9 +41,9 @@ async def get_artifact_relationships(
     Retrieve relationship groups for a single artifact by profile.
 
     Use this tool to explore an artifact's call graph, inheritance hierarchy,
-    or references. This is a drill-down tool — use it AFTER `codebase_search`
-    or `fetch_artifacts` when you need to understand how an artifact relates
-    to others in the codebase.
+    or references. This is a drill-down tool — use it AFTER `semantic_search`,
+    `grep_search`, legacy `codebase_search`, or `fetch_artifacts` when you need
+    to understand how an artifact relates to others in the codebase.
 
     Args:
         identifier: Fully qualified artifact identifier from search or fetch results.
@@ -120,8 +120,8 @@ async def get_artifact_relationships(
             ctx, e, "get artifact relationships", method=_TOOL_NAME,
             recovery_hints={
                 404: (
-                    "(1) verify the identifier came from a recent codebase_search or fetch_artifacts result, "
-                    "(2) call codebase_search again to get a fresh identifier — the index may have changed, "
+                    "(1) verify the identifier came from a recent semantic_search, grep_search, codebase_search, or fetch_artifacts result, "
+                    "(2) call semantic_search or grep_search again to get a fresh identifier — the index may have changed, "
                     "(3) check that the artifact is a function/class (relationships are not available for non-symbol artifacts)"
                 ),
             },

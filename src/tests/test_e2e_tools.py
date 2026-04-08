@@ -23,8 +23,10 @@ from tools import (
     codebase_consultant,
     codebase_search,
     fetch_artifacts,
+    grep_search,
     get_artifact_relationships,
     get_data_sources,
+    semantic_search,
 )
 
 
@@ -64,6 +66,8 @@ def _server(routes: dict) -> FastMCP:
     mcp = FastMCP("E2E Test Server", lifespan=lifespan)
     mcp.tool()(get_data_sources)
     mcp.tool()(codebase_search)
+    mcp.tool()(semantic_search)
+    mcp.tool()(grep_search)
     mcp.tool()(fetch_artifacts)
     mcp.tool()(codebase_consultant)
     mcp.tool()(get_artifact_relationships)
@@ -262,6 +266,105 @@ class TestCodebaseSearchE2E:
         data = json.loads(text)
         assert "error" in data
         assert "404" in data["error"] or "not found" in data["error"].lower()
+
+
+# ---------------------------------------------------------------------------
+# semantic_search
+# ---------------------------------------------------------------------------
+
+class TestSemanticSearchE2E:
+    @pytest.mark.asyncio
+    async def test_success_hits_canonical_endpoint(self):
+        def handler(req):
+            assert req.url.params.get("Query") == "auth service"
+            assert req.url.params.get("MaxResults") == "7"
+            assert req.url.params.get_list("Names") == ["backend"]
+            assert req.url.params.get_list("Paths") == ["src/auth.py"]
+            assert req.url.params.get_list("Extensions") == [".py"]
+            assert req.headers["X-CodeAlive-Tool"] == "semantic_search"
+            return httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {
+                            "identifier": "org/repo::src/auth.py::AuthService",
+                            "kind": "Class",
+                            "description": "Handles authentication",
+                            "contentByteSize": 4200,
+                            "location": {
+                                "path": "src/auth.py",
+                                "range": {"start": {"line": 10}, "end": {"line": 85}},
+                            },
+                        }
+                    ]
+                },
+            )
+
+        mcp = _server({"/api/search/semantic": handler})
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "semantic_search",
+                {
+                    "query": "auth service",
+                    "data_sources": ["backend"],
+                    "paths": ["src/auth.py"],
+                    "extensions": [".py"],
+                    "max_results": 7,
+                },
+            )
+
+        data = json.loads(_text(result))
+        assert data["results"][0]["path"] == "src/auth.py"
+        assert "fetch_artifacts" in data["hint"]
+
+
+# ---------------------------------------------------------------------------
+# grep_search
+# ---------------------------------------------------------------------------
+
+class TestGrepSearchE2E:
+    @pytest.mark.asyncio
+    async def test_success_hits_canonical_endpoint(self):
+        def handler(req):
+            assert req.url.params.get("Query") == "auth\\("
+            assert req.url.params.get("Regex") == "true"
+            assert req.headers["X-CodeAlive-Tool"] == "grep_search"
+            return httpx.Response(
+                200,
+                json={
+                    "results": [
+                        {
+                            "identifier": "org/repo::src/auth.py",
+                            "kind": "File",
+                            "matchCount": 2,
+                            "matches": [
+                                {
+                                    "lineNumber": 15,
+                                    "startColumn": 5,
+                                    "endColumn": 10,
+                                    "lineText": "auth(token)",
+                                }
+                            ],
+                            "location": {
+                                "path": "src/auth.py",
+                                "range": {"start": {"line": 15}, "end": {"line": 15}},
+                            },
+                        }
+                    ]
+                },
+            )
+
+        mcp = _server({"/api/search/grep": handler})
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "grep_search",
+                {"query": "auth\\(", "data_sources": ["backend"], "regex": True},
+            )
+
+        data = json.loads(_text(result))
+        assert data["results"][0]["matchCount"] == 2
+        assert data["results"][0]["matches"][0]["lineNumber"] == 15
+        assert "fetch_artifacts" in data["hint"] or "Read()" in data["hint"]
 
 
 # ---------------------------------------------------------------------------

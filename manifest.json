@@ -55,7 +55,15 @@
     },
     {
       "name": "codebase_search",
-      "description": "Search indexed code semantically across repositories and workspaces."
+      "description": "Deprecated legacy semantic search tool kept for backward compatibility."
+    },
+    {
+      "name": "semantic_search",
+      "description": "Search indexed artifacts semantically across repositories and workspaces."
+    },
+    {
+      "name": "grep_search",
+      "description": "Search indexed artifacts by exact text or regex and return line-level matches."
     },
     {
       "name": "fetch_artifacts",

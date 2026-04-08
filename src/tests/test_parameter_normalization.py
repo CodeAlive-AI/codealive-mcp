@@ -115,16 +115,23 @@ class TestNormalizeDataSourceNames:
 class TestParameterNormalizationIntegration:
     """Integration tests to ensure parameter normalization works in tool contexts."""
 
-    def test_search_tool_parameter_handling(self):
-        """Test that search tool properly normalizes various parameter formats."""
-        from tools.search import codebase_search
+    def test_semantic_search_parameter_handling(self):
+        """Test that semantic search properly normalizes various parameter formats."""
+        from tools.search import semantic_search
         import inspect
 
-        # Verify the function accepts Union[str, List[str]]
-        sig = inspect.signature(codebase_search)
+        sig = inspect.signature(semantic_search)
         data_sources_param = sig.parameters['data_sources']
 
-        # The annotation should accept both str and List[str]
+        assert 'Union' in str(data_sources_param.annotation) or 'str' in str(data_sources_param.annotation)
+
+    def test_grep_search_parameter_handling(self):
+        """Test that grep search properly normalizes various parameter formats."""
+        from tools.search import grep_search
+        import inspect
+
+        sig = inspect.signature(grep_search)
+        data_sources_param = sig.parameters['data_sources']
         assert 'Union' in str(data_sources_param.annotation) or 'str' in str(data_sources_param.annotation)
 
     def test_consultant_tool_parameter_handling(self):
