@@ -3,7 +3,10 @@
 import json
 
 import pytest
-from utils.response_transformer import transform_search_response_to_json
+from utils.response_transformer import (
+    transform_grep_response_to_json,
+    transform_search_response_to_json,
+)
 
 
 class TestJsonTransformer:
@@ -310,3 +313,34 @@ class TestJsonTransformer:
         assert second["path"] == "README.md"
         assert second["kind"] == "Chunk"
         assert second["description"] == "Search documentation section"
+
+    def test_grep_transform_preserves_match_previews(self):
+        response = {
+            "results": [
+                {
+                    "kind": "File",
+                    "identifier": "owner/repo::src/auth.py",
+                    "location": {
+                        "path": "src/auth.py",
+                        "range": {"start": {"line": 15}, "end": {"line": 15}},
+                    },
+                    "matchCount": 2,
+                    "matches": [
+                        {
+                            "lineNumber": 15,
+                            "startColumn": 5,
+                            "endColumn": 10,
+                            "lineText": "auth(token)",
+                        }
+                    ],
+                }
+            ]
+        }
+
+        result = transform_grep_response_to_json(response)
+        data = json.loads(result)
+
+        assert data["results"][0]["path"] == "src/auth.py"
+        assert data["results"][0]["matchCount"] == 2
+        assert data["results"][0]["matches"][0]["lineNumber"] == 15
+        assert "fetch_artifacts" in data["hint"] or "Read()" in data["hint"]

@@ -20,8 +20,9 @@ async def fetch_artifacts(
     """
     Retrieve the full content of code artifacts by their identifiers.
 
-    Use this tool AFTER `codebase_search` to get the complete source code for results
-    you need to inspect. The `identifier` values come from the search results.
+    Use this tool AFTER `semantic_search`, `grep_search`, or legacy `codebase_search`
+    to get the complete source code for results you need to inspect. The `identifier`
+    values come from the search results.
 
     This is the recommended way to retrieve content for **external repositories** that
     you cannot access via local file reads. For repositories in your working directory,
@@ -29,7 +30,8 @@ async def fetch_artifacts(
 
     Args:
         identifiers: List of artifact identifiers from search results (max 20).
-                     These are the `identifier` attribute values from `codebase_search` XML results.
+                     These are the `identifier` attribute values from `semantic_search`,
+                     `grep_search`, or legacy `codebase_search` results.
 
                      Identifier format examples:
                        Symbol:  "my-org/backend::src/services/auth.py::AuthService.validate_token(token: str)"
@@ -61,7 +63,7 @@ async def fetch_artifacts(
 
     Note:
         - Maximum 20 identifiers per request to avoid excessive payloads.
-        - Identifiers must come from `codebase_search` results.
+        - Identifiers must come from `semantic_search`, `grep_search`, or legacy `codebase_search` results.
         - Relationships shown here are a **preview** (up to 3 call relationships per direction).
           To retrieve the complete list, or to explore other relationship types
           (inheritance, references), use `get_artifact_relationships`.
@@ -111,8 +113,8 @@ async def fetch_artifacts(
             ctx, e, "fetch artifacts", method=_TOOL_NAME,
             recovery_hints={
                 404: (
-                    "(1) verify the identifiers came from a recent codebase_search call (do not invent them), "
-                    "(2) re-run codebase_search to get fresh identifiers — the index may have changed, "
+                    "(1) verify the identifiers came from a recent semantic_search, grep_search, or codebase_search call (do not invent them), "
+                    "(2) re-run semantic_search or grep_search to get fresh identifiers — the index may have changed, "
                     "(3) for local repos in your working directory, use Read() on the file path instead"
                 ),
             },
