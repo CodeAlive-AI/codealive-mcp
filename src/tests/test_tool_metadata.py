@@ -17,7 +17,8 @@ async def test_all_tools_are_marked_read_only_with_titles():
         tools = await client.list_tools()
 
     expected_titles = {
-        "codebase_consultant": "Consult Codebase",
+        "chat": "Chat About Codebase",
+        "codebase_consultant": "Consult Codebase (Deprecated)",
         "get_data_sources": "List Data Sources",
         "codebase_search": "Search Codebase",
         "semantic_search": "Semantic Search",

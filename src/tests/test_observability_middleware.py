@@ -131,7 +131,7 @@ class TestFailedToolCall:
     @pytest.mark.asyncio
     async def test_span_status_error_on_failure(self, otel_setup):
         middleware = ObservabilityMiddleware()
-        context = _make_context("codebase_consultant")
+        context = _make_context("chat")
         call_next = AsyncMock(side_effect=ValueError("bad input"))
 
         with pytest.raises(ValueError):

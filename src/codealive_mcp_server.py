@@ -29,6 +29,7 @@ from core import codealive_lifespan, setup_logging, setup_debug_logging, init_tr
 import core.client as _client_module  # for /ready flag access
 from middleware import N8NRemoveParametersMiddleware, ObservabilityMiddleware
 from tools import (
+    chat,
     codebase_consultant,
     codebase_search,
     fetch_artifacts,
@@ -58,13 +59,20 @@ mcp = FastMCP(
     3. To get full content:
        - For repos in your working directory: use `Read()` on the local files
        - For external repos: use `fetch_artifacts` with identifiers from search results
-    4. Use `codebase_consultant` for in-depth analysis and synthesized answers
+    4. Use `get_artifact_relationships` or `fetch_artifacts` to drill into the most relevant hits
+    5. If your environment supports subagents and you need the highest reliability or depth,
+       prefer an agentic workflow where a subagent combines `semantic_search`, `grep_search`,
+       artifact fetches, relationship inspection, and local file reads
+    6. Use `chat` only when you specifically need a synthesized answer after search;
+       it is usually not the default choice and can take up to 30 seconds
 
     For effective code exploration:
     - Start with broad natural-language queries in `semantic_search` to understand the overall structure
     - Use `grep_search(regex=false)` for exact strings and `grep_search(regex=true)` for regex patterns
     - Use specific function/class names or file path scopes when looking for particular implementations
+    - Treat `semantic_search` and `grep_search` as the default discovery tools
     - Prefer `semantic_search` over the deprecated `codebase_search` legacy alias
+    - Reserve `chat` for synthesis after search, not for first-pass evidence gathering
     - Remember that context from previous messages is maintained in the same conversation
 
     Flexible data source usage:
@@ -123,10 +131,6 @@ async def readiness_check(request: Request) -> JSONResponse:
 _READ_ONLY_TOOL = {"readOnlyHint": True}
 
 mcp.tool(
-    title="Consult Codebase",
-    annotations=_READ_ONLY_TOOL,
-)(codebase_consultant)
-mcp.tool(
     title="List Data Sources",
     annotations=_READ_ONLY_TOOL,
 )(get_data_sources)
@@ -143,6 +147,10 @@ mcp.tool(
     annotations=_READ_ONLY_TOOL,
 )(grep_search)
 mcp.tool(
+    title="Chat About Codebase",
+    annotations=_READ_ONLY_TOOL,
+)(chat)
+mcp.tool(
     title="Fetch Artifacts",
     annotations=_READ_ONLY_TOOL,
 )(fetch_artifacts)
@@ -150,6 +158,10 @@ mcp.tool(
     title="Inspect Artifact Relationships",
     annotations=_READ_ONLY_TOOL,
 )(get_artifact_relationships)
+mcp.tool(
+    title="Consult Codebase (Deprecated)",
+    annotations=_READ_ONLY_TOOL,
+)(codebase_consultant)
 
 
 def main():

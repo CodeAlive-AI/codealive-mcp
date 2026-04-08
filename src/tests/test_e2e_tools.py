@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core import CodeAliveContext
 from tools import (
+    chat,
     codebase_consultant,
     codebase_search,
     fetch_artifacts,
@@ -69,6 +70,7 @@ def _server(routes: dict) -> FastMCP:
     mcp.tool()(semantic_search)
     mcp.tool()(grep_search)
     mcp.tool()(fetch_artifacts)
+    mcp.tool()(chat)
     mcp.tool()(codebase_consultant)
     mcp.tool()(get_artifact_relationships)
     return mcp
@@ -464,10 +466,10 @@ class TestFetchArtifactsE2E:
 
 
 # ---------------------------------------------------------------------------
-# codebase_consultant (streaming SSE)
+# chat / codebase_consultant (streaming SSE)
 # ---------------------------------------------------------------------------
 
-class TestCodebaseConsultantE2E:
+class TestChatE2E:
     @staticmethod
     def _sse_body(chunks: list[str], conv_id: str = "conv-42", msg_id: str = "msg-1") -> str:
         """Build an SSE response body with metadata + content chunks + DONE."""
@@ -497,7 +499,7 @@ class TestCodebaseConsultantE2E:
         mcp = _server({"/api/chat/completions": handler})
         async with Client(mcp) as client:
             result = await client.call_tool(
-                "codebase_consultant",
+                "chat",
                 {"question": "How does auth work?", "data_sources": ["backend"]},
             )
 
@@ -518,7 +520,7 @@ class TestCodebaseConsultantE2E:
         mcp = _server({"/api/chat/completions": handler})
         async with Client(mcp) as client:
             result = await client.call_tool(
-                "codebase_consultant",
+                "chat",
                 {"question": "And the error handling?", "conversation_id": "conv-existing"},
             )
 
@@ -530,7 +532,7 @@ class TestCodebaseConsultantE2E:
         mcp = _server({})
         async with Client(mcp) as client:
             result = await client.call_tool(
-                "codebase_consultant", {"question": ""},
+                "chat", {"question": ""},
                 raise_on_error=False,
             )
 
@@ -544,13 +546,30 @@ class TestCodebaseConsultantE2E:
         })
         async with Client(mcp) as client:
             result = await client.call_tool(
-                "codebase_consultant",
+                "chat",
                 {"question": "hello"},
                 raise_on_error=False,
             )
 
         text = _text(result)
         assert "401" in text or "auth" in text.lower()
+
+    @pytest.mark.asyncio
+    async def test_legacy_alias_still_works(self):
+        body = self._sse_body(["Legacy alias"])
+
+        def handler(req):
+            assert req.headers["X-CodeAlive-Tool"] == "codebase_consultant"
+            return httpx.Response(200, text=body, headers={"content-type": "text/event-stream"})
+
+        mcp = _server({"/api/chat/completions": handler})
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "codebase_consultant",
+                {"question": "How does auth work?", "data_sources": ["backend"]},
+            )
+
+        assert "Legacy alias" in _text(result)
 
 
 # ---------------------------------------------------------------------------
