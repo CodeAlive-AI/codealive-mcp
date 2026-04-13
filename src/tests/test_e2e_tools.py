@@ -159,9 +159,8 @@ class TestGetDataSourcesE2E:
             result = await client.call_tool("get_data_sources", {}, raise_on_error=False)
 
         text = _text(result)
-        data = json.loads(text)
-        assert "error" in data
-        assert "500" in data["error"] or "Server error" in data["error"]
+        assert result.is_error
+        assert "500" in text or "Server error" in text
 
 
 # ---------------------------------------------------------------------------
@@ -218,9 +217,8 @@ class TestCodebaseSearchE2E:
             )
 
         text = _text(result)
-        data = json.loads(text)
-        assert "error" in data
-        assert "empty" in data["error"].lower()
+        assert result.is_error
+        assert "empty" in text.lower() or "Query cannot be empty" in text
 
     @pytest.mark.asyncio
     async def test_no_results_returns_empty_json(self):
@@ -265,9 +263,8 @@ class TestCodebaseSearchE2E:
             )
 
         text = _text(result)
-        data = json.loads(text)
-        assert "error" in data
-        assert "404" in data["error"] or "not found" in data["error"].lower()
+        assert result.is_error
+        assert "404" in text or "not found" in text.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -354,9 +351,8 @@ class TestSemanticSearchE2E:
                 {"query": "test", "data_sources": ["repo"], "max_results": 0},
                 raise_on_error=False,
             )
-        data = json.loads(_text(result))
-        assert "error" in data
-        assert "max_results" in data["error"]
+        assert result.is_error
+        assert "max_results" in _text(result)
 
     @pytest.mark.asyncio
     async def test_max_results_boundary_501_rejected(self):
@@ -367,9 +363,8 @@ class TestSemanticSearchE2E:
                 {"query": "test", "data_sources": ["repo"], "max_results": 501},
                 raise_on_error=False,
             )
-        data = json.loads(_text(result))
-        assert "error" in data
-        assert "max_results" in data["error"]
+        assert result.is_error
+        assert "max_results" in _text(result)
 
     @pytest.mark.asyncio
     async def test_max_results_boundary_500_accepted(self):
@@ -496,9 +491,9 @@ class TestSemanticSearchE2E:
                 {"query": "test", "data_sources": ["bad-repo"]},
                 raise_on_error=False,
             )
-        data = json.loads(_text(result))
-        assert "error" in data
-        assert "get_data_sources" in data["error"]
+        text = _text(result)
+        assert result.is_error
+        assert "get_data_sources" in text
 
 
 # ---------------------------------------------------------------------------
@@ -597,8 +592,8 @@ class TestGrepSearchE2E:
                 {"query": "test", "data_sources": ["repo"], "max_results": 0},
                 raise_on_error=False,
             )
-        data = json.loads(_text(result))
-        assert "error" in data
+        assert result.is_error
+        assert "max_results" in _text(result)
 
     @pytest.mark.asyncio
     async def test_max_results_boundary_501_rejected(self):
@@ -609,8 +604,8 @@ class TestGrepSearchE2E:
                 {"query": "test", "data_sources": ["repo"], "max_results": 501},
                 raise_on_error=False,
             )
-        data = json.loads(_text(result))
-        assert "error" in data
+        assert result.is_error
+        assert "max_results" in _text(result)
 
     @pytest.mark.asyncio
     async def test_extensions_forwarded(self):
@@ -672,9 +667,8 @@ class TestGrepSearchE2E:
                 {"query": "", "data_sources": ["repo"]},
                 raise_on_error=False,
             )
-        data = json.loads(_text(result))
-        assert "error" in data
-        assert "empty" in data["error"].lower()
+        assert result.is_error
+        assert "empty" in _text(result).lower() or "Query cannot be empty" in _text(result)
 
     @pytest.mark.asyncio
     async def test_data_sources_as_string_normalized(self):
@@ -700,9 +694,8 @@ class TestGrepSearchE2E:
                 {"query": "test", "data_sources": ["bad-repo"]},
                 raise_on_error=False,
             )
-        data = json.loads(_text(result))
-        assert "error" in data
-        assert "get_data_sources" in data["error"]
+        assert result.is_error
+        assert "get_data_sources" in _text(result)
 
 
 # ---------------------------------------------------------------------------
@@ -1098,9 +1091,8 @@ class TestGetArtifactRelationshipsE2E:
                 raise_on_error=False,
             )
 
-        data = json.loads(_text(result))
-        assert "error" in data
-        assert "required" in data["error"].lower()
+        assert result.is_error
+        assert "required" in _text(result).lower()
 
     @pytest.mark.asyncio
     async def test_max_count_per_type_0_rejected(self):
@@ -1111,9 +1103,8 @@ class TestGetArtifactRelationshipsE2E:
                 {"identifier": "org/repo::x", "max_count_per_type": 0},
                 raise_on_error=False,
             )
-        data = json.loads(_text(result))
-        assert "error" in data
-        assert "max_count_per_type" in data["error"]
+        assert result.is_error
+        assert "max_count_per_type" in _text(result)
 
     @pytest.mark.asyncio
     async def test_max_count_per_type_1001_rejected(self):
@@ -1124,9 +1115,8 @@ class TestGetArtifactRelationshipsE2E:
                 {"identifier": "org/repo::x", "max_count_per_type": 1001},
                 raise_on_error=False,
             )
-        data = json.loads(_text(result))
-        assert "error" in data
-        assert "max_count_per_type" in data["error"]
+        assert result.is_error
+        assert "max_count_per_type" in _text(result)
 
     @pytest.mark.asyncio
     async def test_max_count_per_type_negative_rejected(self):
@@ -1137,9 +1127,8 @@ class TestGetArtifactRelationshipsE2E:
                 {"identifier": "org/repo::x", "max_count_per_type": -1},
                 raise_on_error=False,
             )
-        data = json.loads(_text(result))
-        assert "error" in data
-        assert "max_count_per_type" in data["error"]
+        assert result.is_error
+        assert "max_count_per_type" in _text(result)
 
     @pytest.mark.asyncio
     async def test_max_count_per_type_forwarded(self):

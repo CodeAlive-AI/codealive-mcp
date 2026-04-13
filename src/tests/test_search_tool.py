@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastmcp import Context
+from fastmcp.exceptions import ToolError
 
 from tools.search import codebase_search, grep_search, semantic_search
 
@@ -152,38 +153,24 @@ async def test_codebase_search_keeps_legacy_params(mock_get_api_key):
 
 
 @pytest.mark.asyncio
-async def test_semantic_search_empty_query_returns_error_string():
+async def test_semantic_search_empty_query_raises_tool_error():
     ctx = MagicMock(spec=Context)
-    ctx.info = AsyncMock()
-    ctx.warning = AsyncMock()
-    ctx.error = AsyncMock()
-    ctx.request_context.lifespan_context = MagicMock()
 
-    result = await semantic_search(ctx=ctx, query="")
-
-    data = json.loads(result)
-    assert "error" in data
-    assert "Query cannot be empty" in data["error"]
+    with pytest.raises(ToolError, match="Query cannot be empty"):
+        await semantic_search(ctx=ctx, query="")
 
 
 @pytest.mark.asyncio
-async def test_grep_search_invalid_max_results_returns_error_string():
+async def test_grep_search_invalid_max_results_raises_tool_error():
     ctx = MagicMock(spec=Context)
-    ctx.info = AsyncMock()
-    ctx.warning = AsyncMock()
-    ctx.error = AsyncMock()
-    ctx.request_context.lifespan_context = MagicMock()
 
-    result = await grep_search(ctx=ctx, query="foo", max_results=501)
-
-    data = json.loads(result)
-    assert "error" in data
-    assert "max_results" in data["error"]
+    with pytest.raises(ToolError, match="max_results"):
+        await grep_search(ctx=ctx, query="foo", max_results=501)
 
 
 @pytest.mark.asyncio
 @patch("tools.search.get_api_key_from_context")
-async def test_codebase_search_api_error_returns_error_string(mock_get_api_key):
+async def test_codebase_search_api_error_raises_tool_error(mock_get_api_key):
     import httpx
 
     mock_get_api_key.return_value = "test_key"
@@ -203,12 +190,9 @@ async def test_codebase_search_api_error_returns_error_string(mock_get_api_key):
     ctx, mock_client = _build_context(mock_response)
     mock_client.get.return_value = mock_response
 
-    result = await codebase_search(
-        ctx=ctx,
-        query="test query",
-        data_sources=["invalid-name"],
-    )
-
-    data = json.loads(result)
-    assert "error" in data
-    assert "404" in data["error"]
+    with pytest.raises(ToolError, match="404"):
+        await codebase_search(
+            ctx=ctx,
+            query="test query",
+            data_sources=["invalid-name"],
+        )

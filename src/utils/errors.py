@@ -20,6 +20,7 @@ from typing import Mapping, Optional
 
 import httpx
 from fastmcp import Context
+from fastmcp.exceptions import ToolError
 
 from core.config import REQUEST_TIMEOUT_SECONDS
 
@@ -167,13 +168,14 @@ async def handle_api_error(
     *,
     method: Optional[str] = None,
     recovery_hints: Optional[Mapping[int, str]] = None,
-) -> str:
+) -> None:
     """
     Handle API errors consistently across all tools.
 
-    The returned string is structured so the LLM can act on it without
-    hallucinating: it always carries the HTTP code, an explicit ``Retry: yes|no``
-    marker, and a numbered ``Try: ...`` recovery hint.
+    Logs the error via ``ctx.error()`` and raises ``ToolError`` so the MCP
+    response gets ``isError: true``.  The error text is structured so the LLM
+    can act on it without hallucinating: it always carries the HTTP code, an
+    explicit ``Retry: yes|no`` marker, and a numbered ``Try: ...`` recovery hint.
 
     Args:
         ctx: FastMCP context for logging.
@@ -181,15 +183,16 @@ async def handle_api_error(
         operation: Description of the operation that failed (used in timeout
             and generic-exception messages).
         method: Name of the MCP tool/method that triggered the error. When
-            provided, every returned and logged message is prefixed with
-            ``[method]`` so failures are easy to attribute.
+            provided, every message is prefixed with ``[method]`` so failures
+            are easy to attribute.
         recovery_hints: Optional per-tool overrides for the ``Try: ...`` text,
             keyed by HTTP status code. Use this when a generic hint isn't
             enough — e.g. ``chat`` overrides 404 with
             ``"check the conversation_id"``.
 
-    Returns:
-        User-friendly error message string, prefixed with ``[method]`` when given.
+    Raises:
+        ToolError: Always raised — sets ``isError: true`` in the MCP response
+            so the agent can distinguish errors from data.
     """
     prefix = _method_prefix(method)
 
@@ -204,7 +207,7 @@ async def handle_api_error(
             "(3) if it still times out, the LLM upstream may be overloaded — stop retrying and try again later"
         )
         await ctx.error(f"{prefix}{error_msg}")
-        return f"{prefix}Error: {error_msg}"
+        raise ToolError(f"{prefix}Error: {error_msg}")
 
     if isinstance(error, httpx.HTTPStatusError):
         error_code = error.response.status_code
@@ -231,16 +234,16 @@ async def handle_api_error(
             )
 
         await ctx.error(f"{prefix}{error_msg}")
-        return f"{prefix}Error: {error_msg}"
-    else:
-        error_msg = (
-            f"Error during {operation}: {str(error)}. "
-            "Retry: no — fix the input. "
-            "Try: (1) check the parameters you passed for type errors or typos, "
-            "(2) confirm the tool was called with the schema described in its docstring"
-        )
-        await ctx.error(f"{prefix}{error_msg}")
-        return f"{prefix}Error: {error_msg}"
+        raise ToolError(f"{prefix}Error: {error_msg}")
+
+    error_msg = (
+        f"Error during {operation}: {str(error)}. "
+        "Retry: no — fix the input. "
+        "Try: (1) check the parameters you passed for type errors or typos, "
+        "(2) confirm the tool was called with the schema described in its docstring"
+    )
+    await ctx.error(f"{prefix}{error_msg}")
+    raise ToolError(f"{prefix}Error: {error_msg}")
 
 
 def coerce_stringified_list(value) -> list[str]:

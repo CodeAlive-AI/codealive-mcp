@@ -3,6 +3,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 import httpx
+from fastmcp.exceptions import ToolError
 from utils.errors import handle_api_error, format_data_source_names
 
 
@@ -14,7 +15,7 @@ def _make_http_error(status_code: int, text: str = "") -> httpx.HTTPStatusError:
 
 
 # ---------------------------------------------------------------------------
-# Status code mapping
+# Status code mapping — handle_api_error now raises ToolError (isError: true)
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
@@ -23,15 +24,15 @@ async def test_handle_401_error():
     ctx = MagicMock()
     ctx.error = AsyncMock()
 
-    result = await handle_api_error(ctx, _make_http_error(401, "Invalid token"), "test operation")
+    with pytest.raises(ToolError, match="Authentication error \\(401\\)"):
+        await handle_api_error(ctx, _make_http_error(401, "Invalid token"), "test operation")
 
-    assert "Authentication error (401)" in result
-    assert "Invalid API key" in result
-    # New: explicit retry decision + actionable hint
-    assert "Retry: no" in result
-    assert "Try:" in result
-    assert "CODEALIVE_API_KEY" in result
     ctx.error.assert_called_once()
+    error_msg = ctx.error.call_args[0][0]
+    assert "Invalid API key" in error_msg
+    assert "Retry: no" in error_msg
+    assert "Try:" in error_msg
+    assert "CODEALIVE_API_KEY" in error_msg
 
 
 @pytest.mark.asyncio
@@ -40,12 +41,12 @@ async def test_handle_404_error():
     ctx = MagicMock()
     ctx.error = AsyncMock()
 
-    result = await handle_api_error(ctx, _make_http_error(404, "Resource not found"), "search")
+    with pytest.raises(ToolError, match="Not found error \\(404\\)"):
+        await handle_api_error(ctx, _make_http_error(404, "Resource not found"), "search")
 
-    assert "Not found error (404)" in result
-    assert "Retry: no" in result
-    assert "get_data_sources" in result
-    ctx.error.assert_called_once()
+    error_msg = ctx.error.call_args[0][0]
+    assert "Retry: no" in error_msg
+    assert "get_data_sources" in error_msg
 
 
 @pytest.mark.asyncio
@@ -54,14 +55,12 @@ async def test_handle_429_rate_limit():
     ctx = MagicMock()
     ctx.error = AsyncMock()
 
-    result = await handle_api_error(ctx, _make_http_error(429, "Rate limit exceeded"), "api call")
+    with pytest.raises(ToolError, match="Rate limit exceeded \\(429\\)"):
+        await handle_api_error(ctx, _make_http_error(429, "Rate limit exceeded"), "api call")
 
-    assert "Rate limit exceeded (429)" in result
-    assert "try again later" in result
-    # New: structured retryability marker
-    assert "Retry: yes" in result
-    assert "30" in result  # mentions a concrete wait window
-    ctx.error.assert_called_once()
+    error_msg = ctx.error.call_args[0][0]
+    assert "Retry: yes" in error_msg
+    assert "30" in error_msg
 
 
 @pytest.mark.asyncio
@@ -70,12 +69,12 @@ async def test_handle_500_server_error():
     ctx = MagicMock()
     ctx.error = AsyncMock()
 
-    result = await handle_api_error(ctx, _make_http_error(500, "Internal server error"), "operation")
+    with pytest.raises(ToolError, match="Server error \\(500\\)"):
+        await handle_api_error(ctx, _make_http_error(500, "Internal server error"), "operation")
 
-    assert "Server error (500)" in result
-    assert "CodeAlive service encountered an issue" in result
-    assert "Retry: yes" in result
-    assert "github.com/CodeAlive-AI/codealive-mcp/issues" in result
+    error_msg = ctx.error.call_args[0][0]
+    assert "Retry: yes" in error_msg
+    assert "github.com/CodeAlive-AI/codealive-mcp/issues" in error_msg
 
 
 @pytest.mark.asyncio
@@ -84,11 +83,12 @@ async def test_handle_422_data_source_not_ready():
     ctx = MagicMock()
     ctx.error = AsyncMock()
 
-    result = await handle_api_error(ctx, _make_http_error(422, "still indexing"), "search")
+    with pytest.raises(ToolError, match="422"):
+        await handle_api_error(ctx, _make_http_error(422, "still indexing"), "search")
 
-    assert "(422)" in result
-    assert "Retry: yes" in result
-    assert "alive_only=false" in result
+    error_msg = ctx.error.call_args[0][0]
+    assert "Retry: yes" in error_msg
+    assert "alive_only=false" in error_msg
 
 
 @pytest.mark.asyncio
@@ -96,11 +96,12 @@ async def test_handle_502_bad_gateway():
     ctx = MagicMock()
     ctx.error = AsyncMock()
 
-    result = await handle_api_error(ctx, _make_http_error(502), "search")
+    with pytest.raises(ToolError, match="502"):
+        await handle_api_error(ctx, _make_http_error(502), "search")
 
-    assert "(502)" in result
-    assert "Retry: yes" in result
-    assert "10" in result  # wait window mentioned
+    error_msg = ctx.error.call_args[0][0]
+    assert "Retry: yes" in error_msg
+    assert "10" in error_msg
 
 
 @pytest.mark.asyncio
@@ -108,10 +109,11 @@ async def test_handle_503_service_unavailable():
     ctx = MagicMock()
     ctx.error = AsyncMock()
 
-    result = await handle_api_error(ctx, _make_http_error(503), "search")
+    with pytest.raises(ToolError, match="503"):
+        await handle_api_error(ctx, _make_http_error(503), "search")
 
-    assert "(503)" in result
-    assert "Retry: yes" in result
+    error_msg = ctx.error.call_args[0][0]
+    assert "Retry: yes" in error_msg
 
 
 @pytest.mark.asyncio
@@ -121,12 +123,13 @@ async def test_handle_generic_exception():
     ctx.error = AsyncMock()
 
     error = ValueError("Invalid input")
-    result = await handle_api_error(ctx, error, "parsing")
+    with pytest.raises(ToolError, match="Invalid input"):
+        await handle_api_error(ctx, error, "parsing")
 
-    assert "Error during parsing" in result
-    assert "Invalid input" in result
-    assert "Retry: no" in result
-    assert "Try:" in result
+    error_msg = ctx.error.call_args[0][0]
+    assert "Error during parsing" in error_msg
+    assert "Retry: no" in error_msg
+    assert "Try:" in error_msg
 
 
 @pytest.mark.asyncio
@@ -136,12 +139,12 @@ async def test_handle_unknown_http_error():
     ctx.error = AsyncMock()
 
     error = _make_http_error(418, "I'm a teapot" * 100)
-    result = await handle_api_error(ctx, error, "brewing")
+    with pytest.raises(ToolError, match="418"):
+        await handle_api_error(ctx, error, "brewing")
 
-    assert "HTTP error: 418" in result
-    assert "Retry: no" in result
-    # Detail is capped to 200 chars; the rest of the message adds ~120 chars of structured suffix
-    assert len(result) < 400
+    error_msg = ctx.error.call_args[0][0]
+    assert "HTTP error: 418" in error_msg
+    assert "Retry: no" in error_msg
 
 
 @pytest.mark.asyncio
@@ -150,10 +153,11 @@ async def test_handle_timeout_error():
     ctx = MagicMock()
     ctx.error = AsyncMock()
 
-    result = await handle_api_error(ctx, httpx.ReadTimeout("slow"), "search")
+    with pytest.raises(ToolError, match="timeout"):
+        await handle_api_error(ctx, httpx.ReadTimeout("slow"), "search")
 
-    assert "timeout" in result.lower()
-    assert "Retry: yes" in result
+    error_msg = ctx.error.call_args[0][0]
+    assert "Retry: yes" in error_msg
 
 
 # ---------------------------------------------------------------------------
@@ -167,14 +171,15 @@ async def test_recovery_hints_override_default_404():
     ctx.error = AsyncMock()
 
     custom = "(1) check conversation_id, (2) drop conversation_id and retry"
-    result = await handle_api_error(
-        ctx, _make_http_error(404), "chat",
-        recovery_hints={404: custom},
-    )
+    with pytest.raises(ToolError) as exc_info:
+        await handle_api_error(
+            ctx, _make_http_error(404), "chat",
+            recovery_hints={404: custom},
+        )
 
+    result = str(exc_info.value)
     assert "Not found error (404)" in result
     assert custom in result
-    # Default 404 hint about get_data_sources is suppressed when overridden
     assert "get_data_sources" not in result
 
 
@@ -184,29 +189,31 @@ async def test_recovery_hints_only_apply_to_matching_status():
     ctx = MagicMock()
     ctx.error = AsyncMock()
 
-    result = await handle_api_error(
-        ctx, _make_http_error(401), "chat",
-        recovery_hints={404: "this should not appear"},
-    )
+    with pytest.raises(ToolError) as exc_info:
+        await handle_api_error(
+            ctx, _make_http_error(401), "chat",
+            recovery_hints={404: "this should not appear"},
+        )
 
+    result = str(exc_info.value)
     assert "Authentication error (401)" in result
     assert "this should not appear" not in result
-    # Default 401 hint is preserved
     assert "CODEALIVE_API_KEY" in result
 
 
 @pytest.mark.asyncio
 async def test_method_prefix_applied():
-    """The [method] prefix must be present in both returned and logged messages."""
+    """The [method] prefix must be present in both raised and logged messages."""
     ctx = MagicMock()
     ctx.error = AsyncMock()
 
-    result = await handle_api_error(
-        ctx, _make_http_error(401), "chat",
-        method="chat",
-    )
+    with pytest.raises(ToolError) as exc_info:
+        await handle_api_error(
+            ctx, _make_http_error(401), "chat",
+            method="chat",
+        )
 
-    assert result.startswith("[chat] Error:")
+    assert str(exc_info.value).startswith("[chat] Error:")
     logged = ctx.error.call_args[0][0]
     assert logged.startswith("[chat] ")
 

@@ -4,6 +4,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import json
 from fastmcp import Context
+from fastmcp.exceptions import ToolError
 from tools.chat import chat, codebase_consultant
 
 
@@ -162,12 +163,12 @@ async def test_chat_empty_question_validation(mock_get_api_key):
     ctx.request_context.lifespan_context = MagicMock()
 
     # Test with empty question
-    result = await chat(ctx=ctx, question="")
-    assert "Error: No question provided" in result
+    with pytest.raises(ToolError, match="No question provided"):
+        await chat(ctx=ctx, question="")
 
     # Test with whitespace only
-    result = await chat(ctx=ctx, question="   ")
-    assert "Error: No question provided" in result
+    with pytest.raises(ToolError, match="No question provided"):
+        await chat(ctx=ctx, question="   ")
 
 
 
@@ -176,9 +177,9 @@ async def test_chat_empty_question_validation(mock_get_api_key):
 @patch('tools.chat.get_api_key_from_context')
 @patch('tools.chat.handle_api_error')
 async def test_chat_error_handling(mock_handle_error, mock_get_api_key):
-    """Test error handling in chat."""
+    """Test error handling in chat — handle_api_error raises ToolError."""
     mock_get_api_key.return_value = "test_key"
-    mock_handle_error.return_value = "Error: Authentication failed"
+    mock_handle_error.side_effect = ToolError("Error: Authentication failed")
 
     ctx = MagicMock(spec=Context)
     ctx.info = AsyncMock()
@@ -192,11 +193,11 @@ async def test_chat_error_handling(mock_handle_error, mock_get_api_key):
 
     ctx.request_context.lifespan_context = mock_codealive_context
 
-    result = await chat(
-        ctx=ctx,
-        question="Test",
-        data_sources=["repo123"]
-    )
+    with pytest.raises(ToolError, match="Authentication failed"):
+        await chat(
+            ctx=ctx,
+            question="Test",
+            data_sources=["repo123"]
+        )
 
-    assert result == "Error: Authentication failed"
     mock_handle_error.assert_called_once()

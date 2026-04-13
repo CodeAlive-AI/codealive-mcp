@@ -5,6 +5,7 @@ from urllib.parse import urljoin
 
 import httpx
 from fastmcp import Context
+from fastmcp.exceptions import ToolError
 
 from core import CodeAliveContext, get_api_key_from_context, log_api_request, log_api_response
 from utils import coerce_stringified_list, handle_api_error
@@ -73,10 +74,10 @@ async def fetch_artifacts(
     identifiers = coerce_stringified_list(identifiers)
 
     if not identifiers:
-        return f"<error>[{_TOOL_NAME}] At least one identifier is required.</error>"
+        raise ToolError(f"[{_TOOL_NAME}] At least one identifier is required.")
 
     if len(identifiers) > 20:
-        return f"<error>[{_TOOL_NAME}] Maximum 20 identifiers per request. Please reduce the number of identifiers.</error>"
+        raise ToolError(f"[{_TOOL_NAME}] Maximum 20 identifiers per request. Please reduce the number of identifiers.")
 
     context: CodeAliveContext = ctx.request_context.lifespan_context
 
@@ -113,7 +114,8 @@ async def fetch_artifacts(
         return _build_artifacts_xml(artifacts_data)
 
     except (httpx.HTTPStatusError, Exception) as e:
-        error_msg = await handle_api_error(
+        # handle_api_error raises ToolError → MCP response gets isError: true
+        await handle_api_error(
             ctx, e, "fetch artifacts", method=_TOOL_NAME,
             recovery_hints={
                 404: (
@@ -123,7 +125,6 @@ async def fetch_artifacts(
                 ),
             },
         )
-        return f"<error>{error_msg}</error>"
 
 
 def _add_line_numbers(content: str, start_line: int = 1) -> str:

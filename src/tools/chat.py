@@ -10,6 +10,7 @@ from urllib.parse import urljoin
 
 import httpx
 from fastmcp import Context
+from fastmcp.exceptions import ToolError
 
 from core import CodeAliveContext, get_api_key_from_context, log_api_request, log_api_response
 from utils import handle_api_error, format_validation_error, format_data_source_names, normalize_data_source_names
@@ -134,10 +135,10 @@ async def _chat_impl(
     data_sources = normalize_data_source_names(data_sources)
 
     if not question or not question.strip():
-        return format_validation_error(
+        raise ToolError(format_validation_error(
             method_name,
             "No question provided. Please provide a question to ask the chat tool.",
-        )
+        ))
 
     # Validate that either conversation_id or data_sources is provided
     if not conversation_id and (not data_sources or len(data_sources) == 0):
@@ -235,7 +236,7 @@ async def _chat_impl(
                 f"[{method_name}] Error during streaming: {str(streaming_error)}"
             )
             await ctx.error(error_msg)
-            return f"{error_msg} {error_context}"
+            raise ToolError(f"{error_msg} {error_context}")
 
         # Append conversation ID info to the response if we got one and it's a new conversation
         if conversation_metadata.get("conversationId") and not conversation_id:
@@ -245,7 +246,7 @@ async def _chat_impl(
         return full_response or "No content returned from the API. Please check that your data sources are accessible and try again."
 
     except (httpx.HTTPStatusError, Exception) as e:
-        error_msg = await handle_api_error(
+        await handle_api_error(
             ctx, e, "chat completion", method=method_name,
             recovery_hints={
                 404: (
@@ -255,7 +256,6 @@ async def _chat_impl(
                 ),
             },
         )
-        return error_msg
 
 
 def _format_metadata_context(metadata: Dict) -> str:

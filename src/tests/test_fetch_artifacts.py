@@ -3,6 +3,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastmcp import Context
+from fastmcp.exceptions import ToolError
 from tools.fetch_artifacts import (
     _add_line_numbers,
     _build_artifacts_xml,
@@ -422,26 +423,22 @@ async def test_fetch_artifacts_returns_xml(mock_get_api_key):
 
 @pytest.mark.asyncio
 async def test_fetch_artifacts_empty_identifiers():
-    """Test that empty identifiers list returns an error."""
+    """Test that empty identifiers list raises ToolError."""
     ctx = MagicMock(spec=Context)
 
-    result = await fetch_artifacts(ctx=ctx, identifiers=[])
-
-    assert "<error>" in result
-    assert "At least one identifier" in result
+    with pytest.raises(ToolError, match="At least one identifier"):
+        await fetch_artifacts(ctx=ctx, identifiers=[])
 
 
 @pytest.mark.asyncio
 async def test_fetch_artifacts_exceeds_max_identifiers():
-    """Test that more than 20 identifiers returns an error."""
+    """Test that more than 20 identifiers raises ToolError."""
     ctx = MagicMock(spec=Context)
 
     identifiers = [f"owner/repo::file{i}.py::func{i}" for i in range(21)]
 
-    result = await fetch_artifacts(ctx=ctx, identifiers=identifiers)
-
-    assert "<error>" in result
-    assert "Maximum 20" in result
+    with pytest.raises(ToolError, match="Maximum 20"):
+        await fetch_artifacts(ctx=ctx, identifiers=identifiers)
 
 
 @pytest.mark.asyncio
@@ -517,13 +514,11 @@ async def test_fetch_artifacts_api_error(mock_get_api_key):
     ctx.request_context.lifespan_context = mock_codealive_context
     ctx.request_context.headers = {"authorization": "Bearer test_key"}
 
-    result = await fetch_artifacts(
-        ctx=ctx,
-        identifiers=["some-id"],
-    )
-
-    assert isinstance(result, str)
-    assert "<error>" in result
+    with pytest.raises(ToolError, match="Server error \\(500\\)"):
+        await fetch_artifacts(
+            ctx=ctx,
+            identifiers=["some-id"],
+        )
 
 
 @pytest.mark.asyncio

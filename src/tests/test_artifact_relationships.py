@@ -6,6 +6,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastmcp import Context
+from fastmcp.exceptions import ToolError
 
 from tools.artifact_relationships import (
     PROFILE_MAP,
@@ -284,22 +285,18 @@ class TestGetArtifactRelationshipsTool:
         assert call_args[1]["json"]["profile"] == "InheritanceOnly"
 
     @pytest.mark.asyncio
-    async def test_empty_identifier_returns_error(self):
+    async def test_empty_identifier_raises_tool_error(self):
         ctx = MagicMock(spec=Context)
-        result = await get_artifact_relationships(ctx=ctx, identifier="")
-        data = json.loads(result)
-        assert "error" in data
-        assert "required" in data["error"]
+        with pytest.raises(ToolError, match="required"):
+            await get_artifact_relationships(ctx=ctx, identifier="")
 
     @pytest.mark.asyncio
-    async def test_unsupported_profile_returns_error(self):
+    async def test_unsupported_profile_raises_tool_error(self):
         ctx = MagicMock(spec=Context)
-        result = await get_artifact_relationships(
-            ctx=ctx, identifier="id", profile="invalidProfile"
-        )
-        data = json.loads(result)
-        assert "error" in data
-        assert "Unsupported profile" in data["error"]
+        with pytest.raises(ToolError, match="Unsupported profile"):
+            await get_artifact_relationships(
+                ctx=ctx, identifier="id", profile="invalidProfile"
+            )
 
     @pytest.mark.asyncio
     @patch("tools.artifact_relationships.get_api_key_from_context")
@@ -327,11 +324,8 @@ class TestGetArtifactRelationshipsTool:
         mock_context.base_url = "https://app.codealive.ai"
         ctx.request_context.lifespan_context = mock_context
 
-        result = await get_artifact_relationships(ctx=ctx, identifier="id")
-
-        data = json.loads(result)
-        assert "error" in data
-        assert "401" in data["error"]
+        with pytest.raises(ToolError, match="401"):
+            await get_artifact_relationships(ctx=ctx, identifier="id")
 
     @pytest.mark.asyncio
     @patch("tools.artifact_relationships.get_api_key_from_context")

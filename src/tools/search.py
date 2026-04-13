@@ -6,6 +6,7 @@ from urllib.parse import urljoin
 
 import httpx
 from fastmcp import Context
+from fastmcp.exceptions import ToolError
 
 from core import CodeAliveContext, get_api_key_from_context, log_api_request, log_api_response
 from utils import (
@@ -39,31 +40,19 @@ def _normalize_optional_list(value: Optional[Union[str, List[str]]]) -> List[str
     return [item for item in value if item]
 
 
-def _validate_query(query: str, tool_name: str) -> Optional[str]:
-    if query and query.strip():
-        return None
-
-    return json.dumps(
-        {
-            "error": (
-                f"[{tool_name}] Query cannot be empty. Please provide a search term, "
-                "pattern, function name, or description of the code you're looking for."
-            )
-        },
-        separators=(",", ":"),
-    )
+def _validate_query(query: str, tool_name: str) -> None:
+    """Raise ToolError if query is empty."""
+    if not query or not query.strip():
+        raise ToolError(
+            f"[{tool_name}] Query cannot be empty. Please provide a search term, "
+            "pattern, function name, or description of the code you're looking for."
+        )
 
 
-def _validate_max_results(max_results: Optional[int], tool_name: str) -> Optional[str]:
-    if max_results is None:
-        return None
-    if 1 <= max_results <= 500:
-        return None
-
-    return json.dumps(
-        {"error": f"[{tool_name}] max_results must be between 1 and 500."},
-        separators=(",", ":"),
-    )
+def _validate_max_results(max_results: Optional[int], tool_name: str) -> None:
+    """Raise ToolError if max_results is out of range."""
+    if max_results is not None and not (1 <= max_results <= 500):
+        raise ToolError(f"[{tool_name}] max_results must be between 1 and 500.")
 
 
 async def _perform_search_request(
@@ -94,7 +83,8 @@ async def _perform_search_request(
         response.raise_for_status()
         return transform_response(response.json())
     except (httpx.HTTPStatusError, Exception) as e:
-        error_msg = await handle_api_error(
+        # handle_api_error raises ToolError → MCP response gets isError: true
+        await handle_api_error(
             ctx,
             e,
             action_label,
@@ -107,7 +97,6 @@ async def _perform_search_request(
                 ),
             },
         )
-        return json.dumps({"error": error_msg}, separators=(",", ":"))
 
 
 def _build_scope_params(
@@ -194,13 +183,8 @@ async def semantic_search(
                            extensions=[".py"])
     """
     tool_name = "semantic_search"
-    query_error = _validate_query(query, tool_name)
-    if query_error is not None:
-        return query_error
-
-    max_results_error = _validate_max_results(max_results, tool_name)
-    if max_results_error is not None:
-        return max_results_error
+    _validate_query(query, tool_name)
+    _validate_max_results(max_results, tool_name)
 
     data_source_names = normalize_data_source_names(data_sources)
     normalized_paths = _normalize_optional_list(paths)
@@ -293,13 +277,8 @@ async def grep_search(
                        regex=True)
     """
     tool_name = "grep_search"
-    query_error = _validate_query(query, tool_name)
-    if query_error is not None:
-        return query_error
-
-    max_results_error = _validate_max_results(max_results, tool_name)
-    if max_results_error is not None:
-        return max_results_error
+    _validate_query(query, tool_name)
+    _validate_max_results(max_results, tool_name)
 
     data_source_names = normalize_data_source_names(data_sources)
     normalized_paths = _normalize_optional_list(paths)
@@ -348,9 +327,7 @@ async def codebase_search(
     previous MCP contract and forwards to the legacy backend endpoint unchanged.
     """
     tool_name = "codebase_search"
-    query_error = _validate_query(query, tool_name)
-    if query_error is not None:
-        return query_error
+    _validate_query(query, tool_name)
 
     context: CodeAliveContext = ctx.request_context.lifespan_context
     data_source_names = normalize_data_source_names(data_sources)
@@ -401,7 +378,7 @@ async def codebase_search(
         response.raise_for_status()
         return transform_search_response_to_json(response.json())
     except (httpx.HTTPStatusError, Exception) as e:
-        error_msg = await handle_api_error(
+        await handle_api_error(
             ctx,
             e,
             "code search",
@@ -414,4 +391,3 @@ async def codebase_search(
                 ),
             },
         )
-        return json.dumps({"error": error_msg}, separators=(",", ":"))
