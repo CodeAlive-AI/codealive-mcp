@@ -68,7 +68,7 @@
       },
       {
         "name": "chat",
-        "description": "Synthesized codebase Q&A. Do NOT call unless the user explicitly requests it. Use semantic_search, grep_search, fetch_artifacts instead. Slow (up to 30 seconds)."
+        "description": "Synthesized codebase Q&A. Do NOT call unless the user explicitly names this tool (e.g. 'use chat'). 'Ask CodeAlive' means use search tools, not chat. Slow (up to 30 seconds)."
       },
       {
         "name": "codebase_consultant",

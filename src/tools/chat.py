@@ -29,7 +29,7 @@ async def chat(
     Ask CodeAlive for a synthesized answer about the indexed codebase.
 
     **IMPORTANT: Do NOT call this tool unless the user explicitly asks for it**
-    (e.g. "use chat", "ask CodeAlive", "use codebase_consultant").
+    (e.g. "use chat", "use codebase_consultant", "call the chat tool").
     For all other tasks — finding code, understanding architecture, debugging —
     use `semantic_search`, `grep_search`, `fetch_artifacts`, and
     `get_artifact_relationships` instead. These tools are faster, return
@@ -111,7 +111,7 @@ async def codebase_consultant(
     New integrations should prefer the canonical `chat` tool name.
 
     **Same invocation policy as `chat`**: do NOT call unless the user explicitly
-    named the tool (e.g. "use codebase_consultant", "ask CodeAlive", "use chat").
+    named the tool (e.g. "use codebase_consultant", "use chat", "call the chat tool").
     For all other tasks use `semantic_search`, `grep_search`, `fetch_artifacts`,
     and `get_artifact_relationships`.
     """

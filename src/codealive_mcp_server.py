@@ -66,7 +66,9 @@ mcp = FastMCP(
 
     User-invoked tool — `chat`:
     - `chat` is disabled by default. Call it ONLY when the user has explicitly
-      named the tool (e.g. "use chat", "ask CodeAlive", "use codebase_consultant").
+      named the tool (e.g. "use chat", "use codebase_consultant", "call the chat tool").
+      Phrases like "ask CodeAlive" or "search CodeAlive" do NOT qualify — they
+      refer to CodeAlive tools in general (semantic_search, grep_search, etc.).
     - For every other case — lookups, architecture understanding, debugging,
       summaries — use semantic_search, grep_search, fetch_artifacts, and
       get_artifact_relationships. Do not treat "after search" as a justification
