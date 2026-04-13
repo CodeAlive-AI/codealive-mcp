@@ -17,12 +17,25 @@ from utils import (
 
 
 def _normalize_optional_list(value: Optional[Union[str, List[str]]]) -> List[str]:
-    """Normalize optional string-or-list inputs while preserving ordering."""
+    """Normalize optional string-or-list inputs while preserving ordering.
+
+    Handles stringified JSON arrays (e.g. ``'[".cs",".py"]'``) that some MCP
+    clients send instead of native arrays.
+    """
     if value is None:
         return []
     if isinstance(value, str):
         stripped = value.strip()
-        return [stripped] if stripped else []
+        if not stripped:
+            return []
+        if stripped.startswith("["):
+            try:
+                parsed = json.loads(stripped)
+                if isinstance(parsed, list):
+                    return [str(item) for item in parsed if item]
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return [stripped]
     return [item for item in value if item]
 
 

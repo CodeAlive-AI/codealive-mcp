@@ -2,7 +2,57 @@
 
 import pytest
 import json
-from utils.errors import normalize_data_source_names
+from utils.errors import coerce_stringified_list, normalize_data_source_names
+
+
+class TestCoerceStringifiedList:
+    """Test the generic coerce_stringified_list function."""
+
+    def test_native_list_passthrough(self):
+        assert coerce_stringified_list(["a", "b"]) == ["a", "b"]
+
+    def test_stringified_json_array(self):
+        assert coerce_stringified_list('["a", "b"]') == ["a", "b"]
+
+    def test_stringified_json_array_with_whitespace(self):
+        assert coerce_stringified_list('  ["a", "b"]  ') == ["a", "b"]
+
+    def test_single_string_wrapped(self):
+        assert coerce_stringified_list("single-value") == ["single-value"]
+
+    def test_none_returns_empty(self):
+        assert coerce_stringified_list(None) == []
+
+    def test_empty_string_returns_empty(self):
+        assert coerce_stringified_list("") == []
+
+    def test_empty_list_returns_empty(self):
+        assert coerce_stringified_list([]) == []
+
+    def test_stringified_empty_array(self):
+        assert coerce_stringified_list("[]") == []
+
+    def test_malformed_json_falls_back_to_single(self):
+        result = coerce_stringified_list('["a", "b"')
+        assert result == ['["a", "b"']
+
+    def test_numeric_items_cast_to_str(self):
+        assert coerce_stringified_list([1, 2, 3]) == ["1", "2", "3"]
+
+    def test_stringified_array_items_cast_to_str(self):
+        assert coerce_stringified_list("[1, 2, 3]") == ["1", "2", "3"]
+
+    def test_none_items_filtered(self):
+        assert coerce_stringified_list(["a", None, "b"]) == ["a", "b"]
+
+    def test_non_list_non_string_wrapped(self):
+        assert coerce_stringified_list(42) == ["42"]
+
+    def test_claude_code_deferred_tool_scenario(self):
+        """Reproduces the exact scenario from Claude Code deferred tools."""
+        stringified = '["org/repo::file.md::0001", "org/repo::other.md::0005"]'
+        result = coerce_stringified_list(stringified)
+        assert result == ["org/repo::file.md::0001", "org/repo::other.md::0005"]
 
 
 class TestNormalizeDataSourceNames:

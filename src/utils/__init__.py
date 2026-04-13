@@ -5,6 +5,7 @@ from .response_transformer import (
     transform_search_response_to_json,
 )
 from .errors import (
+    coerce_stringified_list,
     handle_api_error,
     format_validation_error,
     format_data_source_names,
@@ -12,6 +13,7 @@ from .errors import (
 )
 
 __all__ = [
+    'coerce_stringified_list',
     'transform_grep_response_to_json',
     'transform_search_response_to_json',
     'handle_api_error',

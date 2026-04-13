@@ -243,6 +243,42 @@ async def handle_api_error(
         return f"{prefix}Error: {error_msg}"
 
 
+def coerce_stringified_list(value) -> list[str]:
+    """Coerce a possibly-stringified JSON array into a Python list of strings.
+
+    MCP clients (Claude Code deferred tools, LiveKit agents, etc.) sometimes
+    serialize ``list`` parameters as JSON-encoded strings instead of native
+    arrays.  This function accepts both forms so tool validation doesn't
+    reject otherwise valid input.
+
+    Accepted inputs:
+      - ``list``               → returned as-is (items cast to ``str``)
+      - ``'["a","b"]'``        → parsed via ``json.loads``, items cast to ``str``
+      - ``"single-value"``     → wrapped as ``["single-value"]``
+      - ``None`` / empty       → ``[]``
+    """
+    import json
+
+    if not value:
+        return []
+
+    if isinstance(value, str):
+        stripped = value.strip()
+        if stripped.startswith("["):
+            try:
+                parsed = json.loads(stripped)
+                if isinstance(parsed, list):
+                    return [str(item) for item in parsed]
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return [stripped] if stripped else []
+
+    if isinstance(value, list):
+        return [str(item) for item in value if item is not None]
+
+    return [str(value)]
+
+
 def normalize_data_source_names(data_sources) -> list:
     """Normalize data source names from various serialization formats."""
     import json

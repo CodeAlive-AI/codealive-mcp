@@ -1,13 +1,13 @@
 """Fetch artifacts tool implementation."""
 
-from typing import List
+from typing import List, Union
 from urllib.parse import urljoin
 
 import httpx
 from fastmcp import Context
 
 from core import CodeAliveContext, get_api_key_from_context, log_api_request, log_api_response
-from utils import handle_api_error
+from utils import coerce_stringified_list, handle_api_error
 
 # MCP tool/method name surfaced in every error/log message from this module.
 _TOOL_NAME = "fetch_artifacts"
@@ -15,7 +15,7 @@ _TOOL_NAME = "fetch_artifacts"
 
 async def fetch_artifacts(
     ctx: Context,
-    identifiers: List[str],
+    identifiers: Union[str, List[str]],
 ) -> str:
     """
     Retrieve the full content of code artifacts by their identifiers.
@@ -68,6 +68,10 @@ async def fetch_artifacts(
           To retrieve the complete list, or to explore other relationship types
           (inheritance, references), use `get_artifact_relationships`.
     """
+    # Coerce stringified JSON arrays sent by some MCP clients (Claude Code
+    # deferred tools, LiveKit agents, etc.) into a proper Python list.
+    identifiers = coerce_stringified_list(identifiers)
+
     if not identifiers:
         return f"<error>[{_TOOL_NAME}] At least one identifier is required.</error>"
 
