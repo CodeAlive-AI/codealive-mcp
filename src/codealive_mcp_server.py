@@ -52,19 +52,25 @@ mcp = FastMCP(
     - Answer questions about code implementation details
     - Integrate with local git repositories for seamless code exploration
 
-    When working with a codebase, follow this workflow:
+    Default workflow (used for ALL tasks unless the user explicitly requests `chat`):
     1. First use `get_data_sources` to identify available repositories and workspaces
     2. Use `semantic_search` for natural-language retrieval by meaning
     3. Use `grep_search` for literal string or regex matching when the pattern matters
-    3. To get full content:
+    4. To get full content:
        - For repos in your working directory: use `Read()` on the local files
        - For external repos: use `fetch_artifacts` with identifiers from search results
-    4. Use `get_artifact_relationships` or `fetch_artifacts` to drill into the most relevant hits
-    5. If your environment supports subagents and you need the highest reliability or depth,
+    5. Use `get_artifact_relationships` or `fetch_artifacts` to drill into the most relevant hits
+    6. If your environment supports subagents and you need the highest reliability or depth,
        prefer an agentic workflow where a subagent combines `semantic_search`, `grep_search`,
        artifact fetches, relationship inspection, and local file reads
-    6. Use `chat` only when you specifically need a synthesized answer after search;
-       it is usually not the default choice and can take up to 30 seconds
+
+    User-invoked tool — `chat`:
+    - `chat` is disabled by default. Call it ONLY when the user has explicitly
+      named the tool (e.g. "use chat", "ask CodeAlive", "use codebase_consultant").
+    - For every other case — lookups, architecture understanding, debugging,
+      summaries — use semantic_search, grep_search, fetch_artifacts, and
+      get_artifact_relationships. Do not treat "after search" as a justification
+      for calling chat.
 
     For effective code exploration:
     - Start with broad natural-language queries in `semantic_search` to understand the overall structure
@@ -72,7 +78,6 @@ mcp = FastMCP(
     - Use specific function/class names or file path scopes when looking for particular implementations
     - Treat `semantic_search` and `grep_search` as the default discovery tools
     - Prefer `semantic_search` over the deprecated `codebase_search` legacy alias
-    - Reserve `chat` for synthesis after search, not for first-pass evidence gathering
     - Remember that context from previous messages is maintained in the same conversation
 
     Flexible data source usage:

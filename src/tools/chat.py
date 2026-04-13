@@ -43,12 +43,10 @@ async def chat(
     UNLESS the user has explicitly provided specific data source names OR you are continuing an
     existing conversation with a `conversation_id`.
 
-    This tool understands the indexed codebase and can help with:
-    - Architecture and design decisions
-    - Implementation strategies
-    - Code explanations and walkthroughs
-    - Best practices and optimization advice
-    - Debugging and problem-solving
+    When invoked by the user, this tool can produce synthesized answers about
+    architecture, design decisions, code walkthroughs, debugging, etc.
+    These topics do NOT by themselves justify calling the tool — only an
+    explicit user request does.
 
     Args:
         question: What you want to know about the codebase
@@ -84,8 +82,8 @@ async def chat(
            )
 
     Note:
-        - `chat` is usually not needed for simple lookups or evidence gathering
-        - Prefer `semantic_search` and `grep_search` as the default tools
+        - `chat` is disabled by default; see top of docstring for the single
+          condition that permits calling it.
         - Either conversation_id OR data_sources is typically provided
         - When creating a new conversation, data_sources is optional if your API key has exactly one assigned data source
         - When continuing a conversation, conversation_id is required to maintain context
@@ -110,8 +108,12 @@ async def codebase_consultant(
     """Deprecated alias for `chat`.
 
     Keep this for backward compatibility with older prompts and MCP clients.
-    New integrations should prefer `chat`, while default discovery should still
-    start with `semantic_search` and `grep_search`.
+    New integrations should prefer the canonical `chat` tool name.
+
+    **Same invocation policy as `chat`**: do NOT call unless the user explicitly
+    named the tool (e.g. "use codebase_consultant", "ask CodeAlive", "use chat").
+    For all other tasks use `semantic_search`, `grep_search`, `fetch_artifacts`,
+    and `get_artifact_relationships`.
     """
     return await _chat_impl(
         ctx,
