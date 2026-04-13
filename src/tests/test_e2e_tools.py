@@ -1073,6 +1073,7 @@ class TestGetArtifactRelationshipsE2E:
 
     @pytest.mark.asyncio
     async def test_invalid_profile_returns_error(self):
+        """Pydantic rejects invalid Literal values before the function body runs."""
         mcp = _server({})
         async with Client(mcp) as client:
             result = await client.call_tool(
@@ -1082,9 +1083,10 @@ class TestGetArtifactRelationshipsE2E:
             )
 
         text = _text(result)
-        data = json.loads(text)
-        assert "error" in data
-        assert "Unsupported profile" in data["error"]
+        # Pydantic Literal validation fires before the function body, producing
+        # a human-readable validation error (not our custom JSON).
+        assert "callsOnly" in text
+        assert "literal_error" in text or "Input should be" in text
 
     @pytest.mark.asyncio
     async def test_empty_identifier_returns_error(self):

@@ -142,10 +142,56 @@ async def semantic_search(
     max_results: Optional[int] = None,
 ) -> str:
     """
-    Canonical semantic search across indexed repositories and workspaces.
+    Search indexed code by meaning — the default discovery tool.
 
-    Use this for natural-language exploration when you want relevant artifacts by meaning.
-    For exact or regex matching, use `grep_search` instead.
+    Use this for natural-language exploration when you want relevant artifacts
+    by meaning: function names, concepts, architecture patterns, etc.
+    For exact string or regex matching, use `grep_search` instead.
+
+    Args:
+        query: Natural-language description of what you're looking for.
+               Example: "authentication middleware", "database connection pooling",
+               "JWT token validation"
+
+        data_sources: Repository or workspace names to search.
+                      Omit to use the API key's default data source.
+                      Call `get_data_sources` first to discover available names.
+                      Example: ["backend", "workspace:payments-team"]
+
+        paths: Restrict results to specific directory paths.
+               Example: ["src/services", "src/domain"]
+
+        extensions: Restrict results to specific file extensions.
+                    Example: [".cs", ".py", ".ts"]
+
+        max_results: Maximum number of results to return (1–500).
+                     Omit for the server default.
+
+    Returns:
+        Compact JSON: {"results": [...], "hint": "..."}
+
+        Each result contains:
+        - path: file path within the repository
+        - identifier: fully qualified artifact ID — pass this to `fetch_artifacts`
+        - kind: "File", "Symbol", or "Chunk"
+        - description: short triage summary (NOT the real source — see hint)
+        - startLine/endLine: line range (for symbols)
+        - contentByteSize: file size in bytes
+
+        The `hint` field reminds you to load real source code via
+        `fetch_artifacts(identifier)` or local `Read(path)` before reasoning
+        about the code.
+
+    Examples:
+        1. Find authentication code:
+           semantic_search(query="authentication middleware",
+                           data_sources=["backend"])
+
+        2. Narrow to Python files in a specific directory:
+           semantic_search(query="database retry logic",
+                           data_sources=["backend"],
+                           paths=["src/services"],
+                           extensions=[".py"])
     """
     tool_name = "semantic_search"
     query_error = _validate_query(query, tool_name)
@@ -197,9 +243,54 @@ async def grep_search(
     regex: bool = False,
 ) -> str:
     """
-    Canonical exact/regex search across indexed repositories and workspaces.
+    Search indexed code by exact text or regex pattern.
 
-    Use this for literal string lookup or regex matching when the pattern itself matters.
+    Use this when the literal string or pattern matters: function names, error
+    messages, config keys, import paths, TODO comments, etc.
+    For meaning-based exploration, use `semantic_search` instead.
+
+    Args:
+        query: Exact text or regex pattern to match.
+               Literal examples: "ConnectionString", "TODO: fix", "import numpy"
+               Regex examples: "def test_.*async", "Status\\.(Alive|Failed)"
+
+        data_sources: Repository or workspace names to search.
+                      Omit to use the API key's default data source.
+                      Call `get_data_sources` first to discover available names.
+
+        paths: Restrict results to specific directory paths.
+               Example: ["src/services"]
+
+        extensions: Restrict results to specific file extensions.
+                    Example: [".cs", ".py"]
+
+        max_results: Maximum number of results to return (1–500).
+
+        regex: If True, treat `query` as a regex pattern. Default: False (literal).
+
+    Returns:
+        Compact JSON: {"results": [...], "hint": "..."}
+
+        Each result contains:
+        - path: file path
+        - identifier: pass to `fetch_artifacts` for full source
+        - matchCount: total matches in this file
+        - matches: array of line-level hits, each with:
+          - lineNumber, startColumn, endColumn, lineText
+
+        The `hint` reminds you that line previews are evidence only — load
+        full source via `fetch_artifacts` or local `Read()` before reasoning.
+
+    Examples:
+        1. Find exact string:
+           grep_search(query="ConnectionString",
+                       data_sources=["backend"])
+
+        2. Regex search for test methods:
+           grep_search(query="def test_.*auth",
+                       data_sources=["backend"],
+                       extensions=[".py"],
+                       regex=True)
     """
     tool_name = "grep_search"
     query_error = _validate_query(query, tool_name)

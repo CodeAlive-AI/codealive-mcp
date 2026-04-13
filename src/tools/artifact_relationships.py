@@ -1,7 +1,7 @@
 """Artifact relationships tool implementation."""
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from urllib.parse import urljoin
 
 import httpx
@@ -34,7 +34,7 @@ RELATIONSHIP_TYPE_MAP = {
 async def get_artifact_relationships(
     ctx: Context,
     identifier: str,
-    profile: str = "callsOnly",
+    profile: Literal["callsOnly", "inheritanceOnly", "allRelevant", "referencesOnly"] = "callsOnly",
     max_count_per_type: int = 50,
 ) -> str:
     """
