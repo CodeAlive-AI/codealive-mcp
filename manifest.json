@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "codealive-mcp",
   "display_name": "CodeAlive",
-  "version": "0.3.0",
+  "version": "2.0.0",
   "description": "Semantic code search and codebase Q&A for Claude Desktop using your CodeAlive account or self-hosted deployment.",
   "long_description": "CodeAlive gives Claude Desktop access to semantic code search, artifact fetch, repository discovery, and architecture-aware codebase Q&A. This extension runs locally via MCP and supports both CodeAlive Cloud and self-hosted deployments.",
   "author": {
