@@ -126,7 +126,7 @@ claude mcp add --transport http codealive https://mcp.codealive.ai/api --header 
 **Option 2: Docker (STDIO)**
 
 ```bash
-claude mcp add codealive-docker /usr/bin/docker run --rm -i -e CODEALIVE_API_KEY=YOUR_API_KEY_HERE ghcr.io/codealive-ai/codealive-mcp:v0.3.0
+claude mcp add codealive-docker /usr/bin/docker run --rm -i -e CODEALIVE_API_KEY=YOUR_API_KEY_HERE ghcr.io/codealive-ai/codealive-mcp:main
 ```
 
 Replace `YOUR_API_KEY_HERE` with your actual API key.
@@ -168,7 +168,7 @@ Replace `YOUR_API_KEY_HERE` with your actual API key.
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"
+        "ghcr.io/codealive-ai/codealive-mcp:main"
       ]
     }
   }
@@ -188,7 +188,7 @@ OpenAI Codex CLI supports MCP via `~/.codex/config.toml`.
 command = "docker"
 args = ["run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"]
+        "ghcr.io/codealive-ai/codealive-mcp:main"]
 ```
 
 **Experimental: Streamable HTTP (requires `[features].rmcp_client = true`)**
@@ -249,7 +249,7 @@ mcpServers:
       - -i
       - -e
       - CODEALIVE_API_KEY=YOUR_API_KEY_HERE
-      - ghcr.io/codealive-ai/codealive-mcp:v0.3.0
+      - ghcr.io/codealive-ai/codealive-mcp:main
 ```
 
 </details>
@@ -294,7 +294,7 @@ Create `.vscode/mcp.json` in your workspace:
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"
+        "ghcr.io/codealive-ai/codealive-mcp:main"
       ]
     }
   }
@@ -306,26 +306,18 @@ Create `.vscode/mcp.json` in your workspace:
 <details>
 <summary><b>Claude Desktop</b></summary>
 
-> **Recommended:** use the native Claude Desktop extension bundle (`.mcpb`) for one-click install, secure token storage, and self-hosted `baseUrl` configuration. Keep Docker (STDIO) as a fallback.
+**Option 1: Extension bundle `.mcpb` (Recommended)**
 
-**Native desktop extension (`.mcpb`)**
+The `.mcpb` bundle gives you one-click install, secure token storage, and self-hosted `baseUrl` configuration — no Docker or CLI required.
 
-1. Build the bundle from this repository:
-   ```bash
-   npm install -g @anthropic-ai/mcpb
-   mcpb pack
-   ```
-
+1. Download `codealive-mcp.mcpb` from the [latest GitHub Release](https://github.com/CodeAlive-AI/codealive-mcp/releases/latest)
 2. In Claude Desktop, open **Settings → Extensions → Install Extension...**
-
-3. Select the generated `.mcpb` file and configure:
+3. Select the downloaded `.mcpb` file and configure:
    - **CodeAlive API Key**: your bearer token
-   - **CodeAlive Base URL**: your deployment origin, for example `https://codealive.yourcompany.com`
+   - **CodeAlive Base URL**: defaults to `https://app.codealive.ai`; for self-hosted, use your deployment origin (e.g. `https://codealive.yourcompany.com`)
    - **Ignore TLS Errors**: only for dev/self-signed environments
 
-   `https://host` is preferred. `https://host/api` is also accepted and normalized automatically.
-
-**Docker (STDIO) fallback**
+**Option 2: Docker (STDIO)**
 
 1. Edit your config file:
    - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -341,7 +333,7 @@ Create `.vscode/mcp.json` in your workspace:
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"
+        "ghcr.io/codealive-ai/codealive-mcp:main"
       ]
     }
   }
@@ -386,7 +378,7 @@ Create `.vscode/mcp.json` in your workspace:
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"
+        "ghcr.io/codealive-ai/codealive-mcp:main"
       ]
     }
   }
@@ -449,7 +441,7 @@ Qwen Code supports MCP via `mcpServers` in its `settings.json` and multiple tran
       "command": "docker",
       "args": ["run", "--rm", "-i",
                "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-               "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"]
+               "ghcr.io/codealive-ai/codealive-mcp:main"]
     }
   }
 }
@@ -489,7 +481,7 @@ Roo Code reads a JSON settings file similar to Cline.
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"
+        "ghcr.io/codealive-ai/codealive-mcp:main"
       ]
     }
   }
@@ -514,7 +506,7 @@ Roo Code reads a JSON settings file similar to Cline.
 
 Add a STDIO extension with:
 - **Command:** `docker`
-- **Args:** `run --rm -i -e CODEALIVE_API_KEY=YOUR_API_KEY_HERE ghcr.io/codealive-ai/codealive-mcp:v0.3.0`
+- **Args:** `run --rm -i -e CODEALIVE_API_KEY=YOUR_API_KEY_HERE ghcr.io/codealive-ai/codealive-mcp:main`
 
 </details>
 
@@ -548,7 +540,7 @@ Add a STDIO extension with:
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"
+        "ghcr.io/codealive-ai/codealive-mcp:main"
       ]
     }
   }
@@ -624,7 +616,7 @@ npm install -g mcp-remote
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"
+        "ghcr.io/codealive-ai/codealive-mcp:main"
       ]
     }
   }
@@ -663,7 +655,7 @@ npm install -g mcp-remote
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"
+        "ghcr.io/codealive-ai/codealive-mcp:main"
       ]
     }
   }
@@ -704,7 +696,7 @@ npm install -g mcp-remote
       "args": [
         "run", "--rm", "-i",
         "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"
+        "ghcr.io/codealive-ai/codealive-mcp:main"
       ]
     }
   }
