@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "codealive-mcp",
   "display_name": "CodeAlive",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Semantic code search and codebase Q&A for Claude Desktop using your CodeAlive account or self-hosted deployment.",
   "long_description": "CodeAlive gives Claude Desktop access to semantic code search, artifact fetch, repository discovery, and architecture-aware codebase Q&A. This extension runs locally via MCP and supports both CodeAlive Cloud and self-hosted deployments.",
   "author": {
@@ -67,7 +67,7 @@
     },
     {
       "name": "chat",
-      "description": "Synthesized codebase Q&A. Slower and usually not the default choice; prefer semantic_search and grep_search first. Can take up to 30 seconds."
+      "description": "Synthesized codebase Q&A. Do NOT call unless the user explicitly requests it. Use semantic_search, grep_search, fetch_artifacts instead. Slow (up to 30 seconds)."
     },
     {
       "name": "fetch_artifacts",

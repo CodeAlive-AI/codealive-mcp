@@ -28,15 +28,16 @@ async def chat(
     """
     Ask CodeAlive for a synthesized answer about the indexed codebase.
 
-    This is a slower synthesis tool, not the default discovery workflow.
-    Agents should normally start with `semantic_search` and `grep_search`.
-    If the environment supports subagents and the task needs the highest
-    reliability or depth, prefer an agentic multi-step flow that uses a
-    subagent to combine `semantic_search`, `grep_search`, `fetch_artifacts`,
-    relationship inspection, and local file reads. Use `chat` only when a
-    synthesized answer is worth the extra latency and lower evidence fidelity.
+    **IMPORTANT: Do NOT call this tool unless the user explicitly asks for it**
+    (e.g. "use chat", "ask CodeAlive", "use codebase_consultant").
+    For all other tasks — finding code, understanding architecture, debugging —
+    use `semantic_search`, `grep_search`, `fetch_artifacts`, and
+    `get_artifact_relationships` instead. These tools are faster, return
+    primary evidence, and give you full control over the workflow.
 
-    `chat` can take up to 30 seconds.
+    `chat` is a slow synthesis fallback (up to 30 seconds) with lower evidence
+    fidelity. It exists for cases where the user wants a single opinionated
+    answer from CodeAlive rather than raw search results.
 
     **PREREQUISITE**: You MUST call `get_data_sources` FIRST to discover available data source names,
     UNLESS the user has explicitly provided specific data source names OR you are continuing an

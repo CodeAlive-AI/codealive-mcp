@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.CodeAlive-AI/codealive-mcp",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Semantic code search and analysis from CodeAlive for AI assistants and agents.",
   "keywords": [
     "context-engineering",
@@ -68,7 +68,7 @@
       },
       {
         "name": "chat",
-        "description": "Synthesized codebase Q&A. Use only after semantic_search and grep_search when you need a slower, up-to-30-second answer."
+        "description": "Synthesized codebase Q&A. Do NOT call unless the user explicitly requests it. Use semantic_search, grep_search, fetch_artifacts instead. Slow (up to 30 seconds)."
       },
       {
         "name": "codebase_consultant",

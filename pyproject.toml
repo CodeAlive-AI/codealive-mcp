@@ -37,7 +37,7 @@ packages = ["src"]
 package-dir = {"" = "."}
 
 [tool.setuptools_scm]
-fallback_version = "2.0.0"
+fallback_version = "2.0.1"
 
 [tool.uv]
 # Relative dates in exclude-newer (e.g. "7 days") require uv ≥ 0.11.
