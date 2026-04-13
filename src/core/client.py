@@ -65,7 +65,9 @@ async def codealive_lifespan(server: FastMCP) -> AsyncIterator[CodeAliveContext]
         ssl_verification=config.verify_ssl,
     )
 
-    # Create client
+    # Create client with explicit connection pool limits
+    pool_limits = httpx.Limits(max_connections=100, max_keepalive_connections=20)
+
     if config.transport_mode == "stdio":
         # STDIO mode: create client with fixed API key
         client = httpx.AsyncClient(
@@ -76,6 +78,7 @@ async def codealive_lifespan(server: FastMCP) -> AsyncIterator[CodeAliveContext]
             },
             timeout=REQUEST_TIMEOUT_SECONDS,
             verify=config.verify_ssl,
+            limits=pool_limits,
         )
     else:
         # HTTP mode: create base client without authentication headers
@@ -86,6 +89,7 @@ async def codealive_lifespan(server: FastMCP) -> AsyncIterator[CodeAliveContext]
             },
             timeout=REQUEST_TIMEOUT_SECONDS,
             verify=config.verify_ssl,
+            limits=pool_limits,
         )
 
     global _server_ready

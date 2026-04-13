@@ -229,7 +229,7 @@ the same change. If you remove a follow-up workflow, remove the stale hint too.
 
 ## Testing Best Practices
 
-The project has **183 tests** across three tiers: unit tests, e2e tool tests, and smoke tests.
+The project has **224 tests** across four tiers: unit tests, e2e tool tests, smoke tests, and integration tests.
 
 ### Test Tiers
 
@@ -238,6 +238,9 @@ The project has **183 tests** across three tiers: unit tests, e2e tool tests, an
 | **Unit** | `test_*.py` (except `test_e2e_*`) | Individual functions, XML builders, error handling, PII masking, middleware | `pytest src/tests/ -v` |
 | **E2E** | `test_e2e_tools.py` | Full MCP protocol: Client → FastMCP → tool → mock HTTP → response | `pytest src/tests/test_e2e_tools.py -v` |
 | **Smoke** | `smoke_test.py` | Real server startup via stdio, tool registration, basic invocations | `python smoke_test.py` |
+| **Integration** | `integration_test.py` | All tools against **live backend** — verifies filtering params (`max_results`, `paths`, `extensions`, `regex`), relationship profiles, validation edges, full agent workflow | `CODEALIVE_API_KEY=... python integration_test.py` |
+
+Integration tests require a valid `CODEALIVE_API_KEY` and network access. They auto-select the CodeAlive backend repo as target, or accept `--target <name>`. Use `make integration-test` as a shortcut.
 
 ### E2E Test Pattern (FastMCP Client)
 
@@ -299,11 +302,17 @@ Key points:
 
 ## Publishing and Releases
 
-### Version Management
-When making significant changes, consider incrementing the version in `pyproject.toml`:
-```toml
-version = "0.3.0"  # Increment for new features, bug fixes, or breaking changes
-```
+### Version Management — Keep All Three Files in Sync
+
+The version is declared in **three places** that MUST stay consistent:
+
+| File | Field | Role |
+|------|-------|------|
+| `pyproject.toml` | `[tool.setuptools_scm] fallback_version` | Source of truth. Used by `setuptools-scm` when no git tag is present. |
+| `manifest.json` | `"version"` | MCP Registry manifest (Claude Desktop discovery). |
+| `server.json` | `"version"` | MCP Registry server schema (registry listing). |
+
+**When bumping the version**, update all three files in the same commit.
 
 ### Automated Publishing
 The project uses automated publishing:

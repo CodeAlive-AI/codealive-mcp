@@ -134,6 +134,7 @@ class SmokeTest:
             tools = result.tools
 
             expected_tools = {
+                "chat",
                 "codebase_consultant",
                 "codebase_search",
                 "fetch_artifacts",
@@ -216,9 +217,36 @@ class SmokeTest:
             self.print_error(f"Tool execution failed: {str(e)}")
             return False
 
+    async def test_chat(self) -> bool:
+        """Test the chat tool."""
+        self.print_test("chat Tool")
+        try:
+            result = await self.session.call_tool("chat", {
+                "question": "test question",
+                "data_sources": ["test-repo"]
+            })
+
+            if result.isError:
+                error_str = str(result.content)
+                if "API key" in error_str or "data source" in error_str or "authorization" in error_str.lower():
+                    self.print_success("Tool responds correctly (API key/data source required)")
+                    self.print_info("This is expected in smoke test without valid API key")
+                    return True
+                else:
+                    self.print_error(f"Unexpected error: {result.content}")
+                    return False
+
+            self.print_success("Tool executed successfully")
+            self.print_info(f"Response: {str(result.content)[:100]}...")
+            return True
+
+        except Exception as e:
+            self.print_error(f"Tool execution failed: {str(e)}")
+            return False
+
     async def test_codebase_consultant(self) -> bool:
-        """Test the codebase_consultant tool."""
-        self.print_test("codebase_consultant Tool")
+        """Test the codebase_consultant tool (deprecated alias)."""
+        self.print_test("codebase_consultant Tool (deprecated)")
         try:
             result = await self.session.call_tool("codebase_consultant", {
                 "question": "test question",
@@ -287,6 +315,7 @@ class SmokeTest:
                 await self.test_list_tools()
                 await self.test_get_data_sources()
                 await self.test_semantic_search()
+                await self.test_chat()
                 await self.test_codebase_consultant()
                 await self.test_parameter_validation()
 

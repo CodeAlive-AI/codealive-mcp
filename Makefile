@@ -15,6 +15,10 @@ unit-test:  ## Run unit tests with pytest
 	@echo "Running unit tests..."
 	pytest src/tests/ -v
 
+integration-test:  ## Run integration tests against live backend (requires CODEALIVE_API_KEY)
+	@echo "Running integration tests..."
+	python integration_test.py
+
 test: unit-test smoke-test  ## Run all tests (unit + smoke)
 
 clean:  ## Clean up cache and temp files

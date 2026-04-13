@@ -74,6 +74,12 @@ async def get_artifact_relationships(
             separators=(",", ":"),
         )
 
+    if not (1 <= max_count_per_type <= 1000):
+        return json.dumps(
+            {"error": f"[{_TOOL_NAME}] max_count_per_type must be between 1 and 1000."},
+            separators=(",", ":"),
+        )
+
     api_profile = PROFILE_MAP.get(profile)
     if api_profile is None:
         supported = ", ".join(PROFILE_MAP.keys())
