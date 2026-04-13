@@ -435,9 +435,9 @@ async def test_fetch_artifacts_exceeds_max_identifiers():
     """Test that more than 20 identifiers raises ToolError."""
     ctx = MagicMock(spec=Context)
 
-    identifiers = [f"owner/repo::file{i}.py::func{i}" for i in range(21)]
+    identifiers = [f"owner/repo::file{i}.py::func{i}" for i in range(51)]
 
-    with pytest.raises(ToolError, match="Maximum 20"):
+    with pytest.raises(ToolError, match="Maximum 50"):
         await fetch_artifacts(ctx=ctx, identifiers=identifiers)
 
 

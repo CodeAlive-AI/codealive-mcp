@@ -748,16 +748,17 @@ class TestFetchArtifactsE2E:
         assert "required" in _text(result).lower() or "error" in _text(result).lower()
 
     @pytest.mark.asyncio
-    async def test_over_20_identifiers_rejected(self):
+    async def test_over_50_identifiers_rejected(self):
         mcp = _server({})
         async with Client(mcp) as client:
             result = await client.call_tool(
                 "fetch_artifacts",
-                {"identifiers": [f"id-{i}" for i in range(21)]},
+                {"identifiers": [f"id-{i}" for i in range(51)]},
                 raise_on_error=False,
             )
 
-        assert "20" in _text(result) or "Maximum" in _text(result)
+        assert result.is_error
+        assert "50" in _text(result) or "Maximum" in _text(result)
 
     @pytest.mark.asyncio
     async def test_artifact_with_relationships(self):

@@ -63,7 +63,8 @@ async def fetch_artifacts(
         gives the total. Relationships are omitted for non-function artifacts.
 
     Note:
-        - Maximum 20 identifiers per request to avoid excessive payloads.
+        - Hard limit: 50 identifiers per request. Recommended: ≤20 to keep
+          context size manageable and avoid flooding the conversation with code.
         - Identifiers must come from `semantic_search`, `grep_search`, or legacy `codebase_search` results.
         - Relationships shown here are a **preview** (up to 3 call relationships per direction).
           To retrieve the complete list, or to explore other relationship types
@@ -76,8 +77,8 @@ async def fetch_artifacts(
     if not identifiers:
         raise ToolError(f"[{_TOOL_NAME}] At least one identifier is required.")
 
-    if len(identifiers) > 20:
-        raise ToolError(f"[{_TOOL_NAME}] Maximum 20 identifiers per request. Please reduce the number of identifiers.")
+    if len(identifiers) > 50:
+        raise ToolError(f"[{_TOOL_NAME}] Maximum 50 identifiers per request. Please reduce the number of identifiers.")
 
     context: CodeAliveContext = ctx.request_context.lifespan_context
 
