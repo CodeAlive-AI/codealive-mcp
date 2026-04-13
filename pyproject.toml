@@ -40,5 +40,7 @@ package-dir = {"" = "."}
 fallback_version = "0.3.0"
 
 [tool.uv]
-required-version = "==0.11.2"
+# Relative dates in exclude-newer (e.g. "7 days") require uv ≥ 0.11.
+# Older versions silently ignore the whole [tool.uv] section on parse error.
+required-version = "~=0.11.0"
 exclude-newer = "7 days"
