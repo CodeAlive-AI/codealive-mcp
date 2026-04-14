@@ -62,17 +62,24 @@ def transform_grep_response(grep_results: Dict[str, Any]) -> Dict[str, Any]:
             item["matchCount"] = result["matchCount"]
         if result.get("matches"):
             item["matches"] = [
-                {
-                    "lineNumber": match.get("lineNumber"),
-                    "startColumn": match.get("startColumn"),
-                    "endColumn": match.get("endColumn"),
-                    "lineText": match.get("lineText"),
-                }
-                for match in result["matches"]
+                _build_match_dict(match) for match in result["matches"]
             ]
         formatted_results.append(item)
 
     return {"results": formatted_results, "hint": _GREP_HINT}
+
+
+def _build_match_dict(match: Dict) -> Dict[str, Any]:
+    """Build a match dict, forwarding remark only when present."""
+    entry: Dict[str, Any] = {
+        "lineNumber": match.get("lineNumber"),
+        "startColumn": match.get("startColumn"),
+        "endColumn": match.get("endColumn"),
+        "lineText": match.get("lineText"),
+    }
+    if match.get("remark") is not None:
+        entry["remark"] = match["remark"]
+    return entry
 
 
 # Backward-compatible aliases (deprecated)
