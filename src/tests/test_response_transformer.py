@@ -122,15 +122,18 @@ class TestResponseTransformer:
     def test_empty_response(self):
         result = transform_search_response({"results": []})
         assert result["results"] == []
-        assert "fetch_artifacts" in result["hint"]
+        assert "grep_search" in result["hint"]
+        assert "get_data_sources" in result["hint"]
+        assert "fetch_artifacts" not in result["hint"]
 
     def test_no_results_key(self):
         result = transform_search_response({})
         assert result["results"] == []
-        assert "fetch_artifacts" in result["hint"]
+        assert "grep_search" in result["hint"]
+        assert "fetch_artifacts" not in result["hint"]
 
     def test_hint_present_in_every_response(self, sample_search_response):
-        """Every response carries a hint instructing the agent to load real content."""
+        """Non-empty response carries a hint instructing the agent to load real content."""
         result = transform_search_response(sample_search_response)
         assert "hint" in result
         hint = result["hint"]

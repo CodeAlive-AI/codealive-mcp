@@ -23,6 +23,33 @@ _GREP_HINT = (
     "`Read()` on the local path. Treat only the full source as ground truth."
 )
 
+# Hints for empty results — guide the agent through recovery instead of
+# suggesting fetch_artifacts on nothing.
+_SEARCH_EMPTY_HINT = (
+    "No results matched your semantic query. This does NOT mean the code "
+    "doesn't exist — only that this phrasing didn't match indexed artifacts. "
+    "Before concluding absence: "
+    "(1) rephrase with synonyms, broader terms, or a different level "
+    "of abstraction; "
+    "(2) try `grep_search` for exact string or regex matches "
+    "if you know a specific identifier; "
+    "(3) call `get_data_sources` to verify you're searching the correct "
+    "repository; "
+    "(4) if you used `paths` or `extensions` filters, retry without them."
+)
+
+_GREP_EMPTY_HINT = (
+    "No grep matches found. This does NOT mean the code doesn't exist — "
+    "the exact string may differ in casing, spacing, or naming convention. "
+    "Before concluding absence: "
+    "(1) check case — grep is case-sensitive; "
+    "(2) try `semantic_search` for concept-based discovery if unsure "
+    "of exact naming; "
+    "(3) call `get_data_sources` to verify you're searching the correct "
+    "repository; "
+    "(4) if you used `paths` or `extensions` filters, retry without them."
+)
+
 
 def transform_search_response(
     search_results: Dict[str, Any],
@@ -34,10 +61,13 @@ def transform_search_response(
     ``pydantic_core.to_json`` — no manual ``json.dumps`` needed.
     """
     if not isinstance(search_results, dict) or "results" not in search_results:
-        return {"results": [], "hint": _SEARCH_HINT}
+        return {"results": [], "hint": _SEARCH_EMPTY_HINT}
 
     results = search_results.get("results", [])
     formatted_results = _format_results(results or [])
+
+    if not formatted_results:
+        return {"results": [], "hint": _SEARCH_EMPTY_HINT}
 
     return {"results": formatted_results, "hint": _SEARCH_HINT}
 
@@ -45,7 +75,7 @@ def transform_search_response(
 def transform_grep_response(grep_results: Dict[str, Any]) -> Dict[str, Any]:
     """Transform canonical grep response to a dict for LLM consumption."""
     if not isinstance(grep_results, dict) or "results" not in grep_results:
-        return {"results": [], "hint": _GREP_HINT}
+        return {"results": [], "hint": _GREP_EMPTY_HINT}
 
     formatted_results: List[Dict[str, Any]] = []
     for result in grep_results.get("results", []) or []:
@@ -65,6 +95,9 @@ def transform_grep_response(grep_results: Dict[str, Any]) -> Dict[str, Any]:
                 _build_match_dict(match) for match in result["matches"]
             ]
         formatted_results.append(item)
+
+    if not formatted_results:
+        return {"results": [], "hint": _GREP_EMPTY_HINT}
 
     return {"results": formatted_results, "hint": _GREP_HINT}
 

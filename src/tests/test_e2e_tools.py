@@ -233,7 +233,9 @@ class TestCodebaseSearchE2E:
         text = _text(result)
         data = json.loads(text)
         assert data["results"] == []
-        assert "fetch_artifacts" in data["hint"]
+        assert "grep_search" in data["hint"]
+        assert "get_data_sources" in data["hint"]
+        assert "fetch_artifacts" not in data["hint"]
 
     @pytest.mark.asyncio
     async def test_deep_mode_forwarded(self):
