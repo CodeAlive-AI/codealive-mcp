@@ -70,6 +70,7 @@ npx skills add CodeAlive-AI/codealive-skills@codealive-context-engine
 *   [Advanced: Local Development](#-advanced-local-development)
 *   [Community Plugins](#-community-plugins)
 *   [HTTP Deployment (Self-Hosted & Cloud)](#-http-deployment-self-hosted--cloud)
+*   [Windows & WSL](#-windows--wsl)
 *   [Available Tools](#-available-tools)
 *   [Usage Examples](#-usage-examples)
 *   [Troubleshooting](#-troubleshooting)
@@ -1014,6 +1015,114 @@ Replace `your-server:8000` with your actual deployment URL and port.
 
 ---
 
+## 🪟 Windows & WSL
+
+<details>
+<summary><b>Overview</b></summary>
+
+Claude Code on Windows runs inside WSL (Windows Subsystem for Linux). Claude Desktop runs natively on Windows. This creates specific challenges when configuring MCP servers — especially around binary paths, environment variables, and networking.
+
+**The simplest solution for both Claude Code and Claude Desktop on Windows is Remote HTTP** — it avoids all subprocess spawning and path issues entirely.
+
+</details>
+
+<details>
+<summary><b>Claude Code in WSL</b></summary>
+
+When Claude Code runs inside WSL, it operates as a normal Linux environment. Use the same commands as on Linux/macOS:
+
+**Remote HTTP (Recommended — avoids all WSL issues):**
+```bash
+claude mcp add --transport http codealive https://mcp.codealive.ai/api --header "Authorization: Bearer YOUR_API_KEY_HERE"
+```
+
+**Docker STDIO (if Docker Desktop WSL integration is enabled):**
+```bash
+claude mcp add codealive-docker /usr/bin/docker run --rm -i -e CODEALIVE_API_KEY=YOUR_API_KEY_HERE ghcr.io/codealive-ai/codealive-mcp:main
+```
+
+> **Note:** If `docker` is not found, ensure Docker Desktop has WSL integration enabled for your distro, or use the full path `/usr/bin/docker`.
+
+</details>
+
+<details>
+<summary><b>Claude Desktop on Windows (Docker STDIO)</b></summary>
+
+Claude Desktop on Windows **cannot** connect to MCP servers running inside WSL directly. Use one of these approaches:
+
+**Option 1: Docker Desktop (Recommended)**
+
+If Docker Desktop is installed on Windows, `docker.exe` is in the Windows PATH:
+
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
+        "ghcr.io/codealive-ai/codealive-mcp:main"
+      ]
+    }
+  }
+}
+```
+
+**Option 2: wsl.exe Proxy**
+
+If Docker is only available inside WSL, use `wsl.exe` as a bridge:
+
+```json
+{
+  "mcpServers": {
+    "codealive": {
+      "command": "wsl.exe",
+      "args": [
+        "--", "docker", "run", "--rm", "-i",
+        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
+        "ghcr.io/codealive-ai/codealive-mcp:main"
+      ]
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Self-Hosted MCP Server in WSL2</b></summary>
+
+If you run the MCP HTTP server inside WSL2 and connect from Windows-side clients:
+
+**WSL2 NAT networking issue:** By default, `localhost` inside WSL2 is not reachable from Windows. Two workarounds:
+
+1. **Enable mirrored networking** (Windows 11 22H2+) — add to `%USERPROFILE%\.wslconfig`:
+   ```ini
+   [wsl2]
+   networkingMode=mirrored
+   ```
+   Then restart WSL: `wsl --shutdown`. After this, `localhost` is shared between Windows and WSL2.
+
+2. **Use WSL2 VM IP** — run `hostname -I` inside WSL to get the IP, then connect to `http://<WSL_IP>:8000/api` instead of `http://localhost:8000/api`.
+
+</details>
+
+<details>
+<summary><b>Common WSL Pitfalls</b></summary>
+
+| Problem | Cause | Fix |
+|---------|-------|-----|
+| `docker: command not found` | Docker not in WSL PATH | Enable Docker Desktop WSL integration for your distro, or use full path `/usr/bin/docker` |
+| `ENOENT` / `spawn error` for `npx` or `python` | Binary not in non-interactive shell PATH | Use absolute path (e.g., `/home/user/.nvm/versions/node/v20/bin/npx`) |
+| Environment variables missing | WSL non-login shell doesn't source `.bashrc` | Add vars explicitly in MCP config `env` block |
+| `Connection refused` to self-hosted server | WSL2 NAT isolates localhost | Enable mirrored networking or use WSL2 VM IP |
+| Claude Desktop can't reach WSL MCP server | Claude Desktop doesn't support WSL subprocess spawning | Use Remote HTTP, Docker Desktop, or `wsl.exe` proxy |
+
+</details>
+
+---
+
 ## 🐞 Troubleshooting
 
 ### Quick Diagnostics
@@ -1036,6 +1145,13 @@ Replace `your-server:8000` with your actual deployment URL and port.
 - **"401 Unauthorized"** → Verify your API key  
 - **"No repositories found"** → Check API key permissions in CodeAlive dashboard
 - **Client-specific logs** → See your AI client's documentation for MCP logs
+
+### Windows / WSL Issues
+
+- **`docker: command not found` in WSL** → Enable Docker Desktop WSL integration for your distro (Settings → Resources → WSL integration), or use the full path `/usr/bin/docker`
+- **`ENOENT` or `spawn error` for `npx`/`python`** → Non-interactive WSL shells don't inherit `nvm`/`pyenv` paths. Use absolute paths in MCP configs
+- **`Connection refused` to self-hosted server in WSL2** → WSL2 uses NAT networking; `localhost` differs between Windows and WSL2. Enable mirrored networking in `.wslconfig` or use the WSL2 VM IP (`hostname -I`)
+- **Claude Desktop can't connect to WSL MCP server** → Claude Desktop doesn't support WSL subprocess spawning. Use Remote HTTP (`https://mcp.codealive.ai/api`), Docker Desktop, or the `wsl.exe` proxy pattern (see [Windows & WSL section](#-windows--wsl))
 
 ### Getting Help
 
