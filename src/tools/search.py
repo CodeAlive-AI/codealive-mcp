@@ -131,11 +131,22 @@ async def semantic_search(
     max_results: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
-    Search indexed code by meaning — the default discovery tool.
+    Search indexed code by meaning — finds code by WHAT it does.
 
-    Use this for natural-language exploration when you want relevant artifacts
-    by meaning: function names, concepts, architecture patterns, etc.
-    For exact string or regex matching, use `grep_search` instead.
+    Use this when you can describe the behavior or concept you're looking
+    for but don't know (or aren't sure of) the exact names in the codebase.
+
+    **When to use semantic_search:**
+    - Exploring concepts: "authentication middleware", "retry logic"
+    - Describing behavior: "database connection pooling", "JWT validation"
+    - Architecture questions: "request handling pipeline", "event processing"
+    - You don't know the exact naming convention used in the codebase
+
+    **When to use `grep_search` instead:**
+    - You know an exact identifier: class, function, or variable name
+    - Looking for a literal string: error message, URL, config key, file path
+    - Finding all usages of a known symbol: `RepositoryDeleted`, `handlePayment`
+    - Searching for import paths, TODO comments, or regex patterns
 
     Args:
         query: Natural-language description of what you're looking for.
@@ -227,11 +238,24 @@ async def grep_search(
     regex: bool = False,
 ) -> Dict[str, Any]:
     """
-    Search indexed code by exact text or regex pattern.
+    Search indexed code by exact text or regex — finds code containing
+    a specific string.
 
-    Use this when the literal string or pattern matters: function names, error
-    messages, config keys, import paths, TODO comments, etc.
-    For meaning-based exploration, use `semantic_search` instead.
+    Use this when you know WHAT TEXT to look for: an identifier, an error
+    message, a config key, a literal string that must appear in the source.
+
+    **When to use grep_search:**
+    - Specific identifiers: class/function/variable names, domain events
+      (e.g. `RepositoryDeleted`, `handlePayment`, `AUTH_PROVIDERS`)
+    - Literal strings: error messages, URLs, config keys, file paths
+    - Import paths, TODO/FIXME comments, annotations
+    - Regex patterns: `def test_.*async`, `Status\\.(Alive|Failed)`
+    - Finding ALL occurrences of a known symbol across the codebase
+
+    **When to use `semantic_search` instead:**
+    - You're exploring a concept or behavior ("how does auth work?")
+    - You don't know the exact naming convention in the codebase
+    - You want code that DOES something, not code that CONTAINS a string
 
     Args:
         query: Exact text or regex pattern to match.
