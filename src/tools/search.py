@@ -131,12 +131,13 @@ async def semantic_search(
     max_results: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
-    Search indexed code by meaning — finds code by WHAT it does.
+    Search indexed code by meaning — the default discovery tool.
 
-    Use this when you can describe the behavior or concept you're looking
-    for but don't know (or aren't sure of) the exact names in the codebase.
+    Finds code by WHAT it does, not by exact text it contains. Start here
+    when you can describe the behavior or concept you're looking for but
+    don't know (or aren't sure of) the exact names in the codebase.
 
-    **When to use semantic_search:**
+    **When to use semantic_search (default):**
     - Exploring concepts: "authentication middleware", "retry logic"
     - Describing behavior: "database connection pooling", "JWT validation"
     - Architecture questions: "request handling pipeline", "event processing"
@@ -145,7 +146,7 @@ async def semantic_search(
     **When to use `grep_search` instead:**
     - You know an exact identifier: class, function, or variable name
     - Looking for a literal string: error message, URL, config key, file path
-    - Finding all usages of a known symbol: `RepositoryDeleted`, `handlePayment`
+    - Finding ALL usages of a known symbol: `RepositoryDeleted`, `handlePayment`
     - Searching for import paths, TODO comments, or regex patterns
 
     Args:
