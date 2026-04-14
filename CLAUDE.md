@@ -205,6 +205,19 @@ When adding a new tool, ensure:
 
 ## Tool Response Conventions
 
+### Response format: dict for metadata, XML for content
+
+Tools that return **search metadata** (identifiers, match counts, line numbers)
+return a `dict`. FastMCP serializes it automatically via `pydantic_core.to_json`,
+which preserves Unicode — no manual `json.dumps()` needed. Examples:
+`semantic_search`, `grep_search`, `codebase_search`.
+
+Tools that return **source code content** return an **XML string**. XML tags give
+the LLM clear structural boundaries between artifacts, content blocks, and
+relationships — this is critical for accurate reasoning over multi-artifact
+responses. **Do not convert `fetch_artifacts` or `get_artifact_relationships`
+to dict/JSON** — the XML structure is intentional.
+
 ### Hint other MCP tools when the response implies a follow-up call
 
 If a tool's response is **meant to be used as input to another MCP tool**, the
@@ -230,7 +243,7 @@ the same change. If you remove a follow-up workflow, remove the stale hint too.
 
 ## Testing Best Practices
 
-The project has **224 tests** across four tiers: unit tests, e2e tool tests, smoke tests, and integration tests.
+The project has tests across four tiers: unit tests, e2e tool tests, smoke tests, and integration tests.
 
 ### Test Tiers
 

@@ -1,7 +1,7 @@
 """Search tool implementations."""
 
 import json
-from typing import List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Sequence, Union
 from urllib.parse import urljoin
 
 import httpx
@@ -12,8 +12,8 @@ from core import CodeAliveContext, get_api_key_from_context, log_api_request, lo
 from utils import (
     handle_api_error,
     normalize_data_source_names,
-    transform_grep_response_to_json,
-    transform_search_response_to_json,
+    transform_grep_response,
+    transform_search_response,
 )
 
 
@@ -63,7 +63,7 @@ async def _perform_search_request(
     params: List[tuple[str, str]],
     transform_response,
     action_label: str,
-) -> str:
+) -> Dict[str, Any]:
     context: CodeAliveContext = ctx.request_context.lifespan_context
     api_key = get_api_key_from_context(ctx)
 
@@ -129,7 +129,7 @@ async def semantic_search(
     paths: Optional[Union[str, List[str]]] = None,
     extensions: Optional[Union[str, List[str]]] = None,
     max_results: Optional[int] = None,
-) -> str:
+) -> Dict[str, Any]:
     """
     Search indexed code by meaning — the default discovery tool.
 
@@ -157,7 +157,7 @@ async def semantic_search(
                      Omit for the server default.
 
     Returns:
-        Compact JSON: {"results": [...], "hint": "..."}
+        {"results": [...], "hint": "..."}
 
         Each result contains:
         - path: file path within the repository
@@ -212,7 +212,7 @@ async def semantic_search(
         tool_name=tool_name,
         endpoint="/api/search/semantic",
         params=params,
-        transform_response=transform_search_response_to_json,
+        transform_response=transform_search_response,
         action_label="semantic search",
     )
 
@@ -225,7 +225,7 @@ async def grep_search(
     extensions: Optional[Union[str, List[str]]] = None,
     max_results: Optional[int] = None,
     regex: bool = False,
-) -> str:
+) -> Dict[str, Any]:
     """
     Search indexed code by exact text or regex pattern.
 
@@ -253,7 +253,7 @@ async def grep_search(
         regex: If True, treat `query` as a regex pattern. Default: False (literal).
 
     Returns:
-        Compact JSON: {"results": [...], "hint": "..."}
+        {"results": [...], "hint": "..."}
 
         Each result contains:
         - path: file path
@@ -308,7 +308,7 @@ async def grep_search(
         tool_name=tool_name,
         endpoint="/api/search/grep",
         params=params,
-        transform_response=transform_grep_response_to_json,
+        transform_response=transform_grep_response,
         action_label="grep search",
     )
 
@@ -319,7 +319,7 @@ async def codebase_search(
     data_sources: Optional[Union[str, List[str]]] = None,
     mode: str = "auto",
     description_detail: str = "short",
-) -> str:
+) -> Dict[str, Any]:
     """
     Deprecated legacy semantic search tool.
 
@@ -376,7 +376,7 @@ async def codebase_search(
         response = await context.client.get("/api/search", params=params, headers=headers)
         log_api_response(response, request_id)
         response.raise_for_status()
-        return transform_search_response_to_json(response.json())
+        return transform_search_response(response.json())
     except (httpx.HTTPStatusError, Exception) as e:
         await handle_api_error(
             ctx,

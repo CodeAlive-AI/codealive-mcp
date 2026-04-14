@@ -1,16 +1,14 @@
-"""Test suite for compact JSON response transformation."""
-
-import json
+"""Test suite for response transformation."""
 
 import pytest
 from utils.response_transformer import (
-    transform_grep_response_to_json,
-    transform_search_response_to_json,
+    transform_grep_response,
+    transform_search_response,
 )
 
 
-class TestJsonTransformer:
-    """Test cases for compact JSON response transformation."""
+class TestResponseTransformer:
+    """Test cases for response transformation."""
 
     @pytest.fixture
     def sample_search_response(self):
@@ -62,26 +60,18 @@ class TestJsonTransformer:
             ]
         }
 
-    def _is_compact(self, payload: str) -> bool:
-        """Compact JSON round-trips byte-for-byte through the compact serializer."""
-        return payload == json.dumps(json.loads(payload), separators=(",", ":"))
+    def test_returns_dict(self, sample_search_response):
+        """Output is a dict with results and hint."""
+        result = transform_search_response(sample_search_response)
 
-    def test_returns_compact_json_string(self, sample_search_response):
-        """Output is a parseable, compact JSON string."""
-        result = transform_search_response_to_json(sample_search_response)
-
-        assert isinstance(result, str)
-        assert self._is_compact(result)
-
-        data = json.loads(result)
-        assert "results" in data
-        assert isinstance(data["results"], list)
+        assert isinstance(result, dict)
+        assert "results" in result
+        assert isinstance(result["results"], list)
 
     def test_includes_all_essential_fields(self, sample_search_response):
-        result = transform_search_response_to_json(sample_search_response)
-        data = json.loads(result)
+        result = transform_search_response(sample_search_response)
 
-        first = data["results"][0]
+        first = result["results"][0]
         assert first["path"] == "path/auth.py"
         assert first["startLine"] == 10
         assert first["endLine"] == 25
@@ -91,14 +81,13 @@ class TestJsonTransformer:
         assert first["description"] == "Authenticates a user with username and password"
 
     def test_folders_are_skipped(self, sample_search_response):
-        result = transform_search_response_to_json(sample_search_response)
-        data = json.loads(result)
+        result = transform_search_response(sample_search_response)
 
-        for entry in data["results"]:
+        for entry in result["results"]:
             assert entry.get("kind") != "Folder"
 
-    def test_quotes_and_special_chars_use_json_escaping(self):
-        """Quotes and other JSON-significant chars are escaped using JSON conventions."""
+    def test_special_chars_preserved(self):
+        """Quotes and special chars are preserved as-is in the dict."""
         response = {
             "results": [{
                 "kind": "Symbol",
@@ -112,34 +101,39 @@ class TestJsonTransformer:
             }]
         }
 
-        result = transform_search_response_to_json(response)
-        data = json.loads(result)
+        result = transform_search_response(response)
+        assert result["results"][0]["description"] == 'Returns "<value>" & "other"'
 
-        # Round-trips cleanly without HTML entities
-        assert data["results"][0]["description"] == 'Returns "<value>" & "other"'
-        assert "&quot;" not in result
-        assert "&amp;" not in result
+    def test_unicode_preserved(self):
+        """Unicode characters (e.g. Cyrillic) are preserved, not escaped."""
+        response = {
+            "results": [{
+                "kind": "File",
+                "identifier": "owner/repo::путь/файл.py",
+                "location": {"path": "путь/файл.py"},
+                "description": "Описание на русском языке"
+            }]
+        }
+
+        result = transform_search_response(response)
+        assert result["results"][0]["path"] == "путь/файл.py"
+        assert result["results"][0]["description"] == "Описание на русском языке"
 
     def test_empty_response(self):
-        result = transform_search_response_to_json({"results": []})
-        data = json.loads(result)
-        assert data["results"] == []
-        assert "fetch_artifacts" in data["hint"]
+        result = transform_search_response({"results": []})
+        assert result["results"] == []
+        assert "fetch_artifacts" in result["hint"]
 
     def test_no_results_key(self):
-        result = transform_search_response_to_json({})
-        data = json.loads(result)
-        assert data["results"] == []
-        assert "fetch_artifacts" in data["hint"]
+        result = transform_search_response({})
+        assert result["results"] == []
+        assert "fetch_artifacts" in result["hint"]
 
     def test_hint_present_in_every_response(self, sample_search_response):
         """Every response carries a hint instructing the agent to load real content."""
-        result = transform_search_response_to_json(sample_search_response)
-        data = json.loads(result)
-        assert "hint" in data
-        # The hint must redirect the agent away from `description` and toward
-        # the source of truth (`fetch_artifacts` / `Read()` content).
-        hint = data["hint"]
+        result = transform_search_response(sample_search_response)
+        assert "hint" in result
+        hint = result["hint"]
         assert "fetch_artifacts" in hint
         assert "description" in hint
         assert "Read()" in hint
@@ -157,11 +151,9 @@ class TestJsonTransformer:
             }]
         }
 
-        result = transform_search_response_to_json(response)
-        data = json.loads(result)
-
-        assert data["results"][0]["snippet"] == "def func(): return 42"
-        assert "description" not in data["results"][0]
+        result = transform_search_response(response)
+        assert result["results"][0]["snippet"] == "def func(): return 42"
+        assert "description" not in result["results"][0]
 
     def test_description_takes_precedence_over_snippet(self):
         response = {
@@ -177,11 +169,9 @@ class TestJsonTransformer:
             }]
         }
 
-        result = transform_search_response_to_json(response)
-        data = json.loads(result)
-
-        assert data["results"][0]["description"] == "A helper function"
-        assert "snippet" not in data["results"][0]
+        result = transform_search_response(response)
+        assert result["results"][0]["description"] == "A helper function"
+        assert "snippet" not in result["results"][0]
 
     def test_no_description_no_snippet(self):
         response = {
@@ -195,10 +185,8 @@ class TestJsonTransformer:
             }]
         }
 
-        result = transform_search_response_to_json(response)
-        data = json.loads(result)
-
-        entry = data["results"][0]
+        result = transform_search_response(response)
+        entry = result["results"][0]
         assert "description" not in entry
         assert "snippet" not in entry
 
@@ -235,10 +223,8 @@ class TestJsonTransformer:
             ]
         }
 
-        result = transform_search_response_to_json(response)
-        data = json.loads(result)
-
-        paths = [entry["path"] for entry in data["results"]]
+        result = transform_search_response(response)
+        paths = [entry["path"] for entry in result["results"]]
         assert paths == ["important.py", "less_important.py", "another.py"]
 
     def test_performance_large_response(self):
@@ -258,10 +244,8 @@ class TestJsonTransformer:
             ]
         }
 
-        result = transform_search_response_to_json(large_response)
-        data = json.loads(result)
-
-        assert len(data["results"]) == 20
+        result = transform_search_response(large_response)
+        assert len(result["results"]) == 20
 
     def test_data_preservation(self):
         response = {
@@ -297,10 +281,8 @@ class TestJsonTransformer:
             ]
         }
 
-        result = transform_search_response_to_json(response)
-        data = json.loads(result)
-
-        first, second = data["results"]
+        result = transform_search_response(response)
+        first, second = result["results"]
 
         assert first["path"] == "src/tools/search.py"
         assert first["startLine"] == 18
@@ -337,10 +319,35 @@ class TestJsonTransformer:
             ]
         }
 
-        result = transform_grep_response_to_json(response)
-        data = json.loads(result)
+        result = transform_grep_response(response)
 
-        assert data["results"][0]["path"] == "src/auth.py"
-        assert data["results"][0]["matchCount"] == 2
-        assert data["results"][0]["matches"][0]["lineNumber"] == 15
-        assert "fetch_artifacts" in data["hint"] or "Read()" in data["hint"]
+        assert result["results"][0]["path"] == "src/auth.py"
+        assert result["results"][0]["matchCount"] == 2
+        assert result["results"][0]["matches"][0]["lineNumber"] == 15
+        assert "fetch_artifacts" in result["hint"] or "Read()" in result["hint"]
+
+    def test_grep_unicode_in_line_text(self):
+        """Grep results with Unicode lineText are preserved correctly."""
+        response = {
+            "results": [
+                {
+                    "kind": "File",
+                    "identifier": "owner/repo::src/module.bsl",
+                    "location": {"path": "src/module.bsl"},
+                    "matchCount": 1,
+                    "matches": [
+                        {
+                            "lineNumber": 19,
+                            "startColumn": 70,
+                            "endColumn": 83,
+                            "lineText": "\tТипШтрихкодаИВидУпаковки.ТипШтрихкода = Перечисления.ТипыШтрихкодов.GS1_DataMatrix;",
+                        }
+                    ],
+                }
+            ]
+        }
+
+        result = transform_grep_response(response)
+        line = result["results"][0]["matches"][0]["lineText"]
+        assert "ТипШтрихкода" in line
+        assert "GS1_DataMatrix" in line

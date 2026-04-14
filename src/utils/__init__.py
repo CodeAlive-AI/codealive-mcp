@@ -1,6 +1,9 @@
 """Utility functions for CodeAlive MCP server."""
 
 from .response_transformer import (
+    transform_grep_response,
+    transform_search_response,
+    # Deprecated aliases kept for backward compatibility
     transform_grep_response_to_json,
     transform_search_response_to_json,
 )
@@ -14,6 +17,8 @@ from .errors import (
 
 __all__ = [
     'coerce_stringified_list',
+    'transform_grep_response',
+    'transform_search_response',
     'transform_grep_response_to_json',
     'transform_search_response_to_json',
     'handle_api_error',

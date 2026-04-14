@@ -200,8 +200,8 @@ class TestCodebaseSearchE2E:
 
         text = _text(result)
         data = json.loads(text)
-        # Compact JSON: round-trips byte-for-byte through the compact serializer
-        assert text == json.dumps(data, separators=(",", ":"))
+        # Compact JSON with Unicode preserved (pydantic_core.to_json keeps UTF-8)
+        assert text == json.dumps(data, separators=(",", ":"), ensure_ascii=False)
         assert data["results"][0]["path"] == "src/auth.py"
         assert "AuthService" in data["results"][0]["identifier"]
         # Hint must always be present and instruct the agent to fetch real content

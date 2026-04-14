@@ -1,6 +1,5 @@
 """Test suite for semantic, grep, and legacy search tools."""
 
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -60,9 +59,9 @@ async def test_semantic_search_returns_compact_json(mock_get_api_key):
         max_results=7,
     )
 
-    data = json.loads(result)
-    assert data["results"][0]["path"] == "path/auth.py"
-    assert data["results"][0]["identifier"] == "owner/repo::path/auth.py::authenticate_user"
+    assert isinstance(result, dict)
+    assert result["results"][0]["path"] == "path/auth.py"
+    assert result["results"][0]["identifier"] == "owner/repo::path/auth.py::authenticate_user"
 
     call_args = mock_client.get.call_args
     assert call_args.args[0] == "/api/search/semantic"
@@ -113,9 +112,9 @@ async def test_grep_search_returns_matches(mock_get_api_key):
         regex=True,
     )
 
-    data = json.loads(result)
-    assert data["results"][0]["matchCount"] == 2
-    assert data["results"][0]["matches"][0]["lineNumber"] == 15
+    assert isinstance(result, dict)
+    assert result["results"][0]["matchCount"] == 2
+    assert result["results"][0]["matches"][0]["lineNumber"] == 15
 
     call_args = mock_client.get.call_args
     assert call_args.args[0] == "/api/search/grep"

@@ -1,7 +1,6 @@
-"""Response transformation utilities to convert API responses to compact JSON."""
+"""Response transformation utilities for API responses."""
 
-import json
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 # Hint embedded in every search response. Tells the agent that
@@ -25,40 +24,28 @@ _GREP_HINT = (
 )
 
 
-def transform_search_response_to_json(
+def transform_search_response(
     search_results: Dict[str, Any],
-) -> str:
+) -> Dict[str, Any]:
     """
-    Transform search API response to a compact JSON string for LLM consumption.
+    Transform search API response to a dict for LLM consumption.
 
-    Args:
-        search_results: Raw search API response from CodeAlive
-
-    Returns:
-        Compact JSON string with the search results and an embedded hint
-        instructing the agent to fetch real content via ``fetch_artifacts``.
+    Returns a dict that FastMCP serializes automatically via
+    ``pydantic_core.to_json`` — no manual ``json.dumps`` needed.
     """
     if not isinstance(search_results, dict) or "results" not in search_results:
-        return json.dumps(
-            {"results": [], "hint": _SEARCH_HINT}, separators=(",", ":")
-        )
+        return {"results": [], "hint": _SEARCH_HINT}
 
     results = search_results.get("results", [])
-
     formatted_results = _format_results(results or [])
 
-    return json.dumps(
-        {"results": formatted_results, "hint": _SEARCH_HINT},
-        separators=(",", ":"),
-    )
+    return {"results": formatted_results, "hint": _SEARCH_HINT}
 
 
-def transform_grep_response_to_json(grep_results: Dict[str, Any]) -> str:
-    """Transform canonical grep response to compact JSON for LLM consumption."""
+def transform_grep_response(grep_results: Dict[str, Any]) -> Dict[str, Any]:
+    """Transform canonical grep response to a dict for LLM consumption."""
     if not isinstance(grep_results, dict) or "results" not in grep_results:
-        return json.dumps(
-            {"results": [], "hint": _GREP_HINT}, separators=(",", ":")
-        )
+        return {"results": [], "hint": _GREP_HINT}
 
     formatted_results: List[Dict[str, Any]] = []
     for result in grep_results.get("results", []) or []:
@@ -85,10 +72,12 @@ def transform_grep_response_to_json(grep_results: Dict[str, Any]) -> str:
             ]
         formatted_results.append(item)
 
-    return json.dumps(
-        {"results": formatted_results, "hint": _GREP_HINT},
-        separators=(",", ":"),
-    )
+    return {"results": formatted_results, "hint": _GREP_HINT}
+
+
+# Backward-compatible aliases (deprecated)
+transform_search_response_to_json = transform_search_response
+transform_grep_response_to_json = transform_grep_response
 
 
 def _format_results(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
