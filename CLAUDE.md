@@ -104,7 +104,8 @@ This is a Model Context Protocol (MCP) server that provides AI clients with acce
 ### Key Architectural Patterns
 
 1. **FastMCP Framework**: Uses FastMCP 3.x with lifespan context, middleware hooks, and built-in `Client` for testing
-2. **HTTP Client Management**: Single persistent `httpx.AsyncClient` with connection pooling, created in lifespan
+2. **HTTP Auth via `get_http_headers`**: FastMCP 3.x strips the `authorization` header by default (to prevent accidental credential forwarding to downstream services). Our `get_api_key_from_context()` in `core/client.py` must use `get_http_headers(include={"authorization"})` to read Bearer tokens from HTTP/streamable-http clients. **Do not remove the `include=` parameter** — without it, all HTTP-transport clients (LibreChat, n8n, etc.) will fail with a misleading STDIO-mode error.
+3. **HTTP Client Management**: Single persistent `httpx.AsyncClient` with connection pooling, created in lifespan
 3. **Streaming Support**: `chat` and the deprecated `codebase_consultant` alias use SSE streaming (`response.aiter_lines()`) for chat completions
 4. **Environment Configuration**: Supports both .env files and command-line arguments with precedence
 5. **Error Handling**: Centralized in `utils/errors.py` — all tools use `handle_api_error()` with `method=` prefix
