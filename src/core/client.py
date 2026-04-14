@@ -28,25 +28,23 @@ _server_ready: bool = False
 
 
 def get_api_key_from_context(ctx: Context) -> str:
-    """Extract API key based on transport mode."""
-    try:
-        headers = get_http_headers()
-        auth_header = headers.get("authorization", "")
+    """Extract API key based on transport mode.
 
-        if auth_header and auth_header.startswith("Bearer "):
-            # HTTP mode with Bearer token
-            return auth_header[7:]
-        elif headers:
-            # HTTP mode but no/invalid Authorization header
-            raise ValueError("HTTP mode: Authorization: Bearer <api-key> header required")
-        else:
-            # STDIO mode - no HTTP headers available
-            api_key = os.environ.get("CODEALIVE_API_KEY", "")
-            if not api_key:
-                raise ValueError("STDIO mode: CODEALIVE_API_KEY environment variable required")
-            return api_key
-    except Exception:
-        # Fallback to STDIO mode if header access fails
+    FastMCP 3.x strips the ``authorization`` header by default, so we must
+    pass ``include={"authorization"}`` to ``get_http_headers``.
+    """
+    # include={"authorization"} — FastMCP 3.x excludes it by default
+    headers = get_http_headers(include={"authorization"})
+    auth_header = headers.get("authorization", "")
+
+    if auth_header and auth_header.startswith("Bearer "):
+        # HTTP mode with Bearer token
+        return auth_header[7:]
+    elif headers:
+        # HTTP mode but no/invalid Authorization header
+        raise ValueError("HTTP mode: Authorization: Bearer <api-key> header required")
+    else:
+        # STDIO mode - no HTTP headers available
         api_key = os.environ.get("CODEALIVE_API_KEY", "")
         if not api_key:
             raise ValueError("STDIO mode: CODEALIVE_API_KEY environment variable required")
