@@ -20,7 +20,7 @@ async def test_all_tools_are_marked_read_only_with_titles():
         "chat": "Chat About Codebase",
         "codebase_consultant": "Consult Codebase (Deprecated)",
         "get_data_sources": "List Data Sources",
-        "codebase_search": "Search Codebase",
+        "codebase_search": "Search Codebase (Deprecated)",
         "semantic_search": "Semantic Search",
         "grep_search": "Grep Search",
         "fetch_artifacts": "Fetch Artifacts",

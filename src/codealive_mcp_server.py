@@ -142,7 +142,7 @@ mcp.tool(
     annotations=_READ_ONLY_TOOL,
 )(get_data_sources)
 mcp.tool(
-    title="Search Codebase",
+    title="Search Codebase (Deprecated)",
     annotations=_READ_ONLY_TOOL,
 )(codebase_search)
 mcp.tool(
