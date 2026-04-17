@@ -9,6 +9,7 @@ on:
 env:
   DOCKER_REGISTRY: ghcr.io
   IMAGE_NAME: ghcr.io/codealive-ai/codealive-mcp
+  DOCKERHUB_IMAGE: ivanbirukcodealive/codealive_ai
 
 permissions:
   contents: read
@@ -92,6 +93,13 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Login to Docker Hub
+        if: github.event_name == 'push'
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       # PR: build only (no push) to validate Dockerfile — single platform for speed
       - name: Build Docker image (PR validation)
         if: github.event_name == 'pull_request'
@@ -111,7 +119,9 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           file: ./Dockerfile
-          tags: ${{ env.IMAGE_NAME }}:main
+          tags: |
+            ${{ env.IMAGE_NAME }}:main
+            ${{ env.DOCKERHUB_IMAGE }}:mcp-dev
           labels: |
             io.modelcontextprotocol.server.name=io.github.CodeAlive-AI/codealive-mcp
           cache-from: type=gha

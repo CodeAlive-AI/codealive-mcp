@@ -20,6 +20,8 @@ on:
 env:
   DOCKER_REGISTRY: ghcr.io
   IMAGE_NAME: ghcr.io/codealive-ai/codealive-mcp
+  # Self-hosted customers get MCP from Docker Hub alongside backend images.
+  DOCKERHUB_IMAGE: ivanbirukcodealive/codealive_ai
 
 permissions:
   id-token: write   # MCP Registry OIDC authentication
@@ -146,6 +148,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Login to Docker Hub (self-hosted distribution)
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Build and push Docker image
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
         with:
@@ -157,6 +165,8 @@ jobs:
             ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
             ${{ env.IMAGE_NAME }}:v${{ steps.version.outputs.version }}
             ${{ env.IMAGE_NAME }}:latest
+            ${{ env.DOCKERHUB_IMAGE }}:mcp
+            ${{ env.DOCKERHUB_IMAGE }}:mcp-v${{ steps.version.outputs.version }}
           labels: |
             io.modelcontextprotocol.server.name=io.github.CodeAlive-AI/codealive-mcp
           cache-from: type=gha
