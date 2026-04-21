@@ -239,16 +239,20 @@ async def grep_search(
     regex: bool = False,
 ) -> Dict[str, Any]:
     """
-    Search indexed code by exact text or regex — finds code containing
-    a specific string.
+    Search indexed code by exact text or regex — matches file content
+    and, for literal queries, also file names/paths.
 
     Use this when you know WHAT TEXT to look for: an identifier, an error
-    message, a config key, a literal string that must appear in the source.
+    message, a config key, or a file whose name you know (even if nothing
+    inside the file references that name — 1C `Form.xml`, `.mdo`, config
+    XML, media files, etc.).
 
     **When to use grep_search:**
     - Specific identifiers: class/function/variable names, domain events
       (e.g. `RepositoryDeleted`, `handlePayment`, `AUTH_PROVIDERS`)
     - Literal strings: error messages, URLs, config keys, file paths
+    - File names whose content may never contain their own name
+      (e.g. `Form.xml`, `schema.graphql`, `appsettings.json`)
     - Import paths, TODO/FIXME comments, annotations
     - Regex patterns: `def test_.*async`, `Status\\.(Alive|Failed)`
     - Finding ALL occurrences of a known symbol across the codebase
@@ -276,6 +280,8 @@ async def grep_search(
         max_results: Maximum number of results to return (1–500).
 
         regex: If True, treat `query` as a regex pattern. Default: False (literal).
+               **Regex currently matches file content only** — file-name/path
+               matching is literal-substring only. This is a known limitation.
 
     Returns:
         {"results": [...], "hint": "..."}
@@ -283,9 +289,14 @@ async def grep_search(
         Each result contains:
         - path: file path
         - identifier: pass to `fetch_artifacts` for full source
-        - matchCount: total matches in this file
+        - matchCount: total matches in this file (0 for file-name-only hits)
         - matches: array of line-level hits, each with:
           - lineNumber, startColumn, endColumn, lineText
+        - matchedByName: present and `true` only when the artifact matched
+          by its file name/path and has no content match. In that case
+          `matches` is empty and `location.line` defaults to 1 as a
+          file-level reference — do NOT interpret `location.line` as an
+          actual line match. Content-match results omit this field.
 
         The `hint` reminds you that line previews are evidence only — load
         full source via `fetch_artifacts` or local `Read()` before reasoning.
@@ -295,7 +306,12 @@ async def grep_search(
            grep_search(query="ConnectionString",
                        data_sources=["backend"])
 
-        2. Regex search for test methods:
+        2. Find a file by name (returns the file even if nothing inside
+           it references `Form.xml`):
+           grep_search(query="Form.xml",
+                       data_sources=["biterp-bsl"])
+
+        3. Regex search for test methods (content only):
            grep_search(query="def test_.*auth",
                        data_sources=["backend"],
                        extensions=[".py"],
