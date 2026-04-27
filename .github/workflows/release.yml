@@ -148,13 +148,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Docker Hub publish is a secondary distribution channel for self-hosted
+      # customers. Treat it as best-effort: missing credentials must NOT block
+      # the primary release path (GHCR push, MCP Registry publish, git tag,
+      # GitHub Release). Configure DOCKERHUB_USERNAME / DOCKERHUB_TOKEN in the
+      # `release` environment to re-enable.
       - name: Login to Docker Hub (self-hosted distribution)
+        id: dockerhub_login
+        continue-on-error: true
         uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push Docker image
+      - name: Build and push Docker image (GHCR)
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
         with:
           push: true
@@ -165,12 +172,25 @@ jobs:
             ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
             ${{ env.IMAGE_NAME }}:v${{ steps.version.outputs.version }}
             ${{ env.IMAGE_NAME }}:latest
+          labels: |
+            io.modelcontextprotocol.server.name=io.github.CodeAlive-AI/codealive-mcp
+          cache-from: type=gha
+          cache-to: type=gha
+
+      - name: Build and push Docker image (Docker Hub)
+        if: steps.dockerhub_login.outcome == 'success'
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        with:
+          push: true
+          platforms: linux/amd64,linux/arm64
+          file: ./Dockerfile
+          build-args: VERSION=${{ steps.version.outputs.version }}
+          tags: |
             ${{ env.DOCKERHUB_IMAGE }}:mcp
             ${{ env.DOCKERHUB_IMAGE }}:mcp-v${{ steps.version.outputs.version }}
           labels: |
             io.modelcontextprotocol.server.name=io.github.CodeAlive-AI/codealive-mcp
           cache-from: type=gha
-          cache-to: type=gha
 
       # Git tag created AFTER Docker push succeeds — if Docker fails, no stale tag
       - name: Create and push git tag
