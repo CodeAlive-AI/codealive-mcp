@@ -112,18 +112,20 @@ class TestGetDataSourcesE2E:
             result = await client.call_tool("get_data_sources", {})
 
         text = _text(result)
-        # Compact JSON: no spaces after separators
-        assert ", " not in text and ": " not in text
         data = json.loads(text)
-        names = [ds["name"] for ds in data]
+        # Compact JSON, UTF-8 preserved (FastMCP uses pydantic_core.to_json).
+        assert text == json.dumps(data, separators=(",", ":"), ensure_ascii=False)
+        names = [ds["name"] for ds in data["dataSources"]]
         assert "backend" in names
         assert "platform" in names
         # repositoryIds must be stripped from workspaces
-        for ds in data:
+        for ds in data["dataSources"]:
             assert "repositoryIds" not in ds
+        # Always emit a follow-up hint pointing at search/chat tools.
+        assert "semantic_search" in data["hint"]
 
     @pytest.mark.asyncio
-    async def test_empty_list_returns_message(self):
+    async def test_empty_list_returns_recovery_hint(self):
         mcp = _server({"/api/datasources/ready": lambda r: httpx.Response(200, json=[])})
         async with Client(mcp) as client:
             result = await client.call_tool("get_data_sources", {})
@@ -131,7 +133,7 @@ class TestGetDataSourcesE2E:
         text = _text(result)
         data = json.loads(text)
         assert data["dataSources"] == []
-        assert "No data sources found" in data["message"]
+        assert "No data sources found" in data["hint"]
 
     @pytest.mark.asyncio
     async def test_unicode_preserved_in_response(self):
@@ -148,8 +150,9 @@ class TestGetDataSourcesE2E:
         text = _text(result)
         # Round-trip via ensure_ascii=False — ASCII-escaped output would mismatch.
         assert text == json.dumps(json.loads(text), separators=(",", ":"), ensure_ascii=False)
-        assert "кирилл-репо" in text
-        assert "Описание про принтеры HPRT" in text
+        data = json.loads(text)
+        assert data["dataSources"][0]["name"] == "кирилл-репо"
+        assert data["dataSources"][0]["description"] == "Описание про принтеры HPRT"
         assert "\\u04" not in text
 
     @pytest.mark.asyncio
@@ -904,6 +907,31 @@ class TestFetchArtifactsE2E:
         xml = _text(result)
         assert "<artifacts>" in xml
 
+    @pytest.mark.asyncio
+    async def test_unicode_preserved_in_xml(self):
+        """Cyrillic in identifier and content must survive into the XML output."""
+        payload = {
+            "artifacts": [
+                {
+                    "identifier": "org/repo::файл.cs::Класс.Метод",
+                    "content": "класс Привет {\n    метод() => 42\n}\n",
+                    "contentByteSize": 100,
+                    "startLine": 1,
+                }
+            ]
+        }
+        mcp = _server({"/api/search/artifacts": lambda r: httpx.Response(200, json=payload)})
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "fetch_artifacts",
+                {"identifiers": ["org/repo::файл.cs::Класс.Метод"]},
+            )
+
+        xml = _text(result)
+        assert "Класс.Метод" in xml
+        assert "класс Привет" in xml
+        assert "\\u04" not in xml
+
 
 # ---------------------------------------------------------------------------
 # Stringified parameter coercion for search tools
@@ -1040,6 +1068,26 @@ class TestChatE2E:
 
         text = _text(result)
         assert "401" in text or "auth" in text.lower()
+
+    @pytest.mark.asyncio
+    async def test_unicode_preserved_in_streamed_response(self):
+        """Cyrillic chunks streamed via SSE must survive as UTF-8 in the final text."""
+        body = self._sse_body(["Привет, ", "мир!"])
+
+        mcp = _server({
+            "/api/chat/completions": lambda r: httpx.Response(
+                200, text=body, headers={"content-type": "text/event-stream"},
+            ),
+        })
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "chat",
+                {"question": "Как работает аутентификация?", "data_sources": ["backend"]},
+            )
+
+        text = _text(result)
+        assert "Привет, мир!" in text
+        assert "\\u04" not in text
 
     @pytest.mark.asyncio
     async def test_legacy_alias_still_works(self):

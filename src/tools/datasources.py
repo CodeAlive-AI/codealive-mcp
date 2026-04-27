@@ -1,6 +1,6 @@
 """Data sources tool implementation."""
 
-from typing import Any
+from typing import Any, Dict
 from urllib.parse import urljoin
 
 import httpx
@@ -12,8 +12,28 @@ from utils import handle_api_error
 # MCP tool/method name surfaced in every error/log message from this module.
 _TOOL_NAME = "get_data_sources"
 
+# Hint embedded in every successful response. Mirrors the convention used by
+# the search tools (see _SEARCH_HINT in utils/response_transformer.py): the
+# response is always in front of the model when it picks the next step, so we
+# repeat the most load-bearing usage rule here instead of relying on the
+# tool's docstring being re-read mid-conversation.
+_DATASOURCES_HINT = (
+    "Use the `name` field as the `data_sources` parameter for `semantic_search`, "
+    "`grep_search`, or `chat`. To identify the CURRENT repository (vs external), "
+    "compare `name`/`description`/`url` against your working directory and the "
+    "code you've already observed."
+)
+
+_DATASOURCES_EMPTY_HINT = (
+    "No data sources found. Add a repository or workspace to CodeAlive at "
+    "https://app.codealive.ai before calling search or chat tools. If you "
+    "expected sources here, retry with alive_only=false to surface ones still "
+    "being indexed."
+)
+
+
 # alive_only refers to ready_only. leaved as is for backward compatibility.
-async def get_data_sources(ctx: Context, alive_only: bool = True) -> Any:
+async def get_data_sources(ctx: Context, alive_only: bool = True) -> Dict[str, Any]:
     """
     **CALL THIS FIRST**: Gets all available data sources (repositories and workspaces) for the user's account.
 
@@ -29,7 +49,9 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> Any:
                     If False, returns all data sources regardless of processing state.
 
     Returns:
-        A compact JSON array of available data sources with the following fields for each:
+        {"dataSources": [...], "hint": "..."}
+
+        Each entry in `dataSources` carries:
         - id: Unique identifier for the data source
         - name: Human-readable name - CRITICAL for matching with current working directory name
         - description: Summary of codebase contents - CRITICAL for identifying if this matches your
@@ -37,6 +59,9 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> Any:
         - type: The type of data source ("Repository" or "Workspace")
         - url: Repository URL (for Repository type only) - useful for matching with git remote
         - state: The processing state of the data source (if alive_only=false)
+
+        The `hint` field reminds you how to use the result and how to distinguish
+        the CURRENT repository from EXTERNAL ones.
 
         Use name + description + url together to determine if a repository is the CURRENT one
         you're working in versus an EXTERNAL repository.
@@ -107,13 +132,8 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> Any:
         # Parse and format the response
         data_sources = response.json()
 
-        # Empty result: return a dict carrying a recovery message instead of a bare
-        # list, so the LLM has guidance when nothing is indexed yet.
         if not data_sources or len(data_sources) == 0:
-            return {
-                "dataSources": [],
-                "message": "No data sources found. Please add a repository or workspace to CodeAlive before using this API.",
-            }
+            return {"dataSources": [], "hint": _DATASOURCES_EMPTY_HINT}
 
         # Remove repositoryIds from workspace data sources
         for data_source in data_sources:
@@ -121,7 +141,7 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> Any:
                 del data_source["repositoryIds"]
 
         # FastMCP serializes via pydantic_core.to_json, which preserves UTF-8.
-        return data_sources
+        return {"dataSources": data_sources, "hint": _DATASOURCES_HINT}
 
     except (httpx.HTTPStatusError, Exception) as e:
         await handle_api_error(
