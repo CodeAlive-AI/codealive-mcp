@@ -1,7 +1,5 @@
 """Tests for the get_artifact_relationships tool."""
 
-import json
-
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -10,7 +8,7 @@ from fastmcp.exceptions import ToolError
 
 from tools.artifact_relationships import (
     PROFILE_MAP,
-    _build_relationships_json,
+    _build_relationships_dict,
     get_artifact_relationships,
 )
 
@@ -32,8 +30,8 @@ class TestProfileMapping:
         assert PROFILE_MAP["referencesOnly"] == "ReferencesOnly"
 
 
-class TestBuildRelationshipsJson:
-    """Test compact JSON rendering of relationship responses."""
+class TestBuildRelationshipsDict:
+    """Test dict shape of relationship responses (FastMCP handles serialization)."""
 
     def test_found_with_grouped_relationships(self):
         data = {
@@ -71,11 +69,7 @@ class TestBuildRelationshipsJson:
             ],
         }
 
-        result = _build_relationships_json(data)
-        # Compact JSON
-        assert ", " not in result and ": " not in result
-
-        parsed = json.loads(result)
+        parsed = _build_relationships_dict(data)
         assert parsed["sourceIdentifier"] == "org/repo::path::Symbol"
         assert parsed["profile"] == "callsOnly"
         assert parsed["found"] is True
@@ -103,7 +97,7 @@ class TestBuildRelationshipsJson:
             "relationships": [],
         }
 
-        parsed = json.loads(_build_relationships_json(data))
+        parsed = _build_relationships_dict(data)
         assert parsed["found"] is False
         assert "relationships" not in parsed
 
@@ -130,7 +124,7 @@ class TestBuildRelationshipsJson:
             ],
         }
 
-        parsed = json.loads(_build_relationships_json(data))
+        parsed = _build_relationships_dict(data)
         types = [g["type"] for g in parsed["relationships"]]
         assert types == ["ancestors", "descendants"]
         for g in parsed["relationships"]:
@@ -158,14 +152,15 @@ class TestBuildRelationshipsJson:
             ],
         }
 
-        parsed = json.loads(_build_relationships_json(data))
+        parsed = _build_relationships_dict(data)
         item = parsed["relationships"][0]["items"][0]
         assert item["identifier"] == "org/repo::path::Target"
         assert "filePath" not in item
         assert "startLine" not in item
         assert "shortSummary" not in item
 
-    def test_quotes_and_specials_use_json_escaping(self):
+    def test_quotes_and_specials_pass_through_unchanged(self):
+        """Special chars (<, >, &, ") are preserved as-is in the dict — no HTML encoding."""
         data = {
             "sourceIdentifier": "org/repo::path::Class<T>",
             "profile": "CallsOnly",
@@ -186,13 +181,7 @@ class TestBuildRelationshipsJson:
             ],
         }
 
-        result = _build_relationships_json(data)
-        # No HTML entity encoding in JSON output
-        assert "&quot;" not in result
-        assert "&amp;" not in result
-        assert "&lt;" not in result
-
-        parsed = json.loads(result)
+        parsed = _build_relationships_dict(data)
         assert parsed["sourceIdentifier"] == "org/repo::path::Class<T>"
         assert parsed["relationships"][0]["items"][0]["identifier"] == "org/repo::path::Method<T>"
         assert parsed["relationships"][0]["items"][0]["shortSummary"] == 'Returns "value" & more'
@@ -206,7 +195,7 @@ class TestBuildRelationshipsJson:
                 "found": False,
                 "relationships": [],
             }
-            parsed = json.loads(_build_relationships_json(data))
+            parsed = _build_relationships_dict(data)
             assert parsed["profile"] == mcp_name
 
 
@@ -247,7 +236,7 @@ class TestGetArtifactRelationshipsTool:
         # Verify the API was called with CallsOnly profile
         call_args = mock_client.post.call_args
         assert call_args[1]["json"]["profile"] == "CallsOnly"
-        assert json.loads(result)["found"] is True
+        assert result["found"] is True
 
     @pytest.mark.asyncio
     @patch("tools.artifact_relationships.get_api_key_from_context")
@@ -353,8 +342,7 @@ class TestGetArtifactRelationshipsTool:
         mock_context.base_url = "https://app.codealive.ai"
         ctx.request_context.lifespan_context = mock_context
 
-        result = await get_artifact_relationships(ctx=ctx, identifier="org/repo::path::Missing")
+        data = await get_artifact_relationships(ctx=ctx, identifier="org/repo::path::Missing")
 
-        data = json.loads(result)
         assert data["found"] is False
         assert "relationships" not in data

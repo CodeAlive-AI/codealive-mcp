@@ -1,6 +1,5 @@
 """Tests for data sources tool."""
 
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -50,11 +49,8 @@ async def test_get_data_sources_removes_repository_ids_from_workspaces(mock_get_
 
     mock_ctx.request_context.lifespan_context = mock_lifespan_context
 
-    # Call the function
-    result = await get_data_sources(mock_ctx, alive_only=True)
-
-    # Result is a compact JSON array
-    data_sources = json.loads(result)
+    # Tool returns the parsed list directly; FastMCP serializes it.
+    data_sources = await get_data_sources(mock_ctx, alive_only=True)
 
     # Verify repository still has all fields
     repo = next(ds for ds in data_sources if ds["type"] == "Repository")
@@ -116,11 +112,7 @@ async def test_get_data_sources_preserves_other_workspace_fields(mock_get_api_ke
 
     mock_ctx.request_context.lifespan_context = mock_lifespan_context
 
-    # Call the function
-    result = await get_data_sources(mock_ctx, alive_only=True)
-
-    # Result is compact JSON array
-    data_sources = json.loads(result)
+    data_sources = await get_data_sources(mock_ctx, alive_only=True)
 
     workspace = data_sources[0]
 
@@ -167,11 +159,8 @@ async def test_get_data_sources_handles_missing_repository_ids(mock_get_api_key)
 
     mock_ctx.request_context.lifespan_context = mock_lifespan_context
 
-    # Call the function - should not raise an error
-    result = await get_data_sources(mock_ctx, alive_only=True)
-
-    # Result is compact JSON array
-    data_sources = json.loads(result)
+    # Should not raise an error
+    data_sources = await get_data_sources(mock_ctx, alive_only=True)
 
     # Verify workspace is intact
     workspace = data_sources[0]

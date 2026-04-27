@@ -1,7 +1,6 @@
 """Artifact relationships tool implementation."""
 
-import json
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal
 from urllib.parse import urljoin
 
 import httpx
@@ -37,7 +36,7 @@ async def get_artifact_relationships(
     identifier: str,
     profile: Literal["callsOnly", "inheritanceOnly", "allRelevant", "referencesOnly"] = "callsOnly",
     max_count_per_type: int = 50,
-) -> str:
+) -> Dict[str, Any]:
     """
     Retrieve relationship groups for a single artifact by profile.
 
@@ -56,7 +55,7 @@ async def get_artifact_relationships(
         max_count_per_type: Maximum related artifacts per relationship type (1–1000, default 50).
 
     Returns:
-        Compact JSON with grouped relationships:
+        A dict with grouped relationships:
             {"sourceIdentifier":"...","profile":"callsOnly","found":true,
              "relationships":[
                {"type":"outgoing_calls","totalCount":57,"returnedCount":50,"truncated":true,
@@ -111,7 +110,7 @@ async def get_artifact_relationships(
         log_api_response(response, request_id)
         response.raise_for_status()
 
-        return _build_relationships_json(response.json())
+        return _build_relationships_dict(response.json())
 
     except (httpx.HTTPStatusError, Exception) as e:
         await handle_api_error(
@@ -126,8 +125,12 @@ async def get_artifact_relationships(
         )
 
 
-def _build_relationships_json(data: dict) -> str:
-    """Build a compact JSON representation of an artifact relationships response."""
+def _build_relationships_dict(data: dict) -> Dict[str, Any]:
+    """Build a dict representation of an artifact relationships response.
+
+    FastMCP serializes the dict via pydantic_core.to_json, which preserves UTF-8 —
+    don't reintroduce json.dumps here, it would re-escape non-ASCII identifiers.
+    """
     raw_source_id = data.get("sourceIdentifier") or ""
     raw_profile = data.get("profile") or ""
     found = bool(data.get("found", False))
@@ -149,7 +152,7 @@ def _build_relationships_json(data: dict) -> str:
         relationships = data.get("relationships") or []
         payload["relationships"] = [_build_group(group) for group in relationships]
 
-    return json.dumps(payload, separators=(",", ":"))
+    return payload
 
 
 def _build_group(group: dict) -> Dict[str, Any]:

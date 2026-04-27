@@ -118,7 +118,7 @@ This is a Model Context Protocol (MCP) server that provides AI clients with acce
 2. Client calls tools (`get_data_sources` → `semantic_search` / `grep_search` → `fetch_artifacts` / `get_artifact_relationships` → `chat` only if synthesis is still needed)
 3. Middleware chain runs: N8N cleanup → ObservabilityMiddleware (OTel span + log correlation)
 4. Tool translates MCP call to CodeAlive API request (with `X-CodeAlive-*` headers)
-5. Response parsed, formatted as XML or text, returned to AI client
+5. Response parsed and returned to the AI client — as a `dict` for metadata/discovery tools, as an XML string for `fetch_artifacts`, or as plain text for `chat`
 
 ### Environment Variables
 
@@ -205,18 +205,26 @@ When adding a new tool, ensure:
 
 ## Tool Response Conventions
 
-### Response format: dict for metadata, XML for content
+### Response format: dict for metadata/discovery, XML only for source code
 
-Tools that return **search metadata** (identifiers, match counts, line numbers)
-return a `dict`. FastMCP serializes it automatically via `pydantic_core.to_json`,
-which preserves Unicode — no manual `json.dumps()` needed. Examples:
-`semantic_search`, `grep_search`, `codebase_search`.
+Tools that return **structured metadata** (identifiers, match counts, line
+numbers, relationship groups, data source listings) return a `dict` (or list of
+dicts). FastMCP serializes it automatically via `pydantic_core.to_json`, which
+preserves Unicode — no manual `json.dumps()` needed. Examples:
+`semantic_search`, `grep_search`, `codebase_search`, `get_data_sources`,
+`get_artifact_relationships`.
 
-Tools that return **source code content** return an **XML string**. XML tags give
-the LLM clear structural boundaries between artifacts, content blocks, and
-relationships — this is critical for accurate reasoning over multi-artifact
-responses. **Do not convert `fetch_artifacts` or `get_artifact_relationships`
-to dict/JSON** — the XML structure is intentional.
+**Never call `json.dumps(...)` from a tool's return path.** Python's `json.dumps`
+defaults to `ensure_ascii=True` and escapes Cyrillic/CJK/etc. to `\uXXXX`.
+Returning a `dict` lets FastMCP route through `pydantic_core.to_json`, which
+emits UTF-8. If you must serialize manually for some reason, pass
+`ensure_ascii=False` explicitly.
+
+Only `fetch_artifacts` returns an **XML string**. XML tags give the LLM clear
+structural boundaries between artifacts, content blocks, and inline
+relationships when streaming source code — this is critical for accurate
+reasoning over multi-artifact responses. **Do not convert `fetch_artifacts` to
+dict/JSON** — the XML structure is intentional.
 
 ### Hint other MCP tools when the response implies a follow-up call
 

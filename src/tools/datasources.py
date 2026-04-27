@@ -1,6 +1,6 @@
 """Data sources tool implementation."""
 
-import json
+from typing import Any
 from urllib.parse import urljoin
 
 import httpx
@@ -13,7 +13,7 @@ from utils import handle_api_error
 _TOOL_NAME = "get_data_sources"
 
 # alive_only refers to ready_only. leaved as is for backward compatibility.
-async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
+async def get_data_sources(ctx: Context, alive_only: bool = True) -> Any:
     """
     **CALL THIS FIRST**: Gets all available data sources (repositories and workspaces) for the user's account.
 
@@ -107,23 +107,21 @@ async def get_data_sources(ctx: Context, alive_only: bool = True) -> str:
         # Parse and format the response
         data_sources = response.json()
 
-        # If no data sources found, return an empty JSON array with a hint
+        # Empty result: return a dict carrying a recovery message instead of a bare
+        # list, so the LLM has guidance when nothing is indexed yet.
         if not data_sources or len(data_sources) == 0:
-            return json.dumps(
-                {
-                    "dataSources": [],
-                    "message": "No data sources found. Please add a repository or workspace to CodeAlive before using this API.",
-                },
-                separators=(",", ":"),
-            )
+            return {
+                "dataSources": [],
+                "message": "No data sources found. Please add a repository or workspace to CodeAlive before using this API.",
+            }
 
         # Remove repositoryIds from workspace data sources
         for data_source in data_sources:
             if data_source.get("type") == "Workspace" and "repositoryIds" in data_source:
                 del data_source["repositoryIds"]
 
-        # Return compact JSON
-        return json.dumps(data_sources, separators=(",", ":"))
+        # FastMCP serializes via pydantic_core.to_json, which preserves UTF-8.
+        return data_sources
 
     except (httpx.HTTPStatusError, Exception) as e:
         await handle_api_error(

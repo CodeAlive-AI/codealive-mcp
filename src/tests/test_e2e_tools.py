@@ -134,6 +134,25 @@ class TestGetDataSourcesE2E:
         assert "No data sources found" in data["message"]
 
     @pytest.mark.asyncio
+    async def test_unicode_preserved_in_response(self):
+        """Cyrillic in name/description must survive as UTF-8, not \\uXXXX."""
+        payload = [
+            {"id": "r1", "name": "кирилл-репо", "type": "Repository",
+             "description": "Описание про принтеры HPRT"},
+        ]
+
+        mcp = _server({"/api/datasources/ready": lambda r: httpx.Response(200, json=payload)})
+        async with Client(mcp) as client:
+            result = await client.call_tool("get_data_sources", {})
+
+        text = _text(result)
+        # Round-trip via ensure_ascii=False — ASCII-escaped output would mismatch.
+        assert text == json.dumps(json.loads(text), separators=(",", ":"), ensure_ascii=False)
+        assert "кирилл-репо" in text
+        assert "Описание про принтеры HPRT" in text
+        assert "\\u04" not in text
+
+    @pytest.mark.asyncio
     async def test_alive_only_false_hits_all_endpoint(self):
         hit = []
 
@@ -497,6 +516,32 @@ class TestSemanticSearchE2E:
         assert result.is_error
         assert "get_data_sources" in text
 
+    @pytest.mark.asyncio
+    async def test_unicode_preserved_in_response(self):
+        """Cyrillic in path/description must survive as UTF-8, not \\uXXXX."""
+        payload = {
+            "results": [
+                {
+                    "kind": "File",
+                    "identifier": "org/repo::база/file.md::",
+                    "description": "Описание про принтеры HPRT",
+                    "location": {"path": "база/file.md"},
+                    "contentByteSize": 100,
+                }
+            ]
+        }
+
+        mcp = _server({"/api/search/semantic": lambda r: httpx.Response(200, json=payload)})
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "semantic_search", {"query": "кир", "data_sources": ["repo"]},
+            )
+
+        text = _text(result)
+        assert text == json.dumps(json.loads(text), separators=(",", ":"), ensure_ascii=False)
+        assert "база/file.md" in text
+        assert "\\u04" not in text
+
 
 # ---------------------------------------------------------------------------
 # grep_search
@@ -698,6 +743,32 @@ class TestGrepSearchE2E:
             )
         assert result.is_error
         assert "get_data_sources" in _text(result)
+
+    @pytest.mark.asyncio
+    async def test_unicode_preserved_in_response(self):
+        """Cyrillic in path/lineText must survive as UTF-8, not \\uXXXX."""
+        payload = {
+            "results": [
+                {
+                    "kind": "File",
+                    "identifier": "org/repo::база/file.md::",
+                    "location": {"path": "база/file.md"},
+                    "matchCount": 1,
+                    "matches": [{"lineNumber": 3, "startColumn": 1, "endColumn": 5,
+                                 "lineText": "тест кириллица"}],
+                }
+            ]
+        }
+        mcp = _server({"/api/search/grep": lambda r: httpx.Response(200, json=payload)})
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "grep_search", {"query": "кир", "data_sources": ["repo"]},
+            )
+
+        text = _text(result)
+        assert text == json.dumps(json.loads(text), separators=(",", ":"), ensure_ascii=False)
+        assert "тест кириллица" in text
+        assert "\\u04" not in text
 
 
 # ---------------------------------------------------------------------------
@@ -1037,8 +1108,9 @@ class TestGetArtifactRelationshipsE2E:
             )
 
         text = _text(result)
-        assert ", " not in text and ": " not in text
         data = json.loads(text)
+        # FastMCP serializes via pydantic_core.to_json — compact, UTF-8.
+        assert text == json.dumps(data, separators=(",", ":"), ensure_ascii=False)
         assert data["found"] is True
         types = [g["type"] for g in data["relationships"]]
         assert "outgoing_calls" in types
@@ -1220,6 +1292,40 @@ class TestGetArtifactRelationshipsE2E:
         assert data["profile"] == "referencesOnly"
         assert data["relationships"][0]["type"] == "references"
         assert data["relationships"][0]["totalCount"] == 5
+
+    @pytest.mark.asyncio
+    async def test_unicode_preserved_in_response(self):
+        """Cyrillic in identifiers/summaries must survive as UTF-8, not \\uXXXX."""
+        response_data = {
+            "sourceIdentifier": "org/repo::файл.cs::Класс.Метод",
+            "profile": "CallsOnly",
+            "found": True,
+            "relationships": [
+                {
+                    "relationType": "OutgoingCalls",
+                    "totalCount": 1,
+                    "returnedCount": 1,
+                    "truncated": False,
+                    "items": [{"identifier": "org/repo::другой.cs::Метод2",
+                               "filePath": "другой.cs",
+                               "shortSummary": "Описание метода"}],
+                }
+            ],
+        }
+        mcp = _server({
+            "/api/search/artifact-relationships": lambda r: httpx.Response(200, json=response_data),
+        })
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "get_artifact_relationships",
+                {"identifier": "org/repo::файл.cs::Класс.Метод"},
+            )
+
+        text = _text(result)
+        assert text == json.dumps(json.loads(text), separators=(",", ":"), ensure_ascii=False)
+        assert "Класс.Метод" in text
+        assert "Описание метода" in text
+        assert "\\u04" not in text
 
     @pytest.mark.asyncio
     async def test_inheritance_profile_maps_correctly(self):
