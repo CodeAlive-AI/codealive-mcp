@@ -5,13 +5,14 @@ from typing import Sequence
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from loguru import logger
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider, ReadableSpan
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, SpanExportResult
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent.parent))
 
-from middleware.observability_middleware import ObservabilityMiddleware
+from middleware.observability_middleware import ObservabilityMiddleware, _extract_tool_arguments
 
 
 class _CollectingExporter(SpanExporter):
@@ -49,9 +50,10 @@ def otel_setup():
     provider.shutdown()
 
 
-def _make_context(tool_name: str = "codebase_search"):
+def _make_context(tool_name: str = "codebase_search", arguments: dict | None = None):
     ctx = MagicMock()
     ctx.message.name = tool_name
+    ctx.message.arguments = arguments or {}
     return ctx
 
 
@@ -113,6 +115,28 @@ class TestSuccessfulToolCall:
         assert span.name == "tool unknown"
         assert span.attributes["mcp.tool.name"] == "unknown"
 
+    @pytest.mark.asyncio
+    async def test_lifecycle_logs_are_debug_with_tool_arguments(self, otel_setup):
+        middleware = ObservabilityMiddleware()
+        tool_arguments = {"identifier": "org/repo::src/svc.py::run", "profile": "callsOnly"}
+        context = _make_context("get_artifact_relationships", tool_arguments)
+        call_next = AsyncMock(return_value="ok")
+        records = []
+        handler_id = logger.add(lambda message: records.append(message.record), level="DEBUG")
+
+        try:
+            await middleware.on_call_tool(context, call_next)
+        finally:
+            logger.remove(handler_id)
+
+        lifecycle = [
+            record for record in records
+            if record["message"].startswith("Tool call ")
+        ]
+        assert [record["level"].name for record in lifecycle] == ["DEBUG", "DEBUG"]
+        assert lifecycle[0]["extra"]["tool_arguments"] == tool_arguments
+        assert lifecycle[1]["extra"]["tool_arguments"] == tool_arguments
+
 
 # ---------------------------------------------------------------------------
 # Failed tool call
@@ -158,3 +182,47 @@ class TestFailedToolCall:
         messages = [e.attributes["exception.message"] for e in exception_events]
         assert "RuntimeError" in types
         assert "boom" in messages
+
+    @pytest.mark.asyncio
+    async def test_failure_logs_warning_with_full_tool_arguments(self, otel_setup):
+        middleware = ObservabilityMiddleware()
+        tool_arguments = {
+            "identifier": "org/repo::src/svc.py::run",
+            "profile": "bogus",
+            "max_count_per_type": 50,
+        }
+        context = _make_context("get_artifact_relationships", tool_arguments)
+        call_next = AsyncMock(side_effect=ValueError("bad profile"))
+        records = []
+        handler_id = logger.add(lambda message: records.append(message.record), level="DEBUG")
+
+        try:
+            with pytest.raises(ValueError, match="bad profile"):
+                await middleware.on_call_tool(context, call_next)
+        finally:
+            logger.remove(handler_id)
+
+        failures = [record for record in records if record["message"] == "Tool call failed: get_artifact_relationships"]
+        assert len(failures) == 1
+        failure = failures[0]
+        assert failure["level"].name == "WARNING"
+        assert failure["extra"]["tool"] == "get_artifact_relationships"
+        assert failure["extra"]["tool_arguments"] == tool_arguments
+        assert failure["extra"]["error_type"] == "ValueError"
+        assert failure["extra"]["error"] == "bad profile"
+
+
+class TestExtractToolArguments:
+    def test_extracts_fastmcp_arguments(self):
+        context = _make_context("tool", {"name": "value"})
+        assert _extract_tool_arguments(context) == {"name": "value"}
+
+    def test_extracts_json_rpc_params_arguments(self):
+        context = MagicMock()
+        context.message = {"params": {"arguments": {"identifier": "id"}}}
+        assert _extract_tool_arguments(context) == {"identifier": "id"}
+
+    def test_returns_empty_dict_when_unavailable(self):
+        context = MagicMock()
+        context.message = object()
+        assert _extract_tool_arguments(context) == {}

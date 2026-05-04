@@ -11,7 +11,7 @@ The middleware also injects ``trace_id`` into loguru context via
 execution carries the correlation ID.
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 from opentelemetry import trace
@@ -25,11 +25,43 @@ if TYPE_CHECKING:
 _tracer = trace.get_tracer("codealive-mcp.tools")
 
 
+def _extract_tool_arguments(context: "MiddlewareContext") -> dict[str, Any]:
+    """Best-effort extraction of raw MCP tool arguments from FastMCP middleware context."""
+    message = getattr(context, "message", None)
+    args = getattr(message, "arguments", None)
+    if isinstance(args, dict):
+        return dict(args)
+
+    params = getattr(message, "params", None)
+    if isinstance(params, dict):
+        args = params.get("arguments")
+        if isinstance(args, dict):
+            return dict(args)
+    else:
+        args = getattr(params, "arguments", None)
+        if isinstance(args, dict):
+            return dict(args)
+
+    if isinstance(message, dict):
+        args = message.get("arguments")
+        if isinstance(args, dict):
+            return dict(args)
+
+        params = message.get("params")
+        if isinstance(params, dict):
+            args = params.get("arguments")
+            if isinstance(args, dict):
+                return dict(args)
+
+    return {}
+
+
 class ObservabilityMiddleware(Middleware):
     """Wrap each ``tools/call`` in an OTel span and log its outcome."""
 
     async def on_call_tool(self, context: "MiddlewareContext", call_next: "CallNext"):
         tool_name = getattr(context.message, "name", "unknown")
+        tool_arguments = _extract_tool_arguments(context)
 
         with _tracer.start_as_current_span(
             f"tool {tool_name}",
@@ -44,21 +76,25 @@ class ObservabilityMiddleware(Middleware):
             span_ctx = span.get_span_context()
             trace_id = format(span_ctx.trace_id, "032x") if span_ctx.trace_id else ""
 
-            with logger.contextualize(trace_id=trace_id, tool=tool_name):
-                logger.info("Tool call started: {tool}", tool=tool_name)
+            with logger.contextualize(
+                trace_id=trace_id,
+                tool=tool_name,
+                tool_arguments=tool_arguments,
+            ):
+                logger.debug("Tool call started: {tool}", tool=tool_name)
 
                 try:
                     result = await call_next(context)
                 except Exception as exc:
                     span.set_status(StatusCode.ERROR, str(exc))
                     span.record_exception(exc)
-                    logger.error(
-                        "Tool call failed: {tool} — {error}",
-                        tool=tool_name,
+                    logger.bind(
+                        error_type=type(exc).__name__,
                         error=str(exc),
-                    )
+                        tool_arguments=tool_arguments,
+                    ).opt(exception=exc).warning("Tool call failed: {tool}", tool=tool_name)
                     raise
 
                 span.set_status(StatusCode.OK)
-                logger.info("Tool call completed: {tool}", tool=tool_name)
+                logger.debug("Tool call completed: {tool}", tool=tool_name)
                 return result

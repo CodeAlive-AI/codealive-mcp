@@ -208,7 +208,7 @@ class TestGetArtifactRelationshipsTool:
         mock_get_api_key.return_value = "test_key"
 
         ctx = MagicMock(spec=Context)
-        ctx.info = AsyncMock()
+        ctx.debug = AsyncMock()
         ctx.error = AsyncMock()
 
         mock_response = MagicMock()
@@ -244,7 +244,7 @@ class TestGetArtifactRelationshipsTool:
         mock_get_api_key.return_value = "test_key"
 
         ctx = MagicMock(spec=Context)
-        ctx.info = AsyncMock()
+        ctx.debug = AsyncMock()
         ctx.error = AsyncMock()
 
         mock_response = MagicMock()
@@ -295,7 +295,7 @@ class TestGetArtifactRelationshipsTool:
         mock_get_api_key.return_value = "test_key"
 
         ctx = MagicMock(spec=Context)
-        ctx.info = AsyncMock()
+        ctx.debug = AsyncMock()
         ctx.error = AsyncMock()
 
         mock_response = MagicMock()
@@ -322,7 +322,7 @@ class TestGetArtifactRelationshipsTool:
         mock_get_api_key.return_value = "test_key"
 
         ctx = MagicMock(spec=Context)
-        ctx.info = AsyncMock()
+        ctx.debug = AsyncMock()
         ctx.error = AsyncMock()
 
         mock_response = MagicMock()

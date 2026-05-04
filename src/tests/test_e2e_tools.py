@@ -15,10 +15,12 @@ from typing import AsyncIterator
 import httpx
 import pytest
 from fastmcp import Client, FastMCP
+from loguru import logger
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core import CodeAliveContext
+from middleware.observability_middleware import ObservabilityMiddleware
 from tools import (
     chat,
     codebase_consultant,
@@ -1203,6 +1205,38 @@ class TestGetArtifactRelationshipsE2E:
         # a human-readable validation error (not our custom JSON).
         assert "callsOnly" in text
         assert "literal_error" in text or "Input should be" in text
+
+    @pytest.mark.asyncio
+    async def test_invalid_profile_is_logged_with_arguments_by_middleware(self):
+        """FastMCP validation fails before the tool body, so middleware must capture args."""
+        mcp = _server({})
+        mcp.add_middleware(ObservabilityMiddleware())
+        records = []
+        handler_id = logger.add(lambda message: records.append(message.record), level="DEBUG")
+
+        try:
+            async with Client(mcp) as client:
+                result = await client.call_tool(
+                    "get_artifact_relationships",
+                    {"identifier": "org/repo::x", "profile": "bogus"},
+                    raise_on_error=False,
+                )
+        finally:
+            logger.remove(handler_id)
+
+        assert result.is_error
+        failures = [
+            record for record in records
+            if record["message"] == "Tool call failed: get_artifact_relationships"
+        ]
+        assert len(failures) == 1
+        failure = failures[0]
+        assert failure["level"].name == "WARNING"
+        assert failure["extra"]["tool_arguments"] == {
+            "identifier": "org/repo::x",
+            "profile": "bogus",
+        }
+        assert failure["extra"]["error_type"] == "ValidationError"
 
     @pytest.mark.asyncio
     async def test_empty_identifier_returns_error(self):

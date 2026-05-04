@@ -6,6 +6,7 @@ from urllib.parse import urljoin
 import httpx
 from fastmcp import Context
 from fastmcp.exceptions import ToolError
+from loguru import logger
 
 from core import CodeAliveContext, get_api_key_from_context, log_api_request, log_api_response
 from utils import handle_api_error
@@ -40,10 +41,29 @@ async def get_artifact_relationships(
     """
     Retrieve relationship groups for a single artifact by profile.
 
-    Use this tool to explore an artifact's call graph, inheritance hierarchy,
-    or references. This is a drill-down tool — use it AFTER `semantic_search`,
-    `grep_search`, legacy `codebase_search`, or `fetch_artifacts` when you need
-    to understand how an artifact relates to others in the codebase.
+    Use this tool to expand the relationship graph around one known artifact:
+    call graph edges, inheritance hierarchy, or references.
+
+    Important usage rules:
+        - This is a graph expansion tool, not a search tool. The `identifier`
+          must be an exact artifact identifier returned by `semantic_search`,
+          `grep_search`, legacy `codebase_search`, or `fetch_artifacts`.
+        - Do not pass a repository name, file path, class name, method name, or
+          guessed symbol name unless it is the full identifier from a prior
+          tool result.
+        - If `found=false` or the backend returns a not-found/inaccessible
+          error, get a fresh identifier with `semantic_search`, `grep_search`,
+          `codebase_search`, or `fetch_artifacts` before retrying. Repeating
+          the same guessed identifier usually repeats the same failure.
+        - Relationships are primarily available for symbol artifacts such as
+          functions, methods, classes, and interfaces. Plain files and prose
+          documents can legitimately have no relationship graph.
+        - The response contains relationship metadata and short summaries, not
+          full source code. Use `fetch_artifacts` on returned identifiers when
+          exact source content is needed.
+        - If any relationship group has `truncated=true`, increase
+          `max_count_per_type` up to 1000 or narrow the investigation with a
+          more specific `profile`.
 
     Args:
         identifier: Fully qualified artifact identifier from search or fetch results.
@@ -68,10 +88,22 @@ async def get_artifact_relationships(
         When the artifact is not found or inaccessible:
             {"sourceIdentifier":"...","profile":"callsOnly","found":false}
     """
+    tool_arguments = {
+        "identifier": identifier,
+        "profile": profile,
+        "max_count_per_type": max_count_per_type,
+    }
+
     if not identifier:
+        logger.bind(tool=_TOOL_NAME, tool_arguments=tool_arguments).warning(
+            "Tool validation failed: artifact identifier is required"
+        )
         raise ToolError(f"[{_TOOL_NAME}] Artifact identifier is required.")
 
     if not (1 <= max_count_per_type <= 1000):
+        logger.bind(tool=_TOOL_NAME, tool_arguments=tool_arguments).warning(
+            "Tool validation failed: max_count_per_type is out of range"
+        )
         raise ToolError(f"[{_TOOL_NAME}] max_count_per_type must be between 1 and 1000.")
 
     # Literal type handles most validation via Pydantic, but direct callers
@@ -79,6 +111,9 @@ async def get_artifact_relationships(
     api_profile = PROFILE_MAP.get(profile)
     if api_profile is None:
         supported = ", ".join(PROFILE_MAP.keys())
+        logger.bind(tool=_TOOL_NAME, tool_arguments=tool_arguments).warning(
+            "Tool validation failed: unsupported relationship profile"
+        )
         raise ToolError(f'[{_TOOL_NAME}] Unsupported profile "{profile}". Use one of: {supported}')
 
     context: CodeAliveContext = ctx.request_context.lifespan_context
@@ -98,7 +133,7 @@ async def get_artifact_relationships(
             "maxCountPerType": max_count_per_type,
         }
 
-        await ctx.info(f"Fetching {profile} relationships for artifact")
+        await ctx.debug(f"Fetching {profile} relationships for artifact")
 
         full_url = urljoin(context.base_url, "/api/search/artifact-relationships")
         request_id = log_api_request("POST", full_url, headers, body=body)
@@ -113,6 +148,12 @@ async def get_artifact_relationships(
         return _build_relationships_dict(response.json())
 
     except (httpx.HTTPStatusError, Exception) as e:
+        logger.bind(
+            tool=_TOOL_NAME,
+            tool_arguments=tool_arguments,
+            error_type=type(e).__name__,
+            error=str(e),
+        ).warning("Tool call failed while fetching artifact relationships")
         await handle_api_error(
             ctx, e, "get artifact relationships", method=_TOOL_NAME,
             recovery_hints={
