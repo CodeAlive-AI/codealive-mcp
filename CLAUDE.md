@@ -172,6 +172,17 @@ This project uses **loguru** for structured JSON logging. All logs go to **stder
 
 7. **Use `logger.configure(patcher=...)` for global context injection** (like OTel trace_id). Do NOT pass `patcher` to `logger.add()` — loguru 0.7.x does not support it there.
 
+8. **Tool-call failures are warnings with full structured arguments.** Do not log MCP
+   tool-call failures as `error` unless the whole server process is failing. A bad
+   tool call is recoverable input for the model loop, same as backend agent tools.
+   Log it as `logger.warning(..., tool_arguments={...})` or with `.bind(tool_arguments=...)`.
+   Do not redact `tool_arguments` in the logger path; the purpose is to recover the
+   exact failing invocation. Authorization headers remain masked via `log_api_request()`.
+
+9. **Tool-call lifecycle logs are debug.** The per-tool "started" and "completed"
+   messages from `ObservabilityMiddleware` must be `logger.debug`, not `logger.info`.
+   Info-level logs should not be emitted for every agent step/tool step.
+
 ### OTel Trace Correlation
 
 Every log record automatically gets `trace_id` and `span_id` injected by `_otel_patcher` (registered via `logger.configure`). The `ObservabilityMiddleware` also uses `logger.contextualize(trace_id=..., tool=...)` so all logs within a tool call carry the correlation ID. Do not duplicate this — it's automatic.
@@ -194,13 +205,55 @@ The `ObservabilityMiddleware` creates a span per tool call with these attributes
 
 On errors, the span gets `StatusCode.ERROR` + `record_exception()`. Do not add redundant span creation inside tool functions — the middleware handles it.
 
+#### Required MCP observability fix pattern
+
+When touching MCP tool observability, update both the generic middleware and the
+tool-specific body:
+
+- In `src/middleware/observability_middleware.py`, extract tool arguments from
+  the incoming `tools/call` message (FastMCP currently exposes this through the
+  message payload; keep the extraction defensive). Add them to the log context,
+  e.g. `with logger.contextualize(trace_id=trace_id, tool=tool_name,
+  tool_arguments=tool_arguments): ...`.
+- Change middleware lifecycle logs:
+  - `logger.info("Tool call started...")` -> `logger.debug(...)`
+  - `logger.info("Tool call completed...")` -> `logger.debug(...)`
+  - `logger.error("Tool call failed...")` -> `logger.warning(...,
+    tool_arguments=tool_arguments)`
+- Keep OTel span semantics unchanged: failed tool calls should still set
+  `StatusCode.ERROR` and `record_exception(exc)` because tracing represents the
+  tool invocation outcome, while logs use Warning to avoid misclassifying a
+  recoverable model/tool-call error as a server crash.
+- In each tool body, log in-band validation failures before raising `ToolError`.
+  Include all tool parameters in `tool_arguments`.
+
+Concrete example: `src/tools/artifact_relationships.py::get_artifact_relationships`
+must log these branches as Warning with full arguments:
+
+```python
+tool_arguments = {
+    "identifier": identifier,
+    "profile": profile,
+    "max_count_per_type": max_count_per_type,
+}
+```
+
+- missing/empty `identifier`
+- `max_count_per_type` outside `1..1000`
+- unsupported `profile` fallback branch
+- backend `HTTPStatusError` / unexpected exception before delegating to
+  `handle_api_error(...)`
+
+The API request/response helpers stay `Debug` and keep their existing masking
+rules. Do not put raw response bodies into warning logs.
+
 ### Adding New Tools — Observability Checklist
 
 When adding a new tool, ensure:
 1. The tool receives `ctx: Context` as its first argument (required for lifespan context and logging)
 2. API requests include all four `X-CodeAlive-*` headers: `Integration`, `Tool`, `Client`, plus `Authorization`
 3. Call `log_api_request()` before and `log_api_response()` after the HTTP call
-4. Errors go through `handle_api_error(ctx, e, "description", method=_TOOL_NAME)` — this ensures the `[tool_name]` prefix in error messages
+4. Errors are logged as Warning with full `tool_arguments` before they go through `handle_api_error(ctx, e, "description", method=_TOOL_NAME)` — this ensures the `[tool_name]` prefix in error messages and preserves the exact failed call in logs
 5. The middleware automatically wraps the tool in an OTel span — no manual span creation needed
 
 ## Tool Response Conventions
