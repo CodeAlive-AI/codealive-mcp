@@ -61,6 +61,17 @@ async def get_artifact_relationships(
         - The response contains relationship metadata and short summaries, not
           full source code. Use `fetch_artifacts` on returned identifiers when
           exact source content is needed.
+        - Choose `profile` by artifact shape: `callsOnly` for function/method
+          callers and callees; `inheritanceOnly` for hierarchy; `allRelevant`
+          for calls plus inheritance only (it excludes references);
+          `referencesOnly` for where-used checks on types, containers, fields,
+          commands, events, interfaces, and other non-call usage.
+        - Mediated or dynamic frameworks such as command buses, event buses,
+          dependency injection, reflection, route binding, subscriptions,
+          schedulers, or generated dispatch may not expose a direct call edge.
+          When graph context is missing or insufficient, use targeted
+          `grep_search` for construction, registration, dispatch, route,
+          subscription, or scheduler text surfaced by source you've already read.
         - If any relationship group has `truncated=true`, increase
           `max_count_per_type` up to 1000 or narrow the investigation with a
           more specific `profile`.
@@ -69,9 +80,9 @@ async def get_artifact_relationships(
         identifier: Fully qualified artifact identifier from search or fetch results.
         profile: Relationship profile to expand. One of:
                  - "callsOnly" (default): outgoing and incoming calls
-                 - "inheritanceOnly": ancestors and descendants
-                 - "allRelevant": calls + inheritance (4 groups)
-                 - "referencesOnly": symbol references
+                 - "inheritanceOnly": ancestors, descendants, implementations, and derived types
+                 - "allRelevant": calls + inheritance only; references are excluded
+                 - "referencesOnly": where-used LSP references for non-call usage
         max_count_per_type: Maximum related artifacts per relationship type (1–1000, default 50).
 
     Returns:
@@ -191,7 +202,15 @@ def _build_relationships_dict(data: dict) -> Dict[str, Any]:
 
     if found:
         relationships = data.get("relationships") or []
-        payload["relationships"] = [_build_group(group) for group in relationships]
+        groups = [_build_group(group) for group in relationships]
+        payload["relationships"] = groups
+
+        counts = _build_counts(data.get("availableRelationshipCounts"))
+        if counts is not None:
+            payload["availableRelationshipCounts"] = counts
+        payload["hint"] = _build_relationship_hint(found, mcp_profile, groups, counts)
+    else:
+        payload["hint"] = _build_relationship_hint(found, mcp_profile, [], None)
 
     return payload
 
@@ -226,3 +245,113 @@ def _build_group(group: dict) -> Dict[str, Any]:
         "truncated": bool(group.get("truncated")),
         "items": items,
     }
+
+
+def _build_counts(counts: Any) -> Dict[str, int] | None:
+    """Preserve backend relationship counts that guide profile recovery."""
+    if not isinstance(counts, dict):
+        return None
+
+    return {
+        "outgoingCalls": int(counts.get("outgoingCalls") or counts.get("OutgoingCalls") or 0),
+        "incomingCalls": int(counts.get("incomingCalls") or counts.get("IncomingCalls") or 0),
+        "ancestors": int(counts.get("ancestors") or counts.get("Ancestors") or 0),
+        "descendants": int(counts.get("descendants") or counts.get("Descendants") or 0),
+        "references": int(counts.get("references") or counts.get("References") or 0),
+    }
+
+
+def _build_relationship_hint(
+    found: bool,
+    profile: str,
+    groups: List[Dict[str, Any]],
+    counts: Dict[str, int] | None,
+) -> str:
+    """Give model-facing next-step guidance for graph traversal results."""
+    if not found:
+        return (
+            "No relationship data was found for this identifier. Verify that the identifier came from "
+            "a recent search/fetch result and points to a symbol-level artifact; otherwise re-run "
+            "semantic_search or grep_search to get a fresh identifier."
+        )
+
+    if any(group["truncated"] for group in groups):
+        return (
+            "Some relationship groups are truncated. If the user asked for all usages or full graph "
+            "scope, call get_artifact_relationships again with a higher max_count_per_type, then "
+            "fetch promising related artifacts before making broad claims."
+        )
+
+    if all(group["totalCount"] == 0 for group in groups):
+        return _build_empty_profile_hint(profile, counts)
+
+    return (
+        "Fetch promising related artifacts before making claims about behavior, concrete applications, "
+        "or how broadly this mechanism is used."
+    )
+
+
+def _build_empty_profile_hint(profile: str, counts: Dict[str, int] | None) -> str:
+    has_calls = (counts or {}).get("outgoingCalls", 0) > 0 or (counts or {}).get("incomingCalls", 0) > 0
+    has_inheritance = (counts or {}).get("ancestors", 0) > 0 or (counts or {}).get("descendants", 0) > 0
+    has_references = (counts or {}).get("references", 0) > 0
+
+    if profile == "referencesOnly" and has_calls and has_inheritance:
+        return (
+            "No references were found for this profile, but call and inheritance relationships exist. "
+            "Use callsOnly for function/method callers or callees, or inheritanceOnly for base classes, "
+            "interfaces, overrides, implementations, or derived types."
+        )
+    if profile == "referencesOnly" and has_calls:
+        return (
+            "No references were found for this profile, but call relationships exist. Use callsOnly "
+            "for function/method callers or callees. Use referencesOnly for where-used checks on "
+            "types, containers, fields, commands, events, interfaces, and other non-call usage."
+        )
+    if profile == "referencesOnly" and has_inheritance:
+        return (
+            "No references were found for this profile, but inheritance relationships exist. Use "
+            "inheritanceOnly for base classes, interfaces, overrides, implementations, or derived types."
+        )
+    if profile == "callsOnly" and has_references and has_inheritance:
+        return (
+            "No call relationships were found for this profile, but references and inheritance "
+            "relationships exist. Try referencesOnly for where-used checks or inheritanceOnly for hierarchy."
+        )
+    if profile == "callsOnly" and has_references:
+        return (
+            "No call relationships were found for this profile, but references exist. Use referencesOnly "
+            "for where-used checks on types, containers, fields, commands, events, interfaces, or mediated dispatch symbols."
+        )
+    if profile == "callsOnly" and has_inheritance:
+        return (
+            "No call relationships were found for this profile, but inheritance relationships exist. "
+            "Use inheritanceOnly for base classes, interfaces, overrides, implementations, or derived types."
+        )
+    if profile == "allRelevant" and has_references:
+        return (
+            "No calls or inheritance relationships were found for allRelevant. allRelevant excludes "
+            "references by design; use referencesOnly for where-used checks."
+        )
+    if profile == "inheritanceOnly" and has_calls and has_references:
+        return (
+            "No inheritance relationships were found for this profile. Use callsOnly for function "
+            "callers/callees, or referencesOnly for where-used checks on types, commands, events, fields, containers, or interfaces."
+        )
+    if profile == "inheritanceOnly" and has_calls:
+        return (
+            "No inheritance relationships were found for this profile, but call relationships exist. "
+            "Use callsOnly for function/method callers or callees."
+        )
+    if profile == "inheritanceOnly" and has_references:
+        return (
+            "No inheritance relationships were found for this profile, but references exist. Use "
+            "referencesOnly for where-used checks on types, containers, fields, commands, events, interfaces, or mediated dispatch symbols."
+        )
+
+    return (
+        "No relationships were found for this profile. Empty profile results do not mean the artifact "
+        "has no graph data. Use callsOnly for function/method callers and callees, inheritanceOnly for "
+        "hierarchy, allRelevant for calls plus inheritance, and referencesOnly for where-used checks on "
+        "types, containers, fields, commands, events, interfaces, and other non-call usage."
+    )

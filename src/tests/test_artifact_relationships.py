@@ -38,6 +38,13 @@ class TestBuildRelationshipsDict:
             "sourceIdentifier": "org/repo::path::Symbol",
             "profile": "CallsOnly",
             "found": True,
+            "availableRelationshipCounts": {
+                "outgoingCalls": 57,
+                "incomingCalls": 3,
+                "ancestors": 0,
+                "descendants": 2,
+                "references": 11,
+            },
             "relationships": [
                 {
                     "relationType": "OutgoingCalls",
@@ -73,6 +80,10 @@ class TestBuildRelationshipsDict:
         assert parsed["sourceIdentifier"] == "org/repo::path::Symbol"
         assert parsed["profile"] == "callsOnly"
         assert parsed["found"] is True
+        assert parsed["availableRelationshipCounts"]["outgoingCalls"] == 57
+        assert parsed["availableRelationshipCounts"]["references"] == 11
+        assert "truncated" in parsed["hint"]
+        assert "higher max_count_per_type" in parsed["hint"]
 
         outgoing = parsed["relationships"][0]
         assert outgoing["type"] == "outgoing_calls"
@@ -100,6 +111,8 @@ class TestBuildRelationshipsDict:
         parsed = _build_relationships_dict(data)
         assert parsed["found"] is False
         assert "relationships" not in parsed
+        assert "availableRelationshipCounts" not in parsed
+        assert "fresh identifier" in parsed["hint"]
 
     def test_empty_groups_still_rendered(self):
         data = {
@@ -130,6 +143,7 @@ class TestBuildRelationshipsDict:
         for g in parsed["relationships"]:
             assert g["totalCount"] == 0
             assert g["items"] == []
+        assert "No relationships were found for this profile" in parsed["hint"]
 
     def test_optional_fields_omitted_when_null(self):
         data = {
@@ -158,6 +172,92 @@ class TestBuildRelationshipsDict:
         assert "filePath" not in item
         assert "startLine" not in item
         assert "shortSummary" not in item
+
+    def test_empty_profile_hint_uses_available_counts(self):
+        data = {
+            "sourceIdentifier": "org/repo::path::Command",
+            "profile": "CallsOnly",
+            "found": True,
+            "availableRelationshipCounts": {
+                "outgoingCalls": 0,
+                "incomingCalls": 0,
+                "ancestors": 0,
+                "descendants": 0,
+                "references": 7,
+            },
+            "relationships": [
+                {
+                    "relationType": "OutgoingCalls",
+                    "totalCount": 0,
+                    "returnedCount": 0,
+                    "truncated": False,
+                    "items": [],
+                },
+                {
+                    "relationType": "IncomingCalls",
+                    "totalCount": 0,
+                    "returnedCount": 0,
+                    "truncated": False,
+                    "items": [],
+                },
+            ],
+        }
+
+        parsed = _build_relationships_dict(data)
+
+        assert parsed["availableRelationshipCounts"]["references"] == 7
+        assert "referencesOnly" in parsed["hint"]
+        assert "where-used" in parsed["hint"]
+
+    def test_all_relevant_empty_profile_hint_says_references_are_excluded(self):
+        data = {
+            "sourceIdentifier": "org/repo::path::Message",
+            "profile": "AllRelevant",
+            "found": True,
+            "availableRelationshipCounts": {
+                "outgoingCalls": 0,
+                "incomingCalls": 0,
+                "ancestors": 0,
+                "descendants": 0,
+                "references": 4,
+            },
+            "relationships": [
+                {
+                    "relationType": "OutgoingCalls",
+                    "totalCount": 0,
+                    "returnedCount": 0,
+                    "truncated": False,
+                    "items": [],
+                },
+                {
+                    "relationType": "IncomingCalls",
+                    "totalCount": 0,
+                    "returnedCount": 0,
+                    "truncated": False,
+                    "items": [],
+                },
+                {
+                    "relationType": "Ancestors",
+                    "totalCount": 0,
+                    "returnedCount": 0,
+                    "truncated": False,
+                    "items": [],
+                },
+                {
+                    "relationType": "Descendants",
+                    "totalCount": 0,
+                    "returnedCount": 0,
+                    "truncated": False,
+                    "items": [],
+                },
+            ],
+        }
+
+        parsed = _build_relationships_dict(data)
+
+        assert parsed["profile"] == "allRelevant"
+        assert "excludes references" in parsed["hint"]
+        assert "referencesOnly" in parsed["hint"]
 
     def test_quotes_and_specials_pass_through_unchanged(self):
         """Special chars (<, >, &, ") are preserved as-is in the dict — no HTML encoding."""

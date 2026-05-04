@@ -41,3 +41,5 @@ async def test_all_tools_are_marked_read_only_with_titles():
     assert "exact artifact identifier" in relationships_description
     assert "not a search tool" in relationships_description
     assert "fetch_artifacts" in relationships_description
+    assert "excludes references" in relationships_description
+    assert "Mediated or dynamic frameworks" in relationships_description

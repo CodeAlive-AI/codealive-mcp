@@ -1118,6 +1118,13 @@ class TestGetArtifactRelationshipsE2E:
         "sourceIdentifier": "org/repo::src/svc.py::Service",
         "profile": "CallsOnly",
         "found": True,
+        "availableRelationshipCounts": {
+            "outgoingCalls": 3,
+            "incomingCalls": 1,
+            "ancestors": 0,
+            "descendants": 0,
+            "references": 2,
+        },
         "relationships": [
             {
                 "relationType": "OutgoingCalls",
@@ -1162,6 +1169,8 @@ class TestGetArtifactRelationshipsE2E:
         # FastMCP serializes via pydantic_core.to_json — compact, UTF-8.
         assert text == json.dumps(data, separators=(",", ":"), ensure_ascii=False)
         assert data["found"] is True
+        assert data["availableRelationshipCounts"]["references"] == 2
+        assert "Fetch promising related artifacts" in data["hint"]
         types = [g["type"] for g in data["relationships"]]
         assert "outgoing_calls" in types
         assert "incoming_calls" in types
