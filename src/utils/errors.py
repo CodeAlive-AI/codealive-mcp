@@ -15,14 +15,44 @@ should suggest ``get_data_sources``, while a 404 from ``chat`` (or legacy
 ``codebase_consultant``) should suggest checking ``conversation_id``.
 """
 
+import json
 from dataclasses import dataclass
-from typing import Mapping, Optional
+from typing import Any, Mapping, Optional
 
 import httpx
 from fastmcp import Context
 from fastmcp.exceptions import ToolError
 
 from core.config import REQUEST_TIMEOUT_SECONDS
+
+
+def _parse_problem_details(body: str) -> Optional[dict[str, Any]]:
+    """Parse a CodeAlive RFC 9457 / legacy error body, return None on mismatch."""
+    if not body:
+        return None
+    try:
+        d = json.loads(body)
+    except (ValueError, TypeError):
+        return None
+    return d if isinstance(d, dict) else None
+
+
+def _summarise_field_errors(d: dict[str, Any]) -> Optional[str]:
+    """Render a one-line ``field: msg; field: msg`` summary from RFC 9457
+    ``errors`` (a dict-of-lists) or the legacy flat ``validationErrors`` list."""
+    errors = d.get("errors")
+    if isinstance(errors, dict):
+        rendered = [
+            f"{field}: {msg}"
+            for field, msgs in errors.items()
+            for msg in (msgs or [])
+        ]
+        if rendered:
+            return "; ".join(rendered)
+    legacy = d.get("validationErrors")
+    if isinstance(legacy, list) and legacy:
+        return "; ".join(str(x) for x in legacy)
+    return None
 
 # GitHub Issues URL is verified in README.md and manifest.json — safe to embed.
 _ISSUES_URL = "https://github.com/CodeAlive-AI/codealive-mcp/issues"
@@ -66,6 +96,18 @@ class _ErrorTemplate:
 
 
 _ERROR_TEMPLATES: dict[int, _ErrorTemplate] = {
+    400: _ErrorTemplate(
+        label="Bad request (400): The CodeAlive service rejected the request",
+        retryable=False,
+        retry_window=None,
+        default_hint=(
+            "(1) inspect the field-level errors below and fix the offending parameter, "
+            "(2) for conversation_id / message_id, ensure the value is a 24-character hex "
+            "Mongo ObjectId taken from a previous response, "
+            "(3) if no field errors are surfaced, re-read the tool docstring and verify "
+            "the request shape matches"
+        ),
+    ),
     401: _ErrorTemplate(
         label="Authentication error (401): Invalid API key or insufficient permissions",
         retryable=False,
@@ -213,13 +255,31 @@ async def handle_api_error(
         error_code = error.response.status_code
         error_detail = error.response.text
 
+        # Parse the CodeAlive RFC 9457 / legacy error body once. The summary is
+        # appended to whichever branch handles this status code, so the LLM sees
+        # field-level errors and the requestId without scanning raw JSON.
+        problem = _parse_problem_details(error_detail)
+        field_summary = _summarise_field_errors(problem) if problem else None
+        request_id = problem.get("requestId") if problem else None
+        rfc_detail = problem.get("detail") if problem else None
+
+        def _enrich(msg: str) -> str:
+            extras: list[str] = []
+            if rfc_detail and rfc_detail not in msg:
+                extras.append(f"Detail: {rfc_detail}")
+            if field_summary:
+                extras.append(f"Fields: {field_summary}")
+            if request_id:
+                extras.append(f"requestId={request_id}")
+            return msg if not extras else f"{msg} ({' | '.join(extras)})"
+
         template = _ERROR_TEMPLATES.get(error_code)
         if template is not None:
             hint = (recovery_hints or {}).get(error_code, template.default_hint)
-            error_msg = _format_error(template, hint)
+            error_msg = _enrich(_format_error(template, hint))
         elif error_code >= 500:
             # Unknown 5xx — treat as retryable server error
-            error_msg = (
+            error_msg = _enrich(
                 f"Server error ({error_code}): The CodeAlive service encountered an issue. "
                 "Retry: yes (retry once after a few seconds). "
                 "Try: (1) retry the call once, "
@@ -227,7 +287,7 @@ async def handle_api_error(
             )
         else:
             # Unknown 4xx — keep raw detail (truncated) and a conservative hint
-            error_msg = (
+            error_msg = _enrich(
                 f"HTTP error: {error_code} - {error_detail[:200]}. "
                 "Retry: no — fix the input. "
                 "Try: review the parameters you passed and try a different value"
