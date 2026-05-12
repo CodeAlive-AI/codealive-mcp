@@ -988,7 +988,11 @@ class TestSearchStringifiedParamsE2E:
 
 class TestChatE2E:
     @staticmethod
-    def _sse_body(chunks: list[str], conv_id: str = "conv-42", msg_id: str = "msg-1") -> str:
+    def _sse_body(
+        chunks: list[str],
+        conv_id: str = "69fceb3e7b2a6a7efdd18180",
+        msg_id: str = "69fceb3e7b2a6a7efdd18181",
+    ) -> str:
         """Build an SSE response body with metadata + content chunks + DONE."""
         lines = [
             "event: message",
@@ -1011,6 +1015,7 @@ class TestChatE2E:
             data = json.loads(req.content)
             assert data["stream"] is True
             assert data["messages"][0]["content"] == "How does auth work?"
+            assert req.headers["accept"] == "text/event-stream, application/problem+json"
             return httpx.Response(200, text=body, headers={"content-type": "text/event-stream"})
 
         mcp = _server({"/api/chat/completions": handler})
@@ -1023,26 +1028,41 @@ class TestChatE2E:
         text = _text(result)
         assert "Hello world!" in text
         # New conversation gets ID appended
-        assert "conv-42" in text
+        assert "69fceb3e7b2a6a7efdd18180" in text
 
     @pytest.mark.asyncio
     async def test_continuing_conversation(self):
-        body = self._sse_body(["Follow-up answer"], conv_id="conv-existing")
+        conversation_id = "69fceb3e7b2a6a7efdd18180"
+        body = self._sse_body(["Follow-up answer"], conv_id=conversation_id)
 
         def handler(req):
             data = json.loads(req.content)
-            assert data["conversationId"] == "conv-existing"
+            assert data["conversationId"] == conversation_id
             return httpx.Response(200, text=body, headers={"content-type": "text/event-stream"})
 
         mcp = _server({"/api/chat/completions": handler})
         async with Client(mcp) as client:
             result = await client.call_tool(
                 "chat",
-                {"question": "And the error handling?", "conversation_id": "conv-existing"},
+                {"question": "And the error handling?", "conversation_id": conversation_id},
             )
 
         text = _text(result)
         assert "Follow-up answer" in text
+
+    @pytest.mark.asyncio
+    async def test_invalid_conversation_id_returns_actionable_tool_error(self):
+        mcp = _server({})
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "chat",
+                {"question": "And the error handling?", "conversation_id": "conv-existing"},
+                raise_on_error=False,
+            )
+
+        text = _text(result)
+        assert "24-character hex Mongo ObjectId" in text
+        assert "Retry: no" in text
 
     @pytest.mark.asyncio
     async def test_empty_question_returns_error(self):
@@ -1070,6 +1090,97 @@ class TestChatE2E:
 
         text = _text(result)
         assert "401" in text or "auth" in text.lower()
+
+    @pytest.mark.asyncio
+    async def test_problem_details_backend_error_keeps_detail_and_request_id(self):
+        problem = {
+            "type": "https://app.codealive.ai/errors/bad-request",
+            "title": "Bad request",
+            "status": 400,
+            "detail": "Message content violates our content policy",
+            "requestId": "req-rest",
+        }
+
+        mcp = _server({
+            "/api/chat/completions": lambda r: httpx.Response(
+                400,
+                json=problem,
+                headers={"content-type": "application/problem+json"},
+            ),
+        })
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "chat",
+                {"question": "hello"},
+                raise_on_error=False,
+            )
+
+        text = _text(result)
+        assert "Message content violates our content policy" in text
+        assert "requestId=req-rest" in text
+        assert "Retry: no" in text
+
+    @pytest.mark.asyncio
+    async def test_named_sse_problem_details_error_returns_tool_error(self):
+        problem = json.dumps({
+            "type": "https://app.codealive.ai/errors/bad-request",
+            "title": "Bad request",
+            "status": 400,
+            "detail": "Message content violates our content policy",
+            "requestId": "req-sse",
+        })
+        body = f"event: error\ndata: {problem}\n\n"
+
+        mcp = _server({
+            "/api/chat/completions": lambda r: httpx.Response(
+                200,
+                text=body,
+                headers={"content-type": "text/event-stream"},
+            ),
+        })
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "chat",
+                {"question": "hello", "data_sources": ["backend"]},
+                raise_on_error=False,
+            )
+
+        text = _text(result)
+        assert "Message content violates our content policy" in text
+        assert "Code: 400" in text
+        assert "requestId=req-sse" in text
+        assert "Retry: no" in text
+
+    @pytest.mark.asyncio
+    async def test_named_sse_rate_limit_error_is_retryable(self):
+        problem = json.dumps({
+            "type": "https://app.codealive.ai/errors/plan-limit",
+            "title": "Plan limit",
+            "status": 429,
+            "detail": "Chat completion rate limit exceeded",
+            "requestId": "req-sse-429",
+        })
+        body = f"event: error\ndata: {problem}\n\n"
+
+        mcp = _server({
+            "/api/chat/completions": lambda r: httpx.Response(
+                200,
+                text=body,
+                headers={"content-type": "text/event-stream"},
+            ),
+        })
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "chat",
+                {"question": "hello", "data_sources": ["backend"]},
+                raise_on_error=False,
+            )
+
+        text = _text(result)
+        assert "Chat completion rate limit exceeded" in text
+        assert "Retry: yes" in text
+        assert "back off" in text
+        assert "requestId=req-sse-429" in text
 
     @pytest.mark.asyncio
     async def test_unicode_preserved_in_streamed_response(self):

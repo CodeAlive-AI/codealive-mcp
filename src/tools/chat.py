@@ -5,6 +5,7 @@ deprecated alias for backward compatibility.
 """
 
 import json
+import re
 from typing import Dict, List, Optional, Union
 from urllib.parse import urljoin
 
@@ -17,6 +18,7 @@ from utils import handle_api_error, format_validation_error, format_data_source_
 
 _PRIMARY_TOOL_NAME = "chat"
 _LEGACY_TOOL_NAME = "codebase_consultant"
+_OBJECT_ID_RE = re.compile(r"^[0-9a-fA-F]{24}$")
 
 
 async def chat(
@@ -56,8 +58,10 @@ async def chat(
                       resolved to IDs on the server side.
                       Example: ["enterprise-platform", "workspace:payments-team"]
 
-        conversation_id: Continue a previous consultation session
-                         Example: "conv_6789f123a456b789c123d456"
+        conversation_id: Continue a previous consultation session. Must be the
+                         24-character hex Mongo ObjectId returned by a previous
+                         response.
+                         Example: "69fceb3e7b2a6a7efdd18180"
 
     Returns:
         Synthesized analysis and explanation addressing your question.
@@ -78,7 +82,7 @@ async def chat(
         3. Continue a consultation:
            chat(
              question="What about error handling in that flow?",
-             conversation_id="conv_6789f123a456b789c123d456"
+             conversation_id="69fceb3e7b2a6a7efdd18180"
            )
 
     Note:
@@ -143,6 +147,14 @@ async def _chat_impl(
             "No question provided. Please provide a question to ask the chat tool.",
         ))
 
+    if conversation_id and not _OBJECT_ID_RE.match(conversation_id):
+        raise ToolError(format_validation_error(
+            method_name,
+            f"conversation_id {conversation_id!r} is not a 24-character hex Mongo ObjectId. "
+            "Retry: no — fix the input. Try: pass the Conversation ID returned by an earlier "
+            "successful chat response, or omit conversation_id to start a new conversation.",
+        ))
+
     # Validate that either conversation_id or data_sources is provided
     if not conversation_id and (not data_sources or len(data_sources) == 0):
         await ctx.info("No data sources provided. If the API key has exactly one assigned data source, that will be used as default.")
@@ -175,6 +187,7 @@ async def _chat_impl(
 
         headers = {
             "Authorization": f"Bearer {api_key}",
+            "Accept": "text/event-stream, application/problem+json",
             "X-CodeAlive-Integration": "mcp",
             "X-CodeAlive-Tool": method_name,
             "X-CodeAlive-Client": "fastmcp",
@@ -199,22 +212,32 @@ async def _chat_impl(
         # Process streaming response - we always stream internally for efficiency
         full_response = ""
         conversation_metadata = {}
+        current_event_name = "message"
 
         try:
             async for line in response.aiter_lines():
+                line = line.rstrip("\r")
                 if not line:
+                    current_event_name = "message"
                     continue
 
                 # Handle metadata events
-                if line.startswith("event: message"):
+                if line.startswith("event:"):
+                    current_event_name = line[len("event:"):].strip() or "message"
                     continue
 
-                if line.startswith("data: "):
-                    data = line[6:]  # Remove "data: " prefix
+                if line.startswith("data:"):
+                    data = line[len("data:"):].lstrip()
                     if data == "[DONE]":
                         break
                     try:
                         chunk = json.loads(data)
+
+                        if current_event_name == "error" and chunk.get("event") is None:
+                            raise ToolError(_format_stream_error(method_name, chunk, conversation_metadata))
+
+                        if chunk.get("event") == "error":
+                            raise ToolError(_format_stream_error(method_name, chunk, conversation_metadata))
 
                         # Capture metadata with conversation ID and message ID
                         if chunk.get("event") == "metadata":
@@ -232,6 +255,8 @@ async def _chat_impl(
                                 full_response += delta["content"]
                     except json.JSONDecodeError:
                         pass
+        except ToolError:
+            raise
         except Exception as streaming_error:
             # Include conversation and message IDs in streaming error response
             error_context = _format_metadata_context(conversation_metadata)
@@ -248,6 +273,8 @@ async def _chat_impl(
 
         return full_response or "No content returned from the API. Please check that your data sources are accessible and try again."
 
+    except ToolError:
+        raise
     except (httpx.HTTPStatusError, Exception) as e:
         await handle_api_error(
             ctx, e, "chat completion", method=method_name,
@@ -275,3 +302,37 @@ def _format_metadata_context(metadata: Dict) -> str:
     if parts:
         return f"\n\n---\n**Debug Info:**\n" + "\n".join(f"- {p}" for p in parts)
     return ""
+
+
+def _format_stream_error(method_name: str, payload: Dict, metadata: Dict) -> str:
+    """Format an in-stream SSE error frame into an agent-actionable ToolError."""
+    status = payload.get("status")
+    code = str(status or payload.get("code") or "STREAM_ERROR")
+    message = payload.get("message") or payload.get("detail") or payload.get("title") or "Streaming error"
+    detail = payload.get("detail") or payload.get("details")
+    request_id = payload.get("requestId") or payload.get("traceId")
+
+    try:
+        status_int = int(status) if status is not None else None
+    except (TypeError, ValueError):
+        status_int = None
+
+    if status_int in {408, 425, 429}:
+        retry = "Retry: yes (back off before retrying)"
+        hint = "Try: (1) wait 30-60 seconds before retrying, (2) reduce request frequency if this repeats"
+    elif status_int is not None and status_int >= 500:
+        retry = "Retry: yes (retry once after a few seconds)"
+        hint = "Try: (1) retry the call once, (2) if it fails again, stop retrying and report the requestId"
+    else:
+        retry = "Retry: no — fix the input or credentials, do not loop"
+        hint = "Try: inspect the detail/requestId below and adjust the chat request before retrying"
+
+    extras = []
+    if detail and detail != message:
+        extras.append(f"Detail: {detail}")
+    if request_id:
+        extras.append(f"requestId={request_id}")
+    metadata_context = _format_metadata_context(metadata)
+    suffix = f" ({' | '.join(extras)})" if extras else ""
+
+    return f"[{method_name}] Error: {message}. Code: {code}. {retry}. {hint}{suffix}{metadata_context}"

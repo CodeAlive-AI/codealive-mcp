@@ -58,6 +58,7 @@ async def test_chat_with_simple_names(mock_get_api_key):
     ]
 
     assert result == "Hello world"
+    assert call_args.kwargs["headers"]["Accept"] == "text/event-stream, application/problem+json"
     assert call_args.kwargs["headers"]["X-CodeAlive-Tool"] == "chat"
 
 
@@ -139,18 +140,120 @@ async def test_chat_with_conversation_id(mock_get_api_key):
     result = await chat(
         ctx=ctx,
         question="Follow up",
-        conversation_id="conv_123"
+        conversation_id="69fceb3e7b2a6a7efdd18180"
     )
 
     call_args = mock_client.post.call_args
     request_data = call_args.kwargs["json"]
 
     # Should include conversation ID
-    assert request_data["conversationId"] == "conv_123"
+    assert request_data["conversationId"] == "69fceb3e7b2a6a7efdd18180"
     # Should not have explicit names when continuing conversation
     assert "names" not in request_data
-
     assert result == "Continued"
+
+
+@pytest.mark.asyncio
+@patch('tools.chat.get_api_key_from_context')
+async def test_chat_rejects_non_objectid_conversation_id(mock_get_api_key):
+    """Invalid continuation IDs fail locally with an actionable ToolError."""
+    mock_get_api_key.return_value = "test_key"
+
+    ctx = MagicMock(spec=Context)
+    ctx.info = AsyncMock()
+    ctx.warning = AsyncMock()
+    ctx.error = AsyncMock()
+
+    with pytest.raises(ToolError) as exc:
+        await chat(
+            ctx=ctx,
+            question="Follow up",
+            conversation_id="conv_123",
+        )
+
+    msg = str(exc.value)
+    assert "24-character hex Mongo ObjectId" in msg
+    assert "Retry: no" in msg
+
+
+@pytest.mark.asyncio
+@patch('tools.chat.get_api_key_from_context')
+async def test_chat_named_sse_error_raises_tool_error(mock_get_api_key):
+    """RFC 9457 `event: error` frames must not collapse to an empty answer."""
+    mock_get_api_key.return_value = "test_key"
+
+    ctx = MagicMock(spec=Context)
+    ctx.info = AsyncMock()
+    ctx.warning = AsyncMock()
+    ctx.error = AsyncMock()
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+
+    async def mock_aiter_lines():
+        yield 'event: error'
+        yield 'data: {"title":"Bad request","status":400,"detail":"Message content violates our content policy","requestId":"req-1"}'
+        yield ''
+
+    mock_response.aiter_lines = mock_aiter_lines
+
+    mock_client = AsyncMock()
+    mock_client.post.return_value = mock_response
+
+    mock_codealive_context = MagicMock()
+    mock_codealive_context.client = mock_client
+    mock_codealive_context.base_url = "https://app.codealive.ai"
+
+    ctx.request_context.lifespan_context = mock_codealive_context
+
+    with pytest.raises(ToolError) as exc:
+        await chat(ctx=ctx, question="Test question", data_sources=["repo123"])
+
+    msg = str(exc.value)
+    assert "Message content violates our content policy" in msg
+    assert "Code: 400" in msg
+    assert "Retry: no" in msg
+    assert "requestId=req-1" in msg
+
+
+@pytest.mark.asyncio
+@patch('tools.chat.get_api_key_from_context')
+async def test_chat_named_sse_rate_limit_error_is_retryable(mock_get_api_key):
+    """429 ProblemDetails frames should tell agents to back off, not fix input."""
+    mock_get_api_key.return_value = "test_key"
+
+    ctx = MagicMock(spec=Context)
+    ctx.info = AsyncMock()
+    ctx.warning = AsyncMock()
+    ctx.error = AsyncMock()
+
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+
+    async def mock_aiter_lines():
+        yield 'event: error'
+        yield 'data: {"title":"Plan limit","status":429,"detail":"Chat completion rate limit exceeded","requestId":"req-429"}'
+        yield ''
+
+    mock_response.aiter_lines = mock_aiter_lines
+
+    mock_client = AsyncMock()
+    mock_client.post.return_value = mock_response
+
+    mock_codealive_context = MagicMock()
+    mock_codealive_context.client = mock_client
+    mock_codealive_context.base_url = "https://app.codealive.ai"
+
+    ctx.request_context.lifespan_context = mock_codealive_context
+
+    with pytest.raises(ToolError) as exc:
+        await chat(ctx=ctx, question="Test question", data_sources=["repo123"])
+
+    msg = str(exc.value)
+    assert "Chat completion rate limit exceeded" in msg
+    assert "Retry: yes" in msg
+    assert "back off" in msg
+    assert "requestId=req-429" in msg
 
 
 @pytest.mark.asyncio
