@@ -140,8 +140,8 @@ Replace `YOUR_API_KEY_HERE` with your actual API key.
 **Option 1: Remote HTTP (Recommended)**
 
 1. Open Cursor → Settings (`Cmd+,` or `Ctrl+,`)
-2. Navigate to **"MCP"** in the left panel
-3. Click **"Add new MCP server"**
+2. Navigate to **"Tools & MCP"** in the left panel (older builds called this **"Tools & Integrations"**)
+3. Click **"New MCP Server"**
 4. Paste this configuration:
 
 ```json
@@ -157,7 +157,9 @@ Replace `YOUR_API_KEY_HERE` with your actual API key.
 }
 ```
 
-5. Save and restart Cursor
+5. Save — Cursor reloads the server automatically. The entry is stored in `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global).
+
+> **Tip:** Cursor also supports a one-click install deeplink — `cursor://anysphere.cursor-deeplink/mcp/install?name=codealive&config=BASE64_CONFIG`. Only follow deeplinks from trusted sources.
 
 **Option 2: Docker (STDIO)**
 
@@ -179,28 +181,63 @@ Replace `YOUR_API_KEY_HERE` with your actual API key.
 </details>
 
 <details>
-<summary><b>Codex</b></summary>
+<summary><b>Codex (CLI, App, IDE Extension)</b></summary>
 
-OpenAI Codex CLI supports MCP via `~/.codex/config.toml`.
+OpenAI Codex ships in three form-factors that **share the same configuration**: the **Codex CLI**, the **Codex App** (macOS / Windows), and the **Codex IDE Extension** (VS Code `openai.chatgpt` and JetBrains 2025.3+). All three read `~/.codex/config.toml`, so one snippet covers every Codex surface. A project-level `.codex/config.toml` in the repo root is also supported for trusted projects.
 
-**`~/.codex/config.toml` (Docker stdio – recommended)**
-```toml
-[mcp_servers.codealive]
-command = "docker"
-args = ["run", "--rm", "-i",
-        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:main"]
+**Option 1: One-line add (Recommended)**
+
+```bash
+codex mcp add codealive --url https://mcp.codealive.ai/api
 ```
 
-**Experimental: Streamable HTTP (requires `[features].rmcp_client = true`)**
-
-> **Note:** Streamable HTTP support requires `rmcp_client = true` under a `[features]` section in your Codex configuration.
+Then open `~/.codex/config.toml` and add the bearer-token reference plus the Streamable HTTP feature flag:
 
 ```toml
+[features]
+rmcp_client = true
+
+[mcp_servers.codealive]
+url = "https://mcp.codealive.ai/api"
+bearer_token_env_var = "CODEALIVE_API_KEY"
+```
+
+Finally, export the key:
+```bash
+export CODEALIVE_API_KEY="YOUR_API_KEY_HERE"
+```
+
+Verify with `codex mcp list`.
+
+> **Note:** Streamable HTTP requires `[features].rmcp_client = true`. The old top-level `experimental_use_rmcp_client = true` flag is deprecated. `bearer_token_env_var` is preferred over inline `headers = { Authorization = "Bearer …" }` because it keeps secrets out of the config file.
+
+**Option 2: Inline header (HTTP)**
+
+```toml
+[features]
+rmcp_client = true
+
 [mcp_servers.codealive]
 url = "https://mcp.codealive.ai/api"
 headers = { Authorization = "Bearer YOUR_API_KEY_HERE" }
 ```
+
+**Option 3: Docker (STDIO)**
+
+```toml
+[mcp_servers.codealive]
+command = "docker"
+args = ["run", "--rm", "-i", "ghcr.io/codealive-ai/codealive-mcp:main"]
+env_vars = ["CODEALIVE_API_KEY"]
+```
+
+```bash
+export CODEALIVE_API_KEY="YOUR_API_KEY_HERE"
+```
+
+No `[features]` flag is needed for stdio. `env_vars` forwards values from the parent shell — safer than embedding the key in `args`.
+
+**Codex App UI:** Settings → MCP Servers → Add Server. The UI writes the same `~/.codex/config.toml` entry. The CLI and IDE extension pick it up automatically.
 
 </details>
 
