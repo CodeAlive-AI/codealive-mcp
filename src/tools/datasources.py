@@ -37,8 +37,11 @@ def _relevance_message(data_sources: list, response) -> str:
         )
 
     shown = len(data_sources)
-    total_header = response.headers.get(_TOTAL_HEADER)
-    total = int(total_header) if total_header and total_header.isdigit() else None
+    try:
+        total = int(response.headers.get(_TOTAL_HEADER))
+    except (TypeError, ValueError):
+        # Header absent (TypeError on int(None)) or malformed (ValueError).
+        total = None
     if total is not None and total > shown:
         return (
             f"{shown} of {total} available data sources are relevant to this query; the other "

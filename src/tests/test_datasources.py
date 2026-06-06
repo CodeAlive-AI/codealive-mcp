@@ -278,6 +278,23 @@ async def test_get_data_sources_filtered_hint_without_total_header(mock_get_api_
 
 @pytest.mark.asyncio
 @patch('tools.datasources.get_api_key_from_context')
+async def test_get_data_sources_filtered_hint_with_malformed_total_header(mock_get_api_key):
+    """A malformed total header is treated as absent rather than raising."""
+    mock_get_api_key.return_value = "test-key"
+    mock_ctx, _ = _ctx_with_response(
+        [{"id": "repo-1", "name": "Repo", "type": "Repository", "relevanceReason": "checkout flow"}],
+        headers={"X-CodeAlive-Total-Data-Sources": "not-a-number"},
+    )
+
+    result = await get_data_sources(mock_ctx, alive_only=True, query="checkout")
+
+    payload = result
+    assert "omitted" in payload["message"].lower()
+    assert "without a query" in payload["message"].lower()
+
+
+@pytest.mark.asyncio
+@patch('tools.datasources.get_api_key_from_context')
 async def test_get_data_sources_all_relevant_hint_reports_no_omission(mock_get_api_key):
     """When every available source is relevant, the hint says so instead of claiming omissions."""
     mock_get_api_key.return_value = "test-key"
