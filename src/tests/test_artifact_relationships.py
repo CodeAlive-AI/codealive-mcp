@@ -1,7 +1,5 @@
 """Tests for the get_artifact_relationships tool."""
 
-import json
-
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -10,7 +8,7 @@ from fastmcp.exceptions import ToolError
 
 from tools.artifact_relationships import (
     PROFILE_MAP,
-    _build_relationships_json,
+    _build_relationships_dict,
     get_artifact_relationships,
 )
 
@@ -32,14 +30,21 @@ class TestProfileMapping:
         assert PROFILE_MAP["referencesOnly"] == "ReferencesOnly"
 
 
-class TestBuildRelationshipsJson:
-    """Test compact JSON rendering of relationship responses."""
+class TestBuildRelationshipsDict:
+    """Test dict shape of relationship responses (FastMCP handles serialization)."""
 
     def test_found_with_grouped_relationships(self):
         data = {
             "sourceIdentifier": "org/repo::path::Symbol",
             "profile": "CallsOnly",
             "found": True,
+            "availableRelationshipCounts": {
+                "outgoingCalls": 57,
+                "incomingCalls": 3,
+                "ancestors": 0,
+                "descendants": 2,
+                "references": 11,
+            },
             "relationships": [
                 {
                     "relationType": "OutgoingCalls",
@@ -71,14 +76,14 @@ class TestBuildRelationshipsJson:
             ],
         }
 
-        result = _build_relationships_json(data)
-        # Compact JSON
-        assert ", " not in result and ": " not in result
-
-        parsed = json.loads(result)
+        parsed = _build_relationships_dict(data)
         assert parsed["sourceIdentifier"] == "org/repo::path::Symbol"
         assert parsed["profile"] == "callsOnly"
         assert parsed["found"] is True
+        assert parsed["availableRelationshipCounts"]["outgoingCalls"] == 57
+        assert parsed["availableRelationshipCounts"]["references"] == 11
+        assert "truncated" in parsed["hint"]
+        assert "higher max_count_per_type" in parsed["hint"]
 
         outgoing = parsed["relationships"][0]
         assert outgoing["type"] == "outgoing_calls"
@@ -103,9 +108,11 @@ class TestBuildRelationshipsJson:
             "relationships": [],
         }
 
-        parsed = json.loads(_build_relationships_json(data))
+        parsed = _build_relationships_dict(data)
         assert parsed["found"] is False
         assert "relationships" not in parsed
+        assert "availableRelationshipCounts" not in parsed
+        assert "fresh identifier" in parsed["hint"]
 
     def test_empty_groups_still_rendered(self):
         data = {
@@ -130,12 +137,13 @@ class TestBuildRelationshipsJson:
             ],
         }
 
-        parsed = json.loads(_build_relationships_json(data))
+        parsed = _build_relationships_dict(data)
         types = [g["type"] for g in parsed["relationships"]]
         assert types == ["ancestors", "descendants"]
         for g in parsed["relationships"]:
             assert g["totalCount"] == 0
             assert g["items"] == []
+        assert "No relationships were found for this profile" in parsed["hint"]
 
     def test_optional_fields_omitted_when_null(self):
         data = {
@@ -158,14 +166,101 @@ class TestBuildRelationshipsJson:
             ],
         }
 
-        parsed = json.loads(_build_relationships_json(data))
+        parsed = _build_relationships_dict(data)
         item = parsed["relationships"][0]["items"][0]
         assert item["identifier"] == "org/repo::path::Target"
         assert "filePath" not in item
         assert "startLine" not in item
         assert "shortSummary" not in item
 
-    def test_quotes_and_specials_use_json_escaping(self):
+    def test_empty_profile_hint_uses_available_counts(self):
+        data = {
+            "sourceIdentifier": "org/repo::path::Command",
+            "profile": "CallsOnly",
+            "found": True,
+            "availableRelationshipCounts": {
+                "outgoingCalls": 0,
+                "incomingCalls": 0,
+                "ancestors": 0,
+                "descendants": 0,
+                "references": 7,
+            },
+            "relationships": [
+                {
+                    "relationType": "OutgoingCalls",
+                    "totalCount": 0,
+                    "returnedCount": 0,
+                    "truncated": False,
+                    "items": [],
+                },
+                {
+                    "relationType": "IncomingCalls",
+                    "totalCount": 0,
+                    "returnedCount": 0,
+                    "truncated": False,
+                    "items": [],
+                },
+            ],
+        }
+
+        parsed = _build_relationships_dict(data)
+
+        assert parsed["availableRelationshipCounts"]["references"] == 7
+        assert "referencesOnly" in parsed["hint"]
+        assert "where-used" in parsed["hint"]
+
+    def test_all_relevant_empty_profile_hint_says_references_are_excluded(self):
+        data = {
+            "sourceIdentifier": "org/repo::path::Message",
+            "profile": "AllRelevant",
+            "found": True,
+            "availableRelationshipCounts": {
+                "outgoingCalls": 0,
+                "incomingCalls": 0,
+                "ancestors": 0,
+                "descendants": 0,
+                "references": 4,
+            },
+            "relationships": [
+                {
+                    "relationType": "OutgoingCalls",
+                    "totalCount": 0,
+                    "returnedCount": 0,
+                    "truncated": False,
+                    "items": [],
+                },
+                {
+                    "relationType": "IncomingCalls",
+                    "totalCount": 0,
+                    "returnedCount": 0,
+                    "truncated": False,
+                    "items": [],
+                },
+                {
+                    "relationType": "Ancestors",
+                    "totalCount": 0,
+                    "returnedCount": 0,
+                    "truncated": False,
+                    "items": [],
+                },
+                {
+                    "relationType": "Descendants",
+                    "totalCount": 0,
+                    "returnedCount": 0,
+                    "truncated": False,
+                    "items": [],
+                },
+            ],
+        }
+
+        parsed = _build_relationships_dict(data)
+
+        assert parsed["profile"] == "allRelevant"
+        assert "excludes references" in parsed["hint"]
+        assert "referencesOnly" in parsed["hint"]
+
+    def test_quotes_and_specials_pass_through_unchanged(self):
+        """Special chars (<, >, &, ") are preserved as-is in the dict — no HTML encoding."""
         data = {
             "sourceIdentifier": "org/repo::path::Class<T>",
             "profile": "CallsOnly",
@@ -186,13 +281,7 @@ class TestBuildRelationshipsJson:
             ],
         }
 
-        result = _build_relationships_json(data)
-        # No HTML entity encoding in JSON output
-        assert "&quot;" not in result
-        assert "&amp;" not in result
-        assert "&lt;" not in result
-
-        parsed = json.loads(result)
+        parsed = _build_relationships_dict(data)
         assert parsed["sourceIdentifier"] == "org/repo::path::Class<T>"
         assert parsed["relationships"][0]["items"][0]["identifier"] == "org/repo::path::Method<T>"
         assert parsed["relationships"][0]["items"][0]["shortSummary"] == 'Returns "value" & more'
@@ -206,7 +295,7 @@ class TestBuildRelationshipsJson:
                 "found": False,
                 "relationships": [],
             }
-            parsed = json.loads(_build_relationships_json(data))
+            parsed = _build_relationships_dict(data)
             assert parsed["profile"] == mcp_name
 
 
@@ -219,7 +308,7 @@ class TestGetArtifactRelationshipsTool:
         mock_get_api_key.return_value = "test_key"
 
         ctx = MagicMock(spec=Context)
-        ctx.info = AsyncMock()
+        ctx.debug = AsyncMock()
         ctx.error = AsyncMock()
 
         mock_response = MagicMock()
@@ -247,7 +336,7 @@ class TestGetArtifactRelationshipsTool:
         # Verify the API was called with CallsOnly profile
         call_args = mock_client.post.call_args
         assert call_args[1]["json"]["profile"] == "CallsOnly"
-        assert json.loads(result)["found"] is True
+        assert result["found"] is True
 
     @pytest.mark.asyncio
     @patch("tools.artifact_relationships.get_api_key_from_context")
@@ -255,7 +344,7 @@ class TestGetArtifactRelationshipsTool:
         mock_get_api_key.return_value = "test_key"
 
         ctx = MagicMock(spec=Context)
-        ctx.info = AsyncMock()
+        ctx.debug = AsyncMock()
         ctx.error = AsyncMock()
 
         mock_response = MagicMock()
@@ -306,7 +395,7 @@ class TestGetArtifactRelationshipsTool:
         mock_get_api_key.return_value = "test_key"
 
         ctx = MagicMock(spec=Context)
-        ctx.info = AsyncMock()
+        ctx.debug = AsyncMock()
         ctx.error = AsyncMock()
 
         mock_response = MagicMock()
@@ -333,7 +422,7 @@ class TestGetArtifactRelationshipsTool:
         mock_get_api_key.return_value = "test_key"
 
         ctx = MagicMock(spec=Context)
-        ctx.info = AsyncMock()
+        ctx.debug = AsyncMock()
         ctx.error = AsyncMock()
 
         mock_response = MagicMock()
@@ -353,8 +442,7 @@ class TestGetArtifactRelationshipsTool:
         mock_context.base_url = "https://app.codealive.ai"
         ctx.request_context.lifespan_context = mock_context
 
-        result = await get_artifact_relationships(ctx=ctx, identifier="org/repo::path::Missing")
+        data = await get_artifact_relationships(ctx=ctx, identifier="org/repo::path::Missing")
 
-        data = json.loads(result)
         assert data["found"] is False
         assert "relationships" not in data

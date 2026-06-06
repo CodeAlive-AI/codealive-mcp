@@ -15,10 +15,12 @@ from typing import AsyncIterator
 import httpx
 import pytest
 from fastmcp import Client, FastMCP
+from loguru import logger
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core import CodeAliveContext
+from middleware.observability_middleware import ObservabilityMiddleware
 from tools import (
     chat,
     codebase_consultant,
@@ -112,18 +114,20 @@ class TestGetDataSourcesE2E:
             result = await client.call_tool("get_data_sources", {})
 
         text = _text(result)
-        # Compact JSON: no spaces after separators
-        assert ", " not in text and ": " not in text
         data = json.loads(text)
-        names = [ds["name"] for ds in data]
+        # Compact JSON, UTF-8 preserved (FastMCP uses pydantic_core.to_json).
+        assert text == json.dumps(data, separators=(",", ":"), ensure_ascii=False)
+        names = [ds["name"] for ds in data["dataSources"]]
         assert "backend" in names
         assert "platform" in names
         # repositoryIds must be stripped from workspaces
-        for ds in data:
+        for ds in data["dataSources"]:
             assert "repositoryIds" not in ds
+        # Always emit a follow-up hint pointing at search/chat tools.
+        assert "semantic_search" in data["hint"]
 
     @pytest.mark.asyncio
-    async def test_empty_list_returns_message(self):
+    async def test_empty_list_returns_recovery_hint(self):
         mcp = _server({"/api/datasources/ready": lambda r: httpx.Response(200, json=[])})
         async with Client(mcp) as client:
             result = await client.call_tool("get_data_sources", {})
@@ -131,7 +135,27 @@ class TestGetDataSourcesE2E:
         text = _text(result)
         data = json.loads(text)
         assert data["dataSources"] == []
-        assert "No data sources found" in data["message"]
+        assert "No data sources found" in data["hint"]
+
+    @pytest.mark.asyncio
+    async def test_unicode_preserved_in_response(self):
+        """Cyrillic in name/description must survive as UTF-8, not \\uXXXX."""
+        payload = [
+            {"id": "r1", "name": "кирилл-репо", "type": "Repository",
+             "description": "Описание про принтеры HPRT"},
+        ]
+
+        mcp = _server({"/api/datasources/ready": lambda r: httpx.Response(200, json=payload)})
+        async with Client(mcp) as client:
+            result = await client.call_tool("get_data_sources", {})
+
+        text = _text(result)
+        # Round-trip via ensure_ascii=False — ASCII-escaped output would mismatch.
+        assert text == json.dumps(json.loads(text), separators=(",", ":"), ensure_ascii=False)
+        data = json.loads(text)
+        assert data["dataSources"][0]["name"] == "кирилл-репо"
+        assert data["dataSources"][0]["description"] == "Описание про принтеры HPRT"
+        assert "\\u04" not in text
 
     @pytest.mark.asyncio
     async def test_alive_only_false_hits_all_endpoint(self):
@@ -497,6 +521,32 @@ class TestSemanticSearchE2E:
         assert result.is_error
         assert "get_data_sources" in text
 
+    @pytest.mark.asyncio
+    async def test_unicode_preserved_in_response(self):
+        """Cyrillic in path/description must survive as UTF-8, not \\uXXXX."""
+        payload = {
+            "results": [
+                {
+                    "kind": "File",
+                    "identifier": "org/repo::база/file.md::",
+                    "description": "Описание про принтеры HPRT",
+                    "location": {"path": "база/file.md"},
+                    "contentByteSize": 100,
+                }
+            ]
+        }
+
+        mcp = _server({"/api/search/semantic": lambda r: httpx.Response(200, json=payload)})
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "semantic_search", {"query": "кир", "data_sources": ["repo"]},
+            )
+
+        text = _text(result)
+        assert text == json.dumps(json.loads(text), separators=(",", ":"), ensure_ascii=False)
+        assert "база/file.md" in text
+        assert "\\u04" not in text
+
 
 # ---------------------------------------------------------------------------
 # grep_search
@@ -699,6 +749,32 @@ class TestGrepSearchE2E:
         assert result.is_error
         assert "get_data_sources" in _text(result)
 
+    @pytest.mark.asyncio
+    async def test_unicode_preserved_in_response(self):
+        """Cyrillic in path/lineText must survive as UTF-8, not \\uXXXX."""
+        payload = {
+            "results": [
+                {
+                    "kind": "File",
+                    "identifier": "org/repo::база/file.md::",
+                    "location": {"path": "база/file.md"},
+                    "matchCount": 1,
+                    "matches": [{"lineNumber": 3, "startColumn": 1, "endColumn": 5,
+                                 "lineText": "тест кириллица"}],
+                }
+            ]
+        }
+        mcp = _server({"/api/search/grep": lambda r: httpx.Response(200, json=payload)})
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "grep_search", {"query": "кир", "data_sources": ["repo"]},
+            )
+
+        text = _text(result)
+        assert text == json.dumps(json.loads(text), separators=(",", ":"), ensure_ascii=False)
+        assert "тест кириллица" in text
+        assert "\\u04" not in text
+
 
 # ---------------------------------------------------------------------------
 # fetch_artifacts
@@ -833,6 +909,31 @@ class TestFetchArtifactsE2E:
         xml = _text(result)
         assert "<artifacts>" in xml
 
+    @pytest.mark.asyncio
+    async def test_unicode_preserved_in_xml(self):
+        """Cyrillic in identifier and content must survive into the XML output."""
+        payload = {
+            "artifacts": [
+                {
+                    "identifier": "org/repo::файл.cs::Класс.Метод",
+                    "content": "класс Привет {\n    метод() => 42\n}\n",
+                    "contentByteSize": 100,
+                    "startLine": 1,
+                }
+            ]
+        }
+        mcp = _server({"/api/search/artifacts": lambda r: httpx.Response(200, json=payload)})
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "fetch_artifacts",
+                {"identifiers": ["org/repo::файл.cs::Класс.Метод"]},
+            )
+
+        xml = _text(result)
+        assert "Класс.Метод" in xml
+        assert "класс Привет" in xml
+        assert "\\u04" not in xml
+
 
 # ---------------------------------------------------------------------------
 # Stringified parameter coercion for search tools
@@ -887,7 +988,11 @@ class TestSearchStringifiedParamsE2E:
 
 class TestChatE2E:
     @staticmethod
-    def _sse_body(chunks: list[str], conv_id: str = "conv-42", msg_id: str = "msg-1") -> str:
+    def _sse_body(
+        chunks: list[str],
+        conv_id: str = "69fceb3e7b2a6a7efdd18180",
+        msg_id: str = "69fceb3e7b2a6a7efdd18181",
+    ) -> str:
         """Build an SSE response body with metadata + content chunks + DONE."""
         lines = [
             "event: message",
@@ -910,6 +1015,7 @@ class TestChatE2E:
             data = json.loads(req.content)
             assert data["stream"] is True
             assert data["messages"][0]["content"] == "How does auth work?"
+            assert req.headers["accept"] == "text/event-stream, application/problem+json"
             return httpx.Response(200, text=body, headers={"content-type": "text/event-stream"})
 
         mcp = _server({"/api/chat/completions": handler})
@@ -922,26 +1028,41 @@ class TestChatE2E:
         text = _text(result)
         assert "Hello world!" in text
         # New conversation gets ID appended
-        assert "conv-42" in text
+        assert "69fceb3e7b2a6a7efdd18180" in text
 
     @pytest.mark.asyncio
     async def test_continuing_conversation(self):
-        body = self._sse_body(["Follow-up answer"], conv_id="conv-existing")
+        conversation_id = "69fceb3e7b2a6a7efdd18180"
+        body = self._sse_body(["Follow-up answer"], conv_id=conversation_id)
 
         def handler(req):
             data = json.loads(req.content)
-            assert data["conversationId"] == "conv-existing"
+            assert data["conversationId"] == conversation_id
             return httpx.Response(200, text=body, headers={"content-type": "text/event-stream"})
 
         mcp = _server({"/api/chat/completions": handler})
         async with Client(mcp) as client:
             result = await client.call_tool(
                 "chat",
-                {"question": "And the error handling?", "conversation_id": "conv-existing"},
+                {"question": "And the error handling?", "conversation_id": conversation_id},
             )
 
         text = _text(result)
         assert "Follow-up answer" in text
+
+    @pytest.mark.asyncio
+    async def test_invalid_conversation_id_returns_actionable_tool_error(self):
+        mcp = _server({})
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "chat",
+                {"question": "And the error handling?", "conversation_id": "conv-existing"},
+                raise_on_error=False,
+            )
+
+        text = _text(result)
+        assert "24-character hex Mongo ObjectId" in text
+        assert "Retry: no" in text
 
     @pytest.mark.asyncio
     async def test_empty_question_returns_error(self):
@@ -971,6 +1092,117 @@ class TestChatE2E:
         assert "401" in text or "auth" in text.lower()
 
     @pytest.mark.asyncio
+    async def test_problem_details_backend_error_keeps_detail_and_request_id(self):
+        problem = {
+            "type": "https://app.codealive.ai/errors/bad-request",
+            "title": "Bad request",
+            "status": 400,
+            "detail": "Message content violates our content policy",
+            "requestId": "req-rest",
+        }
+
+        mcp = _server({
+            "/api/chat/completions": lambda r: httpx.Response(
+                400,
+                json=problem,
+                headers={"content-type": "application/problem+json"},
+            ),
+        })
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "chat",
+                {"question": "hello"},
+                raise_on_error=False,
+            )
+
+        text = _text(result)
+        assert "Message content violates our content policy" in text
+        assert "requestId=req-rest" in text
+        assert "Retry: no" in text
+
+    @pytest.mark.asyncio
+    async def test_named_sse_problem_details_error_returns_tool_error(self):
+        problem = json.dumps({
+            "type": "https://app.codealive.ai/errors/bad-request",
+            "title": "Bad request",
+            "status": 400,
+            "detail": "Message content violates our content policy",
+            "requestId": "req-sse",
+        })
+        body = f"event: error\ndata: {problem}\n\n"
+
+        mcp = _server({
+            "/api/chat/completions": lambda r: httpx.Response(
+                200,
+                text=body,
+                headers={"content-type": "text/event-stream"},
+            ),
+        })
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "chat",
+                {"question": "hello", "data_sources": ["backend"]},
+                raise_on_error=False,
+            )
+
+        text = _text(result)
+        assert "Message content violates our content policy" in text
+        assert "Code: 400" in text
+        assert "requestId=req-sse" in text
+        assert "Retry: no" in text
+
+    @pytest.mark.asyncio
+    async def test_named_sse_rate_limit_error_is_retryable(self):
+        problem = json.dumps({
+            "type": "https://app.codealive.ai/errors/plan-limit",
+            "title": "Plan limit",
+            "status": 429,
+            "detail": "Chat completion rate limit exceeded",
+            "requestId": "req-sse-429",
+        })
+        body = f"event: error\ndata: {problem}\n\n"
+
+        mcp = _server({
+            "/api/chat/completions": lambda r: httpx.Response(
+                200,
+                text=body,
+                headers={"content-type": "text/event-stream"},
+            ),
+        })
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "chat",
+                {"question": "hello", "data_sources": ["backend"]},
+                raise_on_error=False,
+            )
+
+        text = _text(result)
+        assert "Chat completion rate limit exceeded" in text
+        assert "Retry: yes" in text
+        assert "back off" in text
+        assert "requestId=req-sse-429" in text
+
+    @pytest.mark.asyncio
+    async def test_unicode_preserved_in_streamed_response(self):
+        """Cyrillic chunks streamed via SSE must survive as UTF-8 in the final text."""
+        body = self._sse_body(["Привет, ", "мир!"])
+
+        mcp = _server({
+            "/api/chat/completions": lambda r: httpx.Response(
+                200, text=body, headers={"content-type": "text/event-stream"},
+            ),
+        })
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "chat",
+                {"question": "Как работает аутентификация?", "data_sources": ["backend"]},
+            )
+
+        text = _text(result)
+        assert "Привет, мир!" in text
+        assert "\\u04" not in text
+
+    @pytest.mark.asyncio
     async def test_legacy_alias_still_works(self):
         body = self._sse_body(["Legacy alias"])
 
@@ -997,6 +1229,13 @@ class TestGetArtifactRelationshipsE2E:
         "sourceIdentifier": "org/repo::src/svc.py::Service",
         "profile": "CallsOnly",
         "found": True,
+        "availableRelationshipCounts": {
+            "outgoingCalls": 3,
+            "incomingCalls": 1,
+            "ancestors": 0,
+            "descendants": 0,
+            "references": 2,
+        },
         "relationships": [
             {
                 "relationType": "OutgoingCalls",
@@ -1037,9 +1276,12 @@ class TestGetArtifactRelationshipsE2E:
             )
 
         text = _text(result)
-        assert ", " not in text and ": " not in text
         data = json.loads(text)
+        # FastMCP serializes via pydantic_core.to_json — compact, UTF-8.
+        assert text == json.dumps(data, separators=(",", ":"), ensure_ascii=False)
         assert data["found"] is True
+        assert data["availableRelationshipCounts"]["references"] == 2
+        assert "Fetch promising related artifacts" in data["hint"]
         types = [g["type"] for g in data["relationships"]]
         assert "outgoing_calls" in types
         assert "incoming_calls" in types
@@ -1083,6 +1325,38 @@ class TestGetArtifactRelationshipsE2E:
         # a human-readable validation error (not our custom JSON).
         assert "callsOnly" in text
         assert "literal_error" in text or "Input should be" in text
+
+    @pytest.mark.asyncio
+    async def test_invalid_profile_is_logged_with_arguments_by_middleware(self):
+        """FastMCP validation fails before the tool body, so middleware must capture args."""
+        mcp = _server({})
+        mcp.add_middleware(ObservabilityMiddleware())
+        records = []
+        handler_id = logger.add(lambda message: records.append(message.record), level="DEBUG")
+
+        try:
+            async with Client(mcp) as client:
+                result = await client.call_tool(
+                    "get_artifact_relationships",
+                    {"identifier": "org/repo::x", "profile": "bogus"},
+                    raise_on_error=False,
+                )
+        finally:
+            logger.remove(handler_id)
+
+        assert result.is_error
+        failures = [
+            record for record in records
+            if record["message"] == "Tool call failed: get_artifact_relationships"
+        ]
+        assert len(failures) == 1
+        failure = failures[0]
+        assert failure["level"].name == "WARNING"
+        assert failure["extra"]["tool_arguments"] == {
+            "identifier": "org/repo::x",
+            "profile": "bogus",
+        }
+        assert failure["extra"]["error_type"] == "ValidationError"
 
     @pytest.mark.asyncio
     async def test_empty_identifier_returns_error(self):
@@ -1220,6 +1494,40 @@ class TestGetArtifactRelationshipsE2E:
         assert data["profile"] == "referencesOnly"
         assert data["relationships"][0]["type"] == "references"
         assert data["relationships"][0]["totalCount"] == 5
+
+    @pytest.mark.asyncio
+    async def test_unicode_preserved_in_response(self):
+        """Cyrillic in identifiers/summaries must survive as UTF-8, not \\uXXXX."""
+        response_data = {
+            "sourceIdentifier": "org/repo::файл.cs::Класс.Метод",
+            "profile": "CallsOnly",
+            "found": True,
+            "relationships": [
+                {
+                    "relationType": "OutgoingCalls",
+                    "totalCount": 1,
+                    "returnedCount": 1,
+                    "truncated": False,
+                    "items": [{"identifier": "org/repo::другой.cs::Метод2",
+                               "filePath": "другой.cs",
+                               "shortSummary": "Описание метода"}],
+                }
+            ],
+        }
+        mcp = _server({
+            "/api/search/artifact-relationships": lambda r: httpx.Response(200, json=response_data),
+        })
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "get_artifact_relationships",
+                {"identifier": "org/repo::файл.cs::Класс.Метод"},
+            )
+
+        text = _text(result)
+        assert text == json.dumps(json.loads(text), separators=(",", ":"), ensure_ascii=False)
+        assert "Класс.Метод" in text
+        assert "Описание метода" in text
+        assert "\\u04" not in text
 
     @pytest.mark.asyncio
     async def test_inheritance_profile_maps_correctly(self):

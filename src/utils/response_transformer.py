@@ -116,11 +116,6 @@ def _build_match_dict(match: Dict) -> Dict[str, Any]:
     return entry
 
 
-# Backward-compatible aliases (deprecated)
-transform_search_response_to_json = transform_search_response
-transform_grep_response_to_json = transform_grep_response
-
-
 def _format_results(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     formatted_results: List[Dict[str, Any]] = []
     for result in results:

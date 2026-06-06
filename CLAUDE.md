@@ -118,7 +118,7 @@ This is a Model Context Protocol (MCP) server that provides AI clients with acce
 2. Client calls tools (`get_data_sources` → `semantic_search` / `grep_search` → `fetch_artifacts` / `get_artifact_relationships` → `chat` only if synthesis is still needed)
 3. Middleware chain runs: N8N cleanup → ObservabilityMiddleware (OTel span + log correlation)
 4. Tool translates MCP call to CodeAlive API request (with `X-CodeAlive-*` headers)
-5. Response parsed, formatted as XML or text, returned to AI client
+5. Response parsed and returned to the AI client — as a `dict` for metadata/discovery tools, as an XML string for `fetch_artifacts`, or as plain text for `chat`
 
 ### Environment Variables
 
@@ -172,6 +172,17 @@ This project uses **loguru** for structured JSON logging. All logs go to **stder
 
 7. **Use `logger.configure(patcher=...)` for global context injection** (like OTel trace_id). Do NOT pass `patcher` to `logger.add()` — loguru 0.7.x does not support it there.
 
+8. **Tool-call failures are warnings with full structured arguments.** Do not log MCP
+   tool-call failures as `error` unless the whole server process is failing. A bad
+   tool call is recoverable input for the model loop, same as backend agent tools.
+   Log it as `logger.warning(..., tool_arguments={...})` or with `.bind(tool_arguments=...)`.
+   Do not redact `tool_arguments` in the logger path; the purpose is to recover the
+   exact failing invocation. Authorization headers remain masked via `log_api_request()`.
+
+9. **Tool-call lifecycle logs are debug.** The per-tool "started" and "completed"
+   messages from `ObservabilityMiddleware` must be `logger.debug`, not `logger.info`.
+   Info-level logs should not be emitted for every agent step/tool step.
+
 ### OTel Trace Correlation
 
 Every log record automatically gets `trace_id` and `span_id` injected by `_otel_patcher` (registered via `logger.configure`). The `ObservabilityMiddleware` also uses `logger.contextualize(trace_id=..., tool=...)` so all logs within a tool call carry the correlation ID. Do not duplicate this — it's automatic.
@@ -194,29 +205,79 @@ The `ObservabilityMiddleware` creates a span per tool call with these attributes
 
 On errors, the span gets `StatusCode.ERROR` + `record_exception()`. Do not add redundant span creation inside tool functions — the middleware handles it.
 
+#### Required MCP observability fix pattern
+
+When touching MCP tool observability, update both the generic middleware and the
+tool-specific body:
+
+- In `src/middleware/observability_middleware.py`, extract tool arguments from
+  the incoming `tools/call` message (FastMCP currently exposes this through the
+  message payload; keep the extraction defensive). Add them to the log context,
+  e.g. `with logger.contextualize(trace_id=trace_id, tool=tool_name,
+  tool_arguments=tool_arguments): ...`.
+- Change middleware lifecycle logs:
+  - `logger.info("Tool call started...")` -> `logger.debug(...)`
+  - `logger.info("Tool call completed...")` -> `logger.debug(...)`
+  - `logger.error("Tool call failed...")` -> `logger.warning(...,
+    tool_arguments=tool_arguments)`
+- Keep OTel span semantics unchanged: failed tool calls should still set
+  `StatusCode.ERROR` and `record_exception(exc)` because tracing represents the
+  tool invocation outcome, while logs use Warning to avoid misclassifying a
+  recoverable model/tool-call error as a server crash.
+- In each tool body, log in-band validation failures before raising `ToolError`.
+  Include all tool parameters in `tool_arguments`.
+
+Concrete example: `src/tools/artifact_relationships.py::get_artifact_relationships`
+must log these branches as Warning with full arguments:
+
+```python
+tool_arguments = {
+    "identifier": identifier,
+    "profile": profile,
+    "max_count_per_type": max_count_per_type,
+}
+```
+
+- missing/empty `identifier`
+- `max_count_per_type` outside `1..1000`
+- unsupported `profile` fallback branch
+- backend `HTTPStatusError` / unexpected exception before delegating to
+  `handle_api_error(...)`
+
+The API request/response helpers stay `Debug` and keep their existing masking
+rules. Do not put raw response bodies into warning logs.
+
 ### Adding New Tools — Observability Checklist
 
 When adding a new tool, ensure:
 1. The tool receives `ctx: Context` as its first argument (required for lifespan context and logging)
 2. API requests include all four `X-CodeAlive-*` headers: `Integration`, `Tool`, `Client`, plus `Authorization`
 3. Call `log_api_request()` before and `log_api_response()` after the HTTP call
-4. Errors go through `handle_api_error(ctx, e, "description", method=_TOOL_NAME)` — this ensures the `[tool_name]` prefix in error messages
+4. Errors are logged as Warning with full `tool_arguments` before they go through `handle_api_error(ctx, e, "description", method=_TOOL_NAME)` — this ensures the `[tool_name]` prefix in error messages and preserves the exact failed call in logs
 5. The middleware automatically wraps the tool in an OTel span — no manual span creation needed
 
 ## Tool Response Conventions
 
-### Response format: dict for metadata, XML for content
+### Response format: dict for metadata/discovery, XML only for source code
 
-Tools that return **search metadata** (identifiers, match counts, line numbers)
-return a `dict`. FastMCP serializes it automatically via `pydantic_core.to_json`,
-which preserves Unicode — no manual `json.dumps()` needed. Examples:
-`semantic_search`, `grep_search`, `codebase_search`.
+Tools that return **structured metadata** (identifiers, match counts, line
+numbers, relationship groups, data source listings) return a `dict` (or list of
+dicts). FastMCP serializes it automatically via `pydantic_core.to_json`, which
+preserves Unicode — no manual `json.dumps()` needed. Examples:
+`semantic_search`, `grep_search`, `codebase_search`, `get_data_sources`,
+`get_artifact_relationships`.
 
-Tools that return **source code content** return an **XML string**. XML tags give
-the LLM clear structural boundaries between artifacts, content blocks, and
-relationships — this is critical for accurate reasoning over multi-artifact
-responses. **Do not convert `fetch_artifacts` or `get_artifact_relationships`
-to dict/JSON** — the XML structure is intentional.
+**Never call `json.dumps(...)` from a tool's return path.** Python's `json.dumps`
+defaults to `ensure_ascii=True` and escapes Cyrillic/CJK/etc. to `\uXXXX`.
+Returning a `dict` lets FastMCP route through `pydantic_core.to_json`, which
+emits UTF-8. If you must serialize manually for some reason, pass
+`ensure_ascii=False` explicitly.
+
+Only `fetch_artifacts` returns an **XML string**. XML tags give the LLM clear
+structural boundaries between artifacts, content blocks, and inline
+relationships when streaming source code — this is critical for accurate
+reasoning over multi-artifact responses. **Do not convert `fetch_artifacts` to
+dict/JSON** — the XML structure is intentional.
 
 ### Hint other MCP tools when the response implies a follow-up call
 

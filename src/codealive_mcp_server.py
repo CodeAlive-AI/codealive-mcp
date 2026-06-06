@@ -80,6 +80,9 @@ mcp = FastMCP(
     - Use specific function/class names or file path scopes when looking for particular implementations
     - Treat `semantic_search` and `grep_search` as the default discovery tools
     - Prefer `semantic_search` over the deprecated `codebase_search` legacy alias
+    - Use `get_artifact_relationships` only with exact artifact identifiers from prior search/fetch results.
+      It expands a known artifact's relationship graph; it does not search by path, class name, or guessed symbol.
+      For exact source code, call `fetch_artifacts` on identifiers returned by search or relationships.
     - Remember that context from previous messages is maintained in the same conversation
 
     Flexible data source usage:

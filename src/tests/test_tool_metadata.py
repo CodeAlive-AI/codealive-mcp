@@ -35,3 +35,11 @@ async def test_all_tools_are_marked_read_only_with_titles():
         assert tool.title == title
         assert tool.annotations is not None
         assert tool.annotations.readOnlyHint is True
+
+    relationships_description = actual["get_artifact_relationships"].description
+    assert relationships_description is not None
+    assert "exact artifact identifier" in relationships_description
+    assert "not a search tool" in relationships_description
+    assert "fetch_artifacts" in relationships_description
+    assert "excludes references" in relationships_description
+    assert "Mediated or dynamic frameworks" in relationships_description

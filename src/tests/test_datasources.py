@@ -1,6 +1,5 @@
 """Tests for data sources tool."""
 
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -50,11 +49,10 @@ async def test_get_data_sources_removes_repository_ids_from_workspaces(mock_get_
 
     mock_ctx.request_context.lifespan_context = mock_lifespan_context
 
-    # Call the function
+    # Tool returns a dict {"dataSources":[...], "hint":"..."}.
     result = await get_data_sources(mock_ctx, alive_only=True)
-
-    # Result is a compact JSON array
-    data_sources = json.loads(result)
+    data_sources = result["dataSources"]
+    assert "hint" in result
 
     # Verify repository still has all fields
     repo = next(ds for ds in data_sources if ds["type"] == "Repository")
@@ -116,11 +114,8 @@ async def test_get_data_sources_preserves_other_workspace_fields(mock_get_api_ke
 
     mock_ctx.request_context.lifespan_context = mock_lifespan_context
 
-    # Call the function
     result = await get_data_sources(mock_ctx, alive_only=True)
-
-    # Result is compact JSON array
-    data_sources = json.loads(result)
+    data_sources = result["dataSources"]
 
     workspace = data_sources[0]
 
@@ -167,11 +162,9 @@ async def test_get_data_sources_handles_missing_repository_ids(mock_get_api_key)
 
     mock_ctx.request_context.lifespan_context = mock_lifespan_context
 
-    # Call the function - should not raise an error
+    # Should not raise an error
     result = await get_data_sources(mock_ctx, alive_only=True)
-
-    # Result is compact JSON array
-    data_sources = json.loads(result)
+    data_sources = result["dataSources"]
 
     # Verify workspace is intact
     workspace = data_sources[0]
@@ -244,7 +237,7 @@ async def test_get_data_sources_surfaces_relevance_reason(mock_get_api_key):
 
     result = await get_data_sources(mock_ctx, alive_only=True, query="checkout")
 
-    payload = json.loads(result)
+    payload = result
     assert payload["dataSources"][0]["relevanceReason"] == "implements the checkout flow"
 
 
@@ -260,7 +253,7 @@ async def test_get_data_sources_filtered_hint_reports_total_and_omitted(mock_get
 
     result = await get_data_sources(mock_ctx, alive_only=True, query="checkout")
 
-    payload = json.loads(result)
+    payload = result
     assert len(payload["dataSources"]) == 1
     assert "1 of 25" in payload["message"]
     assert "omitted" in payload["message"].lower()
@@ -278,7 +271,7 @@ async def test_get_data_sources_filtered_hint_without_total_header(mock_get_api_
 
     result = await get_data_sources(mock_ctx, alive_only=True, query="checkout")
 
-    payload = json.loads(result)
+    payload = result
     assert "omitted" in payload["message"].lower()
     assert "without a query" in payload["message"].lower()
 
@@ -295,7 +288,7 @@ async def test_get_data_sources_all_relevant_hint_reports_no_omission(mock_get_a
 
     result = await get_data_sources(mock_ctx, alive_only=True, query="checkout")
 
-    payload = json.loads(result)
+    payload = result
     assert "all 1" in payload["message"].lower()
     assert "omitted" not in payload["message"].lower()
 
@@ -313,7 +306,7 @@ async def test_get_data_sources_failopen_hint_when_no_reasons_present(mock_get_a
 
     result = await get_data_sources(mock_ctx, alive_only=True, query="checkout")
 
-    payload = json.loads(result)
+    payload = result
     assert len(payload["dataSources"]) == 2
     assert "unavailable" in payload["message"].lower()
     assert "full" in payload["message"].lower()
@@ -321,28 +314,26 @@ async def test_get_data_sources_failopen_hint_when_no_reasons_present(mock_get_a
 
 @pytest.mark.asyncio
 @patch('tools.datasources.get_api_key_from_context')
-async def test_get_data_sources_empty_with_query_returns_no_relevant_message(mock_get_api_key):
-    """Empty result WITH a query returns a 'no relevant' message, not 'add a repository'."""
+async def test_get_data_sources_empty_with_query_returns_no_relevant_hint(mock_get_api_key):
+    """Empty result WITH a query returns a 'no relevant' hint, not 'add a repository'."""
     mock_get_api_key.return_value = "test-key"
     mock_ctx, _ = _ctx_with_response([])
 
     result = await get_data_sources(mock_ctx, alive_only=True, query="something unrelated")
 
-    payload = json.loads(result)
-    assert payload["dataSources"] == []
-    assert "relevant" in payload["message"].lower()
-    assert "add a repository" not in payload["message"].lower()
+    assert result["dataSources"] == []
+    assert "relevant" in result["hint"].lower()
+    assert "add a repository" not in result["hint"].lower()
 
 
 @pytest.mark.asyncio
 @patch('tools.datasources.get_api_key_from_context')
-async def test_get_data_sources_empty_without_query_keeps_add_repository_message(mock_get_api_key):
-    """Empty result WITHOUT a query keeps the existing 'add a repository' message."""
+async def test_get_data_sources_empty_without_query_keeps_add_repository_hint(mock_get_api_key):
+    """Empty result WITHOUT a query keeps the existing 'add a repository' hint."""
     mock_get_api_key.return_value = "test-key"
     mock_ctx, _ = _ctx_with_response([])
 
     result = await get_data_sources(mock_ctx, alive_only=True)
 
-    payload = json.loads(result)
-    assert payload["dataSources"] == []
-    assert "add a repository" in payload["message"].lower()
+    assert result["dataSources"] == []
+    assert "add a repository" in result["hint"].lower()
