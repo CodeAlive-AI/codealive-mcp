@@ -95,6 +95,12 @@ def transform_grep_response(grep_results: Dict[str, Any]) -> Dict[str, Any]:
             item["matches"] = [
                 _build_match_dict(match) for match in result["matches"]
             ]
+        # Forward matchedByName only when the backend set it (name-only hits).
+        # The backend omits the field for content matches via System.Text.Json
+        # WhenWritingNull, so `get("matchedByName")` is None/missing for those
+        # and we skip it here to keep the happy path free of an extra key.
+        if result.get("matchedByName"):
+            item["matchedByName"] = True
         formatted_results.append(item)
 
     if not formatted_results:

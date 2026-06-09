@@ -354,3 +354,49 @@ class TestResponseTransformer:
         line = result["results"][0]["matches"][0]["lineText"]
         assert "ТипШтрихкода" in line
         assert "GS1_DataMatrix" in line
+
+    def test_grep_forwards_matched_by_name_flag(self):
+        """Name-only hits must carry matchedByName=True through to the MCP output
+        so LLM agents can distinguish a file-level name match from a content match.
+        Content hits must NOT include the field (backend omits null via
+        JsonIgnoreCondition.WhenWritingNull; the transformer mirrors that)."""
+        response = {
+            "results": [
+                {
+                    "kind": "File",
+                    "identifier": "biterp/.../Ext/Form.xml",
+                    "location": {
+                        "path": "bsl-checks/src/test/resources/checks/VerifyMetadata/CommonForms/Форма/Ext/Form.xml",
+                        "range": {"start": {"line": 1}, "end": {"line": 1}},
+                    },
+                    "matchCount": 0,
+                    "matches": [],
+                    "matchedByName": True,
+                },
+                {
+                    "kind": "File",
+                    "identifier": "biterp/.../renames.txt",
+                    "location": {"path": "renames.txt"},
+                    "matchCount": 2,
+                    "matches": [
+                        {
+                            "lineNumber": 3,
+                            "startColumn": 1,
+                            "endColumn": 9,
+                            "lineText": "Form.xml -> Form2.xml",
+                        }
+                    ],
+                    # matchedByName intentionally absent — backend omits it for content hits
+                },
+            ]
+        }
+
+        result = transform_grep_response(response)
+
+        assert len(result["results"]) == 2
+        name_only, content_hit = result["results"]
+        assert name_only["matchedByName"] is True
+        assert name_only["matchCount"] == 0
+        assert "matches" not in name_only  # transformer only copies matches when non-empty
+        assert "matchedByName" not in content_hit
+        assert content_hit["matchCount"] == 2
