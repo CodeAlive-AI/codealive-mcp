@@ -10,7 +10,7 @@ This MCP (Model Context Protocol) server enables AI clients like Claude Code, Cu
 
 ## What is CodeAlive?
 
-CodeAlive is a Context Engine for large codebases, powered by graph-based retrieval and exposed through MCP. It gives AI agents like Cursor, Claude Code, Codex, and other MCP-compatible tools precise repository context instead of forcing them to read files blindly. In our 20-task RepoQA benchmark, CodeAlive + Qwen3.6 deep reached frontier-agent quality at ~25x lower model cost, and semantic search reduced captured benchmark tokens by 45%.
+CodeAlive is a Context Engine for large codebases, powered by graph-based retrieval and exposed through MCP. It gives AI agents like Cursor, Claude Code, Codex, and other MCP-compatible tools precise repository context instead of forcing them to read files blindly. In our RepoQA benchmark, CodeAlive + Qwen3.6 deep reached frontier-agent quality at ~25x lower model cost, and semantic search reduced captured tokens by 45%.
 
 It's like Context7, but for your (large) codebases.
 
