@@ -365,6 +365,39 @@ class TestBuildArtifactsXmlHint:
         assert "<hint>" not in result
 
 
+class TestBuildArtifactsXmlDataSourceMissHint:
+    """When a data_source was supplied but nothing was found, hint to retry or drop it."""
+
+    def test_hint_when_data_source_scoped_returns_nothing(self):
+        data = {"artifacts": [
+            {"identifier": "repo::a.ts::F", "content": None, "contentByteSize": None},
+        ]}
+        result = _build_artifacts_xml(data, data_source="repo (main)")
+        assert "<hint>" in result
+        assert "repo (main)" in result
+        # Guides toward the two recovery moves.
+        assert "data_source" in result
+        assert "omit" in result.lower()
+
+    def test_hint_when_empty_artifacts_and_data_source(self):
+        result = _build_artifacts_xml({"artifacts": []}, data_source="ds-main")
+        assert "ds-main" in result and "<hint>" in result
+
+    def test_no_miss_hint_when_data_source_resolved_content(self):
+        data = {"artifacts": [
+            {"identifier": "repo::a.ts::F", "content": "code", "contentByteSize": 4},
+        ]}
+        result = _build_artifacts_xml(data, data_source="repo (main)")
+        assert "omit data_source" not in result
+
+    def test_no_miss_hint_without_data_source(self):
+        data = {"artifacts": [
+            {"identifier": "repo::a.ts::F", "content": None, "contentByteSize": None},
+        ]}
+        result = _build_artifacts_xml(data)
+        assert "<hint>" not in result
+
+
 @pytest.mark.asyncio
 @patch('tools.fetch_artifacts.get_api_key_from_context')
 async def test_fetch_artifacts_returns_xml(mock_get_api_key):
@@ -476,6 +509,43 @@ async def test_fetch_artifacts_posts_correct_body(mock_get_api_key):
     body = call_args.kwargs["json"]
     assert body["identifiers"] == ["id1", "id2"]
     assert "names" not in body
+    # No data_source supplied => the field is omitted (preserves the 409-on-ambiguity fallback).
+    assert "dataSource" not in body
+
+
+@pytest.mark.asyncio
+@patch('tools.fetch_artifacts.get_api_key_from_context')
+async def test_fetch_artifacts_forwards_data_source(mock_get_api_key):
+    """data_source (Name or Id) is forwarded as the DataSource body field when provided."""
+    mock_get_api_key.return_value = "test_key"
+
+    ctx = MagicMock(spec=Context)
+    ctx.info = AsyncMock()
+    ctx.warning = AsyncMock()
+    ctx.error = AsyncMock()
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"artifacts": []}
+    mock_response.raise_for_status = MagicMock()
+
+    mock_client = AsyncMock()
+    mock_client.post.return_value = mock_response
+
+    mock_codealive_context = MagicMock()
+    mock_codealive_context.client = mock_client
+    mock_codealive_context.base_url = "https://app.codealive.ai"
+
+    ctx.request_context.lifespan_context = mock_codealive_context
+    ctx.request_context.headers = {"authorization": "Bearer test_key"}
+
+    await fetch_artifacts(
+        ctx=ctx,
+        identifiers=["id1"],
+        data_source="repo (main)",
+    )
+
+    body = mock_client.post.call_args.kwargs["json"]
+    assert body["dataSource"] == "repo (main)"
 
 
 @pytest.mark.asyncio

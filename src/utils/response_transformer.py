@@ -171,6 +171,20 @@ def _build_result_dict(path: str, result: Dict) -> Dict[str, Any]:
     if result.get("identifier"):
         info["identifier"] = result["identifier"]
 
+    # Surface the data source identity (id + name) so the agent can disambiguate a branch-blind
+    # identifier — the same repo indexed on two branches yields identical identifiers across data
+    # sources. Either value can be passed back as `data_source` to fetch_artifacts /
+    # get_artifact_relationships. (Previously this field was stripped here.)
+    data_source = result.get("dataSource")
+    if isinstance(data_source, dict):
+        ds_info: Dict[str, Any] = {}
+        if data_source.get("id"):
+            ds_info["id"] = data_source["id"]
+        if data_source.get("name"):
+            ds_info["name"] = data_source["name"]
+        if ds_info:
+            info["dataSource"] = ds_info
+
     if result.get("contentByteSize") is not None:
         info["contentByteSize"] = result["contentByteSize"]
 
