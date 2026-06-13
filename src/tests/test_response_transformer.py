@@ -314,14 +314,14 @@ class TestResponseTransformer:
                     "matches": [
                         {"lineNumber": 3, "startColumn": 0, "endColumn": 4, "lineText": "auth"}
                     ],
-                    "dataSource": {"type": "repository", "id": "ds-main", "name": "repo (main)"},
+                    "dataSource": {"type": "repository", "id": "ds-main", "name": "backend"},
                 }
             ]
         }
 
         result = transform_grep_response(response)
 
-        assert result["results"][0]["dataSource"] == {"id": "ds-main", "name": "repo (main)"}
+        assert result["results"][0]["dataSource"] == {"id": "ds-main", "name": "backend"}
 
     def test_grep_transform_preserves_match_previews(self):
         response = {

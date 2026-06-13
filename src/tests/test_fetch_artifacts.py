@@ -372,9 +372,9 @@ class TestBuildArtifactsXmlDataSourceMissHint:
         data = {"artifacts": [
             {"identifier": "repo::a.ts::F", "content": None, "contentByteSize": None},
         ]}
-        result = _build_artifacts_xml(data, data_source="repo (main)")
+        result = _build_artifacts_xml(data, data_source="backend")
         assert "<hint>" in result
-        assert "repo (main)" in result
+        assert "backend" in result
         # Guides toward the two recovery moves.
         assert "data_source" in result
         assert "omit" in result.lower()
@@ -387,7 +387,7 @@ class TestBuildArtifactsXmlDataSourceMissHint:
         data = {"artifacts": [
             {"identifier": "repo::a.ts::F", "content": "code", "contentByteSize": 4},
         ]}
-        result = _build_artifacts_xml(data, data_source="repo (main)")
+        result = _build_artifacts_xml(data, data_source="backend")
         assert "omit data_source" not in result
 
     def test_no_miss_hint_without_data_source(self):
@@ -541,11 +541,49 @@ async def test_fetch_artifacts_forwards_data_source(mock_get_api_key):
     await fetch_artifacts(
         ctx=ctx,
         identifiers=["id1"],
-        data_source="repo (main)",
+        data_source="backend",
     )
 
     body = mock_client.post.call_args.kwargs["json"]
-    assert body["dataSource"] == "repo (main)"
+    assert body["dataSource"] == "backend"
+
+
+@pytest.mark.asyncio
+@patch('tools.fetch_artifacts.get_api_key_from_context')
+async def test_fetch_artifacts_whitespace_data_source_omitted(mock_get_api_key):
+    """A whitespace-only data_source normalizes to None: not sent to the backend
+    and not echoed in the not-found hint (preserves the 409-on-ambiguity fallback)."""
+    mock_get_api_key.return_value = "test_key"
+
+    ctx = MagicMock(spec=Context)
+    ctx.info = AsyncMock()
+    ctx.warning = AsyncMock()
+    ctx.error = AsyncMock()
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"artifacts": []}
+    mock_response.raise_for_status = MagicMock()
+
+    mock_client = AsyncMock()
+    mock_client.post.return_value = mock_response
+
+    mock_codealive_context = MagicMock()
+    mock_codealive_context.client = mock_client
+    mock_codealive_context.base_url = "https://app.codealive.ai"
+
+    ctx.request_context.lifespan_context = mock_codealive_context
+    ctx.request_context.headers = {"authorization": "Bearer test_key"}
+
+    result = await fetch_artifacts(
+        ctx=ctx,
+        identifiers=["id1"],
+        data_source="   ",
+    )
+
+    body = mock_client.post.call_args.kwargs["json"]
+    assert "dataSource" not in body
+    # The confusing `... data source "   "` hint must not appear.
+    assert '"   "' not in result
 
 
 @pytest.mark.asyncio

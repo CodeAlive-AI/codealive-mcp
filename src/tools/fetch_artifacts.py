@@ -81,6 +81,11 @@ async def fetch_artifacts(
     # deferred tools, LiveKit agents, etc.) into a proper Python list.
     identifiers = coerce_stringified_list(identifiers)
 
+    # Normalize the optional selector: treat empty/whitespace-only as "no selector"
+    # so we don't send a junk dataSource to the backend or echo it in the not-found hint.
+    if data_source is not None:
+        data_source = data_source.strip() or None
+
     if not identifiers:
         raise ToolError(f"[{_TOOL_NAME}] At least one identifier is required.")
 

@@ -112,6 +112,12 @@ async def get_artifact_relationships(
         "data_source": data_source,
     }
 
+    # Normalize the optional selector: treat empty/whitespace-only as "no selector"
+    # so we don't send a junk dataSource to the backend or echo it in the not-found hint.
+    # (tool_arguments above intentionally keeps the raw value for exact-invocation logging.)
+    if data_source is not None:
+        data_source = data_source.strip() or None
+
     if not identifier:
         logger.bind(tool=_TOOL_NAME, tool_arguments=tool_arguments).warning(
             "Tool validation failed: artifact identifier is required"
