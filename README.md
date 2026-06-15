@@ -28,7 +28,7 @@ Once connected, you'll have access to these powerful tools:
 1. **`get_data_sources`** - List your indexed repositories and workspaces
 2. **`semantic_search`** - Canonical semantic search across indexed artifacts
 3. **`grep_search`** - Exact literal or regex text search inside file content, plus literal file-name/path matching (returns files like `Form.xml` even when their content never mentions the name), with line-level previews for content matches
-4. **`fetch_artifacts`** - Load the full source for relevant search hits
+4. **`fetch_artifacts`** - Load the full source for relevant search hits (missing or inaccessible identifiers are reported back in a `<not_found>` block, not silently dropped)
 5. **`get_artifact_relationships`** - Expand call graph, inheritance, and reference relationships for one artifact
 6. **`chat`** - Slower synthesized codebase Q&A, typically only after search
 7. **`codebase_search`** - Deprecated legacy semantic search alias kept for backward compatibility

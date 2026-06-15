@@ -204,7 +204,11 @@ class TestBuildArtifactsXmlRelationships:
         assert 'identifier="repo::src/b.ts::FuncB"/>' in result
         assert 'summary' not in result.split('FuncB')[1].split('/>')[0]
 
-    def test_relationships_summary_kept_raw(self):
+    def test_relationships_summary_xml_escaped(self):
+        # Summaries are AI-generated text placed in an XML *attribute*; like identifiers they must
+        # be escaped so a crafted summary cannot break out of the attribute and inject pseudo-XML
+        # into the model context. (Source-code *content* stays raw — that is the <content> body,
+        # not an attribute; see test_content_is_not_html_escaped.)
         data = {"artifacts": [{
             "identifier": "repo::src/a.ts::FuncA",
             "content": "code",
@@ -219,10 +223,29 @@ class TestBuildArtifactsXmlRelationships:
             }
         }]}
         result = _build_artifacts_xml(data)
-        # Raw special chars preserved (no HTML escaping)
-        assert "Checks if x < 10 & y > 5" in result
-        assert "&lt;" not in result
-        assert "&amp;" not in result
+        # Special chars in the attribute are escaped, and the raw unescaped form is gone.
+        assert "&lt;" in result
+        assert "&amp;" in result
+        assert "&gt;" in result
+        assert "x < 10 & y > 5" not in result
+
+    def test_relationships_summary_injection_is_neutralized(self):
+        # A crafted summary must not break out of the attribute and inject pseudo-XML.
+        data = {"artifacts": [{
+            "identifier": "repo::src/a.ts::FuncA",
+            "content": "code",
+            "contentByteSize": 4,
+            "relationships": {
+                "outgoingCallsCount": 1,
+                "outgoingCalls": [
+                    {"identifier": "repo::src/b.ts::FuncB", "summary": '"/><injected>x</injected><call summary="'},
+                ],
+                "incomingCallsCount": None,
+                "incomingCalls": None,
+            }
+        }]}
+        result = _build_artifacts_xml(data)
+        assert "<injected>" not in result
 
 
 class TestHasAnyCalls:
@@ -357,12 +380,16 @@ class TestBuildArtifactsXmlHint:
         assert result.count("<hint>") == 1
         assert result.count(self.HINT_MARKER) == 1
 
-    def test_hint_absent_when_no_artifacts_have_content(self):
+    def test_relationships_hint_absent_but_missing_surfaced_when_no_content(self):
+        # A not-found artifact produces no relationships preview hint (nothing to drill
+        # into), but it must still be surfaced — not silently dropped.
         data = {"artifacts": [
             {"identifier": "repo::missing.ts::Func", "content": None, "contentByteSize": None},
         ]}
         result = _build_artifacts_xml(data)
-        assert "<hint>" not in result
+        assert self.HINT_MARKER not in result
+        assert "<not_found" in result
+        assert "repo::missing.ts::Func" in result
 
 
 class TestBuildArtifactsXmlDataSourceMissHint:
@@ -390,12 +417,96 @@ class TestBuildArtifactsXmlDataSourceMissHint:
         result = _build_artifacts_xml(data, data_source="backend")
         assert "omit data_source" not in result
 
-    def test_no_miss_hint_without_data_source(self):
+    def test_no_data_source_miss_hint_without_data_source(self):
+        # Without a data_source selector there is no data-source-specific recovery hint,
+        # but the missing artifact is still surfaced in a <not_found> block.
         data = {"artifacts": [
             {"identifier": "repo::a.ts::F", "content": None, "contentByteSize": None},
         ]}
         result = _build_artifacts_xml(data)
-        assert "<hint>" not in result
+        assert "omit data_source" not in result
+        assert "<not_found" in result
+
+
+class TestBuildArtifactsXmlNotFound:
+    """Requested identifiers the backend could not resolve must be surfaced, not dropped."""
+
+    HINT = "could not be fetched"
+
+    def test_explicit_found_false_goes_to_not_found_block(self):
+        data = {"artifacts": [
+            {"identifier": "repo::a.ts::F", "found": True, "content": "code", "contentByteSize": 4},
+            {"identifier": "repo::missing.ts::G", "found": False, "content": None},
+        ]}
+        result = _build_artifacts_xml(data)
+        assert '<not_found count="1">' in result
+        assert 'identifier="repo::missing.ts::G"' in result
+        # the found sibling is still rendered as a normal artifact
+        assert '<artifact identifier="repo::a.ts::F"' in result
+        assert self.HINT in result.lower()
+
+    def test_legacy_null_content_without_found_flag_is_surfaced(self):
+        data = {"artifacts": [
+            {"identifier": "repo::missing.ts::G", "content": None},
+        ]}
+        result = _build_artifacts_xml(data)
+        assert "<not_found" in result
+        assert 'identifier="repo::missing.ts::G"' in result
+
+    def test_found_true_empty_content_renders_as_artifact_not_missing(self):
+        data = {"artifacts": [
+            {"identifier": "repo::a.ts::F", "found": True, "content": ""},
+        ]}
+        result = _build_artifacts_xml(data)
+        assert '<artifact identifier="repo::a.ts::F"' in result
+        assert "<not_found" not in result
+
+    def test_found_true_null_content_renders_as_artifact_not_missing(self):
+        data = {"artifacts": [
+            {"identifier": "repo::a.ts::F", "found": True, "content": None},
+        ]}
+        result = _build_artifacts_xml(data)
+        assert '<artifact identifier="repo::a.ts::F"' in result
+        assert "<not_found" not in result
+
+    def test_all_found_emits_no_not_found_block(self):
+        data = {"artifacts": [
+            {"identifier": "repo::a.ts::F", "found": True, "content": "code", "contentByteSize": 4},
+        ]}
+        result = _build_artifacts_xml(data)
+        assert "<not_found" not in result
+
+    def test_requested_backstop_surfaces_id_backend_never_echoed(self):
+        data = {"artifacts": [
+            {"identifier": "repo::a.ts::F", "found": True, "content": "code", "contentByteSize": 4},
+        ]}
+        result = _build_artifacts_xml(data, requested=["repo::a.ts::F", "repo::ghost.ts::Z"])
+        assert '<not_found count="1">' in result
+        assert 'identifier="repo::ghost.ts::Z"' in result
+
+    def test_not_found_count_matches_rows(self):
+        data = {"artifacts": [
+            {"identifier": "repo::m1::A", "found": False, "content": None},
+            {"identifier": "repo::m2::B", "found": False, "content": None},
+        ]}
+        result = _build_artifacts_xml(data)
+        assert '<not_found count="2">' in result
+        assert 'identifier="repo::m1::A"' in result
+        assert 'identifier="repo::m2::B"' in result
+
+    def test_identifiers_are_xml_escaped(self):
+        # Crafted identifiers (caller/LLM-supplied, and any unmatched requested string lands in
+        # <not_found> via the backstop) must not break out of the XML attribute and inject
+        # pseudo-XML into the model context — neither in <artifact> nor <not_found>.
+        data = {"artifacts": [
+            {"identifier": 'r::ok"><x>::F', "found": True, "content": "code", "contentByteSize": 4},
+            {"identifier": 'r::bad"><injected>::G', "found": False, "content": None},
+        ]}
+        result = _build_artifacts_xml(data)
+        assert "<injected>" not in result
+        assert "<x>" not in result
+        assert "&quot;&gt;&lt;injected&gt;" in result
+        assert "&quot;&gt;&lt;x&gt;" in result
 
 
 @pytest.mark.asyncio
@@ -450,8 +561,10 @@ async def test_fetch_artifacts_returns_xml(mock_get_api_key):
     assert "2 |     return True" in result
     assert 'contentByteSize="38"' in result
     assert 'identifier="owner/repo::src/auth.py::login"' in result
-    # Not-found artifact is skipped (not in output)
-    assert "missing.py" not in result
+    # Not-found artifact is surfaced in a <not_found> block, not silently dropped.
+    assert "<not_found" in result
+    assert 'identifier="owner/repo::src/missing.py::func"' in result
+    assert "could not be fetched" in result.lower()
 
 
 @pytest.mark.asyncio

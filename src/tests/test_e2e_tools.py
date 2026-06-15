@@ -815,6 +815,47 @@ class TestFetchArtifactsE2E:
         assert "\n    </content>" in xml
 
     @pytest.mark.asyncio
+    async def test_not_found_surfaced_with_found_flag(self):
+        payload = {
+            "artifacts": [
+                {"identifier": "org/repo::src/auth.py::AuthService", "found": True,
+                 "content": "class AuthService:\n    pass\n", "contentByteSize": 28, "startLine": 10},
+                {"identifier": "org/repo::src/missing.py::Gone", "found": False, "content": None},
+            ]
+        }
+        mcp = _server({"/api/search/artifacts": lambda r: httpx.Response(200, json=payload)})
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "fetch_artifacts",
+                {"identifiers": ["org/repo::src/auth.py::AuthService", "org/repo::src/missing.py::Gone"]},
+            )
+
+        xml = _text(result)
+        assert "<not_found" in xml
+        assert 'identifier="org/repo::src/missing.py::Gone"' in xml
+        assert "could not be fetched" in xml.lower()
+        # the found one is still rendered
+        assert "class AuthService" in xml
+
+    @pytest.mark.asyncio
+    async def test_not_found_surfaced_legacy_null_content(self):
+        # Older backend without the `found` flag: null content still surfaces as not-found.
+        payload = {
+            "artifacts": [
+                {"identifier": "org/repo::src/missing.py::Gone", "content": None, "contentByteSize": None},
+            ]
+        }
+        mcp = _server({"/api/search/artifacts": lambda r: httpx.Response(200, json=payload)})
+        async with Client(mcp) as client:
+            result = await client.call_tool(
+                "fetch_artifacts", {"identifiers": ["org/repo::src/missing.py::Gone"]},
+            )
+
+        xml = _text(result)
+        assert "<not_found" in xml
+        assert 'identifier="org/repo::src/missing.py::Gone"' in xml
+
+    @pytest.mark.asyncio
     async def test_empty_identifiers_returns_error(self):
         mcp = _server({})
         async with Client(mcp) as client:

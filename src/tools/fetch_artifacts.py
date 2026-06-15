@@ -13,6 +13,20 @@ from utils import coerce_stringified_list, handle_api_error
 # MCP tool/method name surfaced in every error/log message from this module.
 _TOOL_NAME = "fetch_artifacts"
 
+# Emitted alongside a <not_found> block so the agent never silently drops a requested
+# artifact. Lists the concrete missing identifiers (in the block) and tells the agent to
+# re-check those ids and retry the problematic ones. Parallel to search.py's _SEARCH_EMPTY_HINT.
+_NOT_FOUND_HINT = (
+    "{count} requested identifier(s) returned no accessible artifact and are listed under "
+    "<not_found> above. Do NOT silently omit them from your answer. A <not_found> entry means "
+    "the identifier did not resolve, or points outside the data sources this key can read — it "
+    "is NOT proof the code is absent. Required next steps: (1) re-check those exact identifiers "
+    "for typos or staleness; (2) re-run semantic_search or grep_search to obtain fresh, valid "
+    "identifiers, then call fetch_artifacts again for those problematic ids; (3) if they still "
+    "cannot be retrieved, explicitly tell the user which artifacts could not be fetched — do not "
+    "pretend they don't exist."
+)
+
 
 async def fetch_artifacts(
     ctx: Context,
@@ -62,7 +76,10 @@ async def fetch_artifacts(
           </artifact>
         </artifacts>
 
-        Only artifacts with content are included in the response.
+        Requested identifiers the backend could not resolve (or that are outside your
+        access scope) are NOT dropped silently — they are listed in a
+        <not_found count="N"> block with each concrete identifier, plus a hint to re-check
+        those ids and retry the problematic ones.
         The `<relationships>` element shows the artifact's call graph:
         - **outgoing_calls**: functions this artifact calls (its dependencies)
         - **incoming_calls**: functions that call this artifact (its blast radius)
@@ -126,7 +143,7 @@ async def fetch_artifacts(
         artifacts_data = response.json()
 
         # Build XML output
-        return _build_artifacts_xml(artifacts_data, data_source=data_source)
+        return _build_artifacts_xml(artifacts_data, data_source=data_source, requested=identifiers)
 
     except (httpx.HTTPStatusError, Exception) as e:
         # handle_api_error raises ToolError → MCP response gets isError: true
@@ -166,41 +183,83 @@ def _add_line_numbers(content: str, start_line: int = 1) -> str:
     return "\n".join(numbered)
 
 
-def _build_artifacts_xml(data: dict, data_source: str | None = None) -> str:
+def _escape_attr(value: str) -> str:
+    """Escape a value for safe inclusion in an XML attribute (identifiers).
+
+    Identifiers are caller-supplied — and in the MCP setting the "caller" is an
+    untrusted LLM/user — and they are reflected straight back into the model's context
+    (especially in the <not_found> block, which echoes any unmatched requested string via
+    the backstop). An un-escaped quote or angle bracket would let a crafted identifier break
+    out of the attribute and inject pseudo-XML. Mirrors the C# wrapper's
+    XmlToolResultFormatter.EscapeAttr. Source-code *content* is intentionally NOT escaped
+    (see <content>); this helper is for attribute values only.
+    """
+    return (
+        value.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def _build_artifacts_xml(
+    data: dict,
+    data_source: str | None = None,
+    requested: list[str] | None = None,
+) -> str:
     """Build XML representation of fetched artifacts.
 
-    Backend DTO: Identifier (string), Content (string?), ContentByteSize (long?),
-    Relationships (object?).
-    Content is null when artifact is not found or has no content.
-    Only artifacts with content are included in output.
+    Backend DTO: Identifier (string), Found (bool), Content (string?),
+    ContentByteSize (long?), Relationships (object?).
+
+    A requested identifier that the backend could not resolve — or that points outside
+    the caller's access scope — comes back with ``found: false`` (older backends omit
+    the flag and return ``content: null``). Such identifiers are NOT dropped silently:
+    they are collected into a ``<not_found count="N">`` block listing each concrete
+    identifier, followed by ``_NOT_FOUND_HINT`` telling the agent to re-check the ids and
+    retry the problematic ones — otherwise the user silently loses a requested artifact.
+    A ``found: true`` artifact with empty content is still rendered as a normal
+    ``<artifact>`` (it was located; it just has no extractable body).
 
     Content is emitted raw (no HTML escaping) and wrapped between newlines so the
     LLM sees the source code exactly as-is.
 
-    When ``data_source`` was supplied and nothing was found, emit a recovery hint:
-    the identifier may live in a different data source, or the selector may be wrong —
-    so the agent can retry with another data source or drop the selector entirely.
+    When ``data_source`` was supplied and nothing was found, an additional recovery hint
+    suggests the identifier may live in a different data source, or the selector is wrong.
+    ``requested`` is the original identifier list; it backstops the diff so an id the
+    backend never echoed back is still surfaced as not-found.
     """
     xml_parts = ["<artifacts>"]
 
     has_any_relationships = False
     emitted = 0
+    returned_identifiers: set[str] = set()
+    not_found: list[str] = []
     artifacts = data.get("artifacts", [])
     for artifact in artifacts:
+        identifier = artifact.get("identifier", "")
+        if identifier:
+            returned_identifiers.add(identifier)
+
         content = artifact.get("content")
-        if content is None:
+        # Prefer the backend's explicit `found` flag; fall back to content-is-null for
+        # older backends that don't emit it yet.
+        found = artifact.get("found")
+        is_missing = (found is False) if found is not None else (content is None)
+        if is_missing:
+            if identifier:
+                not_found.append(identifier)
             continue
 
         emitted += 1
-        identifier = artifact.get("identifier", "")
         content_byte_size = artifact.get("contentByteSize")
 
-        attrs = [f'identifier="{identifier}"']
+        attrs = [f'identifier="{_escape_attr(identifier)}"']
         if content_byte_size is not None:
             attrs.append(f'contentByteSize="{content_byte_size}"')
 
         start_line = artifact.get("startLine") or 1
-        numbered_content = _add_line_numbers(content, start_line)
+        numbered_content = _add_line_numbers(content or "", start_line)
 
         xml_parts.append(f'  <artifact {" ".join(attrs)}>')
         xml_parts.append('    <content>')
@@ -217,6 +276,12 @@ def _build_artifacts_xml(data: dict, data_source: str | None = None) -> str:
 
         xml_parts.append('  </artifact>')
 
+    # Backstop: any requested identifier the backend never echoed back is also missing.
+    if requested:
+        for identifier in requested:
+            if identifier not in returned_identifiers and identifier not in not_found:
+                not_found.append(identifier)
+
     if has_any_relationships:
         xml_parts.append(
             '  <hint>The <relationships> above are a preview (up to 3 calls per '
@@ -225,9 +290,16 @@ def _build_artifacts_xml(data: dict, data_source: str | None = None) -> str:
             'an artifact identifier.</hint>'
         )
 
+    if not_found:
+        xml_parts.append(f'  <not_found count="{len(not_found)}">')
+        for identifier in not_found:
+            xml_parts.append(f'    <artifact identifier="{_escape_attr(identifier)}"/>')
+        xml_parts.append('  </not_found>')
+        xml_parts.append(f'  <hint>{_NOT_FOUND_HINT.format(count=len(not_found))}</hint>')
+
     if emitted == 0 and data_source:
         xml_parts.append(
-            f'  <hint>No artifacts were found in data source "{data_source}". The identifier may '
+            f'  <hint>No artifacts were found in data source "{_escape_attr(data_source)}". The identifier may '
             'belong to a different data source, or the data_source value may be wrong. Try: '
             '(1) re-run fetch_artifacts with data_source set to a different candidate (use the '
             '`dataSource` name or id from your search results, or call get_data_sources), or '
@@ -271,10 +343,10 @@ def _build_relationships_xml(relationships: dict) -> str | None:
                 summary = call.get("summary")
                 if summary is not None:
                     call_elements.append(
-                        f'        <call identifier="{call_id}" summary="{summary}"/>'
+                        f'        <call identifier="{_escape_attr(call_id)}" summary="{_escape_attr(summary)}"/>'
                     )
                 else:
-                    call_elements.append(f'        <call identifier="{call_id}"/>')
+                    call_elements.append(f'        <call identifier="{_escape_attr(call_id)}"/>')
 
         parts.append(f'      <{tag} count="{count}">')
         parts.extend(call_elements)

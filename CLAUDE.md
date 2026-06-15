@@ -297,6 +297,11 @@ Examples in this repo:
   whenever an artifact has call relationships, telling the agent it can drill
   down further. Implementation: `_build_artifacts_xml` in
   `src/tools/fetch_artifacts.py`.
+- `fetch_artifacts` also emits a `<not_found count="N">` block plus a `<hint>`
+  (`_NOT_FOUND_HINT`) whenever a requested identifier is missing or inaccessible —
+  it relies on the backend `found` flag, falling back to `content is null` and a
+  requested-vs-returned diff so it never silently drops a requested artifact.
+  Implementation: `_build_artifacts_xml` in `src/tools/fetch_artifacts.py`.
 
 When you add or change a tool whose output is structurally a "pointer" to data
 held by another tool (identifiers, IDs, references), add or update the hint in
