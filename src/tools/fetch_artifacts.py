@@ -1,6 +1,6 @@
 """Fetch artifacts tool implementation."""
 
-from typing import List, Union
+from typing import List, Optional, Union
 from urllib.parse import urljoin
 
 import httpx
@@ -17,6 +17,7 @@ _TOOL_NAME = "fetch_artifacts"
 async def fetch_artifacts(
     ctx: Context,
     identifiers: Union[str, List[str]],
+    data_source: Optional[str] = None,
 ) -> str:
     """
     Retrieve the full content of code artifacts by their identifiers.
@@ -38,6 +39,12 @@ async def fetch_artifacts(
                        Symbol:  "my-org/backend::src/services/auth.py::AuthService.validate_token(token: str)"
                        File:    "my-org/backend::src/services/auth.py"
                        Chunk:   "my-org/backend::README.md::0042"
+
+        data_source: Optional data-source Name or Id used to disambiguate an identifier that
+                     exists in more than one data source. Copy the `dataSource.name` or
+                     `dataSource.id` from the search result you want. Omit it for normal lookups;
+                     if an identifier is ambiguous and you omit it, the backend returns a 409
+                     listing the candidate data sources.
 
     Returns:
         XML with full content and call relationships for each found artifact:
@@ -74,6 +81,11 @@ async def fetch_artifacts(
     # deferred tools, LiveKit agents, etc.) into a proper Python list.
     identifiers = coerce_stringified_list(identifiers)
 
+    # Normalize the optional selector: treat empty/whitespace-only as "no selector"
+    # so we don't send a junk dataSource to the backend or echo it in the not-found hint.
+    if data_source is not None:
+        data_source = data_source.strip() or None
+
     if not identifiers:
         raise ToolError(f"[{_TOOL_NAME}] At least one identifier is required.")
 
@@ -92,6 +104,8 @@ async def fetch_artifacts(
         }
 
         body = {"identifiers": identifiers}
+        if data_source:
+            body["dataSource"] = data_source
 
         await ctx.info(f"Fetching {len(identifiers)} artifact(s)")
 
@@ -112,7 +126,7 @@ async def fetch_artifacts(
         artifacts_data = response.json()
 
         # Build XML output
-        return _build_artifacts_xml(artifacts_data)
+        return _build_artifacts_xml(artifacts_data, data_source=data_source)
 
     except (httpx.HTTPStatusError, Exception) as e:
         # handle_api_error raises ToolError → MCP response gets isError: true
@@ -123,6 +137,11 @@ async def fetch_artifacts(
                     "(1) verify the identifiers came from a recent semantic_search, grep_search, or codebase_search call (do not invent them), "
                     "(2) re-run semantic_search or grep_search to get fresh identifiers — the index may have changed, "
                     "(3) for local repos in your working directory, use Read() on the file path instead"
+                ),
+                409: (
+                    "(1) the identifier exists in more than one data source — see the candidate data sources in the Detail above; each one will resolve, "
+                    "(2) retry fetch_artifacts with data_source set to one candidate's Name or Id; if that data source isn't the one you want, retry with the next candidate, "
+                    "(3) do NOT invent a result — pick from the listed data sources"
                 ),
             },
         )
@@ -147,7 +166,7 @@ def _add_line_numbers(content: str, start_line: int = 1) -> str:
     return "\n".join(numbered)
 
 
-def _build_artifacts_xml(data: dict) -> str:
+def _build_artifacts_xml(data: dict, data_source: str | None = None) -> str:
     """Build XML representation of fetched artifacts.
 
     Backend DTO: Identifier (string), Content (string?), ContentByteSize (long?),
@@ -157,16 +176,22 @@ def _build_artifacts_xml(data: dict) -> str:
 
     Content is emitted raw (no HTML escaping) and wrapped between newlines so the
     LLM sees the source code exactly as-is.
+
+    When ``data_source`` was supplied and nothing was found, emit a recovery hint:
+    the identifier may live in a different data source, or the selector may be wrong —
+    so the agent can retry with another data source or drop the selector entirely.
     """
     xml_parts = ["<artifacts>"]
 
     has_any_relationships = False
+    emitted = 0
     artifacts = data.get("artifacts", [])
     for artifact in artifacts:
         content = artifact.get("content")
         if content is None:
             continue
 
+        emitted += 1
         identifier = artifact.get("identifier", "")
         content_byte_size = artifact.get("contentByteSize")
 
@@ -198,6 +223,16 @@ def _build_artifacts_xml(data: dict) -> str:
             'direction). To retrieve the full list, or to explore other relationship '
             'types (inheritance, references), call `get_artifact_relationships` with '
             'an artifact identifier.</hint>'
+        )
+
+    if emitted == 0 and data_source:
+        xml_parts.append(
+            f'  <hint>No artifacts were found in data source "{data_source}". The identifier may '
+            'belong to a different data source, or the data_source value may be wrong. Try: '
+            '(1) re-run fetch_artifacts with data_source set to a different candidate (use the '
+            '`dataSource` name or id from your search results, or call get_data_sources), or '
+            '(2) omit data_source entirely — if the identifier is ambiguous you then get a 409 '
+            'that lists the candidate data sources to choose from.</hint>'
         )
 
     xml_parts.append("</artifacts>")

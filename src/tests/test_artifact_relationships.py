@@ -372,6 +372,117 @@ class TestGetArtifactRelationshipsTool:
 
         call_args = mock_client.post.call_args
         assert call_args[1]["json"]["profile"] == "InheritanceOnly"
+        # No data_source supplied => omitted from the body.
+        assert "dataSource" not in call_args[1]["json"]
+
+    @pytest.mark.asyncio
+    @patch("tools.artifact_relationships.get_api_key_from_context")
+    async def test_forwards_data_source(self, mock_get_api_key):
+        mock_get_api_key.return_value = "test_key"
+
+        ctx = MagicMock(spec=Context)
+        ctx.debug = AsyncMock()
+        ctx.error = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "sourceIdentifier": "id",
+            "profile": "CallsOnly",
+            "found": True,
+            "relationships": [],
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = mock_response
+
+        mock_context = MagicMock()
+        mock_context.client = mock_client
+        mock_context.base_url = "https://app.codealive.ai"
+        ctx.request_context.lifespan_context = mock_context
+
+        await get_artifact_relationships(
+            ctx=ctx,
+            identifier="id",
+            data_source="backend",
+        )
+
+        assert mock_client.post.call_args[1]["json"]["dataSource"] == "backend"
+
+    @pytest.mark.asyncio
+    @patch("tools.artifact_relationships.get_api_key_from_context")
+    async def test_whitespace_data_source_omitted(self, mock_get_api_key):
+        """A whitespace-only data_source normalizes to None: not sent to the backend
+        and not echoed in the not-found hint (preserves the 409-on-ambiguity fallback)."""
+        mock_get_api_key.return_value = "test_key"
+
+        ctx = MagicMock(spec=Context)
+        ctx.debug = AsyncMock()
+        ctx.error = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.json.return_value = {
+            "sourceIdentifier": "id",
+            "profile": "CallsOnly",
+            "found": False,
+        }
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = mock_response
+
+        mock_context = MagicMock()
+        mock_context.client = mock_client
+        mock_context.base_url = "https://app.codealive.ai"
+        ctx.request_context.lifespan_context = mock_context
+
+        result = await get_artifact_relationships(
+            ctx=ctx,
+            identifier="id",
+            data_source="   ",
+        )
+
+        assert "dataSource" not in mock_client.post.call_args[1]["json"]
+        # The confusing `... in data source "   "` hint must not appear.
+        assert '"   "' not in result["hint"]
+
+    @pytest.mark.asyncio
+    @patch("tools.artifact_relationships.get_api_key_from_context")
+    async def test_ambiguous_409_surfaces_candidate_data_sources(self, mock_get_api_key):
+        import httpx
+
+        mock_get_api_key.return_value = "test_key"
+
+        ctx = MagicMock(spec=Context)
+        ctx.debug = AsyncMock()
+        ctx.error = AsyncMock()
+
+        mock_response = MagicMock()
+        mock_response.status_code = 409
+        mock_response.text = (
+            '{"detail": "Identifier matches 2 data sources: '
+            "Name='backend' Id='ds-main', Name='backend-legacy' Id='ds-master'\"}"
+        )
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "Conflict", request=MagicMock(), response=mock_response
+        )
+
+        mock_client = AsyncMock()
+        mock_client.post.return_value = mock_response
+
+        mock_context = MagicMock()
+        mock_context.client = mock_client
+        mock_context.base_url = "https://app.codealive.ai"
+        ctx.request_context.lifespan_context = mock_context
+
+        with pytest.raises(ToolError) as exc:
+            await get_artifact_relationships(ctx=ctx, identifier="org/repo::path::Symbol")
+
+        message = str(exc.value)
+        assert "409" in message
+        # The candidate data sources from the backend 409 must be surfaced, plus the data_source retry hint.
+        assert "backend" in message and "backend-legacy" in message
+        assert "data_source" in message
 
     @pytest.mark.asyncio
     async def test_empty_identifier_raises_tool_error(self):
@@ -446,3 +557,21 @@ class TestGetArtifactRelationshipsTool:
 
         assert data["found"] is False
         assert "relationships" not in data
+
+    def test_not_found_hint_with_data_source_suggests_retry_or_omit(self):
+        payload = _build_relationships_dict(
+            {"sourceIdentifier": "org/repo::path::S", "profile": "CallsOnly", "found": False},
+            data_source="backend",
+        )
+        hint = payload["hint"]
+        assert "backend" in hint
+        assert "data_source" in hint
+        assert "omit" in hint.lower()
+
+    def test_not_found_hint_without_data_source_is_generic(self):
+        payload = _build_relationships_dict(
+            {"sourceIdentifier": "org/repo::path::S", "profile": "CallsOnly", "found": False},
+        )
+        hint = payload["hint"]
+        assert "data_source" not in hint
+        assert "fresh identifier" in hint

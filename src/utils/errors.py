@@ -138,6 +138,17 @@ _ERROR_TEMPLATES: dict[int, _ErrorTemplate] = {
             "(3) verify any identifiers were returned by a recent semantic_search, grep_search, or codebase_search"
         ),
     ),
+    409: _ErrorTemplate(
+        label="Ambiguous data source (409): the identifier matches more than one data source",
+        retryable=True,
+        retry_window="retry once with data_source set",
+        default_hint=(
+            "(1) read the candidate data sources in the Detail below — every one will resolve, "
+            "(2) retry with data_source set to one candidate's Name or Id; if that data source isn't "
+            "the one you want, retry with the next candidate, "
+            "(3) do not invent a result"
+        ),
+    ),
     422: _ErrorTemplate(
         label="Data source not ready (422): The requested data source is still being indexed",
         retryable=True,

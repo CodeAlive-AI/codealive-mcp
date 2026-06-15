@@ -294,10 +294,34 @@ class TestResponseTransformer:
         assert first["identifier"] == "CodeAlive-AI/codealive-mcp::src/tools/search.py::codebase_search"
         assert first["contentByteSize"] == 8500
         assert first["description"] == "Main search function"
+        # Data-source identity must be surfaced (not stripped) so the agent can feed it back
+        # as `data_source` to disambiguate a branch-blind identifier.
+        assert first["dataSource"] == {"id": "685b21230e3822f4efa9d073", "name": "codealive-mcp"}
 
         assert second["path"] == "README.md"
         assert second["kind"] == "Chunk"
         assert second["description"] == "Search documentation section"
+        assert second["dataSource"] == {"id": "685b21230e3822f4efa9d073", "name": "codealive-mcp"}
+
+    def test_grep_transform_surfaces_data_source(self):
+        response = {
+            "results": [
+                {
+                    "kind": "File",
+                    "identifier": "owner/repo::src/auth.py",
+                    "location": {"path": "src/auth.py"},
+                    "matchCount": 1,
+                    "matches": [
+                        {"lineNumber": 3, "startColumn": 0, "endColumn": 4, "lineText": "auth"}
+                    ],
+                    "dataSource": {"type": "repository", "id": "ds-main", "name": "backend"},
+                }
+            ]
+        }
+
+        result = transform_grep_response(response)
+
+        assert result["results"][0]["dataSource"] == {"id": "ds-main", "name": "backend"}
 
     def test_grep_transform_preserves_match_previews(self):
         response = {

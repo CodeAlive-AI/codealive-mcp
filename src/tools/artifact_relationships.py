@@ -1,6 +1,6 @@
 """Artifact relationships tool implementation."""
 
-from typing import Any, Dict, List, Literal
+from typing import Any, Dict, List, Literal, Optional
 from urllib.parse import urljoin
 
 import httpx
@@ -37,6 +37,7 @@ async def get_artifact_relationships(
     identifier: str,
     profile: Literal["callsOnly", "inheritanceOnly", "allRelevant", "referencesOnly"] = "callsOnly",
     max_count_per_type: int = 50,
+    data_source: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Retrieve relationship groups for a single artifact by profile.
@@ -84,6 +85,11 @@ async def get_artifact_relationships(
                  - "allRelevant": calls + inheritance only; references are excluded
                  - "referencesOnly": where-used LSP references for non-call usage
         max_count_per_type: Maximum related artifacts per relationship type (1–1000, default 50).
+        data_source: Optional data-source Name or Id used to disambiguate an identifier that
+                     exists in more than one data source. Copy the `dataSource.name` or
+                     `dataSource.id` from a search result. Omit it for normal lookups; if the
+                     source identifier is ambiguous and you omit it, the backend returns a 409
+                     listing the candidate data sources.
 
     Returns:
         A dict with grouped relationships:
@@ -103,7 +109,14 @@ async def get_artifact_relationships(
         "identifier": identifier,
         "profile": profile,
         "max_count_per_type": max_count_per_type,
+        "data_source": data_source,
     }
+
+    # Normalize the optional selector: treat empty/whitespace-only as "no selector"
+    # so we don't send a junk dataSource to the backend or echo it in the not-found hint.
+    # (tool_arguments above intentionally keeps the raw value for exact-invocation logging.)
+    if data_source is not None:
+        data_source = data_source.strip() or None
 
     if not identifier:
         logger.bind(tool=_TOOL_NAME, tool_arguments=tool_arguments).warning(
@@ -143,6 +156,8 @@ async def get_artifact_relationships(
             "profile": api_profile,
             "maxCountPerType": max_count_per_type,
         }
+        if data_source:
+            body["dataSource"] = data_source
 
         await ctx.debug(f"Fetching {profile} relationships for artifact")
 
@@ -156,7 +171,7 @@ async def get_artifact_relationships(
         log_api_response(response, request_id)
         response.raise_for_status()
 
-        return _build_relationships_dict(response.json())
+        return _build_relationships_dict(response.json(), data_source=data_source)
 
     except (httpx.HTTPStatusError, Exception) as e:
         logger.bind(
@@ -173,15 +188,24 @@ async def get_artifact_relationships(
                     "(2) call semantic_search or grep_search again to get a fresh identifier — the index may have changed, "
                     "(3) check that the artifact is a function/class (relationships are not available for non-symbol artifacts)"
                 ),
+                409: (
+                    "(1) the identifier exists in more than one data source — see the candidate data sources in the Detail above; each one will resolve, "
+                    "(2) retry get_artifact_relationships with data_source set to one candidate's Name or Id; if that data source isn't the one you want, retry with the next candidate, "
+                    "(3) do NOT invent relation results — pick from the listed data sources"
+                ),
             },
         )
 
 
-def _build_relationships_dict(data: dict) -> Dict[str, Any]:
+def _build_relationships_dict(data: dict, data_source: Optional[str] = None) -> Dict[str, Any]:
     """Build a dict representation of an artifact relationships response.
 
     FastMCP serializes the dict via pydantic_core.to_json, which preserves UTF-8 —
     don't reintroduce json.dumps here, it would re-escape non-ASCII identifiers.
+
+    ``data_source`` is the selector the caller passed (if any); when the source is not
+    found it shapes the recovery hint so the agent can retry with another data source
+    or drop the selector.
     """
     raw_source_id = data.get("sourceIdentifier") or ""
     raw_profile = data.get("profile") or ""
@@ -208,9 +232,9 @@ def _build_relationships_dict(data: dict) -> Dict[str, Any]:
         counts = _build_counts(data.get("availableRelationshipCounts"))
         if counts is not None:
             payload["availableRelationshipCounts"] = counts
-        payload["hint"] = _build_relationship_hint(found, mcp_profile, groups, counts)
+        payload["hint"] = _build_relationship_hint(found, mcp_profile, groups, counts, data_source)
     else:
-        payload["hint"] = _build_relationship_hint(found, mcp_profile, [], None)
+        payload["hint"] = _build_relationship_hint(found, mcp_profile, [], None, data_source)
 
     return payload
 
@@ -266,9 +290,19 @@ def _build_relationship_hint(
     profile: str,
     groups: List[Dict[str, Any]],
     counts: Dict[str, int] | None,
+    data_source: Optional[str] = None,
 ) -> str:
     """Give model-facing next-step guidance for graph traversal results."""
     if not found:
+        if data_source:
+            return (
+                f'No relationship data was found for this identifier in data source "{data_source}". '
+                "The identifier may belong to a different data source, or the data_source value may be "
+                "wrong. Try: re-run with data_source set to a different candidate (use the `dataSource` "
+                "name or id from your search results, or call get_data_sources), or omit data_source "
+                "entirely — if the identifier is ambiguous you then get a 409 listing the candidate data "
+                "sources. Otherwise re-run semantic_search or grep_search to get a fresh identifier."
+            )
         return (
             "No relationship data was found for this identifier. Verify that the identifier came from "
             "a recent search/fetch result and points to a symbol-level artifact; otherwise re-run "
