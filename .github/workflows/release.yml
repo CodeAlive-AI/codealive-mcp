@@ -171,9 +171,11 @@ jobs:
           tags: |
             ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
             ${{ env.IMAGE_NAME }}:v${{ steps.version.outputs.version }}
+            ${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
             ${{ env.IMAGE_NAME }}:latest
           labels: |
             io.modelcontextprotocol.server.name=io.github.CodeAlive-AI/codealive-mcp
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha
 
@@ -188,8 +190,10 @@ jobs:
           tags: |
             ${{ env.DOCKERHUB_IMAGE }}:mcp
             ${{ env.DOCKERHUB_IMAGE }}:mcp-v${{ steps.version.outputs.version }}
+            ${{ env.DOCKERHUB_IMAGE }}:mcp-sha-${{ github.sha }}
           labels: |
             io.modelcontextprotocol.server.name=io.github.CodeAlive-AI/codealive-mcp
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
 
       # Git tag created AFTER Docker push succeeds — if Docker fails, no stale tag
