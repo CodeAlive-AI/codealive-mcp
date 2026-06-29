@@ -64,7 +64,7 @@ jobs:
             CURRENT="0.0.0"
             echo "::warning::No existing version tags found, starting from 0.0.0"
           fi
-          echo "current=$CURRENT" >> $GITHUB_OUTPUT
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
 
           if [ -n "${{ inputs.version }}" ]; then
             VERSION="${{ inputs.version }}"
@@ -90,8 +90,8 @@ jobs:
             exit 1
           fi
 
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "### Releasing $CURRENT → $VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "### Releasing $CURRENT → $VERSION" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Prepare server.json for publish
         run: |
