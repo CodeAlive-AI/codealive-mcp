@@ -81,8 +81,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
 
       - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
+      - name: Calculate Docker version
+        id: docker_version
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          LATEST_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1 || true)
+          if [ -z "$LATEST_TAG" ]; then
+            VERSION="0.1.0.dev${{ github.run_number }}+g${GITHUB_SHA::7}"
+          elif [ "$(git rev-list --count "${LATEST_TAG}..HEAD")" = "0" ]; then
+            VERSION="${LATEST_TAG#v}"
+          else
+            CURRENT="${LATEST_TAG#v}"
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+            NEXT_PATCH="$((PATCH + 1))"
+            COMMITS_SINCE_TAG=$(git rev-list --count "${LATEST_TAG}..HEAD")
+            VERSION="${MAJOR}.${MINOR}.${NEXT_PATCH}.dev${COMMITS_SINCE_TAG}+g${GITHUB_SHA::7}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Docker version: $VERSION"
 
       - name: Login to GitHub Container Registry
         if: github.event_name == 'push'
@@ -111,6 +133,7 @@ jobs:
           push: true
           platforms: linux/amd64,linux/arm64
           file: ./Dockerfile
+          build-args: VERSION=${{ steps.docker_version.outputs.version }}
           tags: |
             ${{ env.IMAGE_NAME }}:main
             ${{ env.IMAGE_NAME }}:sha-${{ github.sha }}

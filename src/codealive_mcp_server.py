@@ -8,6 +8,7 @@ import argparse
 import datetime
 import os
 import sys
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -110,6 +111,20 @@ mcp.add_middleware(N8NRemoveParametersMiddleware())
 mcp.add_middleware(ObservabilityMiddleware())
 
 
+def _package_version() -> str:
+    try:
+        return version("codealive-mcp")
+    except PackageNotFoundError:
+        return "unknown"
+
+
+def _runtime_metadata() -> dict[str, str]:
+    return {
+        "version": _package_version(),
+        "sourceRevision": os.getenv("CODEALIVE_MCP_SOURCE_REVISION", "unknown"),
+    }
+
+
 # Add health check endpoint for AWS ALB
 @mcp.custom_route("/health", methods=["GET"])
 async def health_check(request: Request) -> JSONResponse:
@@ -117,7 +132,8 @@ async def health_check(request: Request) -> JSONResponse:
     return JSONResponse({
         "status": "healthy",
         "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        "service": "codealive-mcp-server"
+        "service": "codealive-mcp-server",
+        **_runtime_metadata(),
     })
 
 
