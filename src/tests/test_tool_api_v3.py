@@ -99,14 +99,14 @@ def _context_with_response(rendered: str = "<result>ok</result>"):
             lambda ctx: get_artifact_relationships(
                 ctx,
                 identifier="repo::src/Foo.cs::Foo",
-                profile="AllRelevant",
+                profile="all_relevant",
                 max_count_per_type=25,
                 data_source="backend",
             ),
             "/api/tools/get_artifact_relationships",
             {
                 "identifier": "repo::src/Foo.cs::Foo",
-                "profile": "AllRelevant",
+                "profile": "all_relevant",
                 "max_count_per_type": 25,
                 "data_source": "backend",
             },

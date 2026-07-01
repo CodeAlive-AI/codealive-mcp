@@ -11,7 +11,7 @@ from .tool_api import call_tool_api, require_text
 async def get_artifact_relationships(
     ctx: Context,
     identifier: str,
-    profile: Literal["CallsOnly", "InheritanceOnly", "AllRelevant", "ReferencesOnly"] = "CallsOnly",
+    profile: Literal["calls_only", "inheritance_only", "all_relevant", "references_only"] = "calls_only",
     max_count_per_type: int = 50,
     data_source: Optional[str] = None,
 ) -> str:
