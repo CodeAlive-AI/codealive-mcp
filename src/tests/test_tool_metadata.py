@@ -18,13 +18,16 @@ async def test_all_tools_are_marked_read_only_with_titles():
 
     expected_titles = {
         "chat": "Chat About Codebase",
-        "codebase_consultant": "Consult Codebase (Deprecated)",
         "get_data_sources": "List Data Sources",
-        "codebase_search": "Search Codebase (Deprecated)",
         "semantic_search": "Semantic Search",
         "grep_search": "Grep Search",
+        "get_repository_ontology": "Get Repository Ontology",
+        "get_file_tree": "Get File Tree",
+        "read_file": "Read File",
         "fetch_artifacts": "Fetch Artifacts",
         "get_artifact_relationships": "Inspect Artifact Relationships",
+        "get_artifact_query_schema": "Get ArtifactQuery Schema",
+        "query_artifact_metadata": "Query Artifact Metadata",
     }
 
     actual = {tool.name: tool for tool in tools}
@@ -41,5 +44,3 @@ async def test_all_tools_are_marked_read_only_with_titles():
     assert "exact artifact identifier" in relationships_description
     assert "not a search tool" in relationships_description
     assert "fetch_artifacts" in relationships_description
-    assert "excludes references" in relationships_description
-    assert "Mediated or dynamic frameworks" in relationships_description

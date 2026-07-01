@@ -11,8 +11,8 @@ hint gives the model a concrete next action instead of hallucinating one.
 
 Per-tool callers can override the default ``Try:`` text via ``recovery_hints``
 when a generic hint isn't actionable enough — e.g. a 404 from ``semantic_search``
-should suggest ``get_data_sources``, while a 404 from ``chat`` (or legacy
-``codebase_consultant``) should suggest checking ``conversation_id``.
+should suggest ``get_data_sources``, while a 404 from artifact tools should
+suggest reusing identifiers returned by v3 search/fetch/read tools.
 """
 
 import json
@@ -102,8 +102,7 @@ _ERROR_TEMPLATES: dict[int, _ErrorTemplate] = {
         retry_window=None,
         default_hint=(
             "(1) inspect the field-level errors below and fix the offending parameter, "
-            "(2) for conversation_id / message_id, ensure the value is a 24-character hex "
-            "Mongo ObjectId taken from a previous response, "
+            "(2) verify that the request uses canonical Tool API v3 snake_case fields, "
             "(3) if no field errors are surfaced, re-read the tool docstring and verify "
             "the request shape matches"
         ),
@@ -135,7 +134,7 @@ _ERROR_TEMPLATES: dict[int, _ErrorTemplate] = {
         default_hint=(
             "(1) call get_data_sources to see available data source names, "
             "(2) check spelling and case, "
-            "(3) verify any identifiers were returned by a recent semantic_search, grep_search, or codebase_search"
+            "(3) verify any identifiers were returned by a recent semantic_search, grep_search, read_file, or fetch_artifacts"
         ),
     ),
     409: _ErrorTemplate(
@@ -155,7 +154,7 @@ _ERROR_TEMPLATES: dict[int, _ErrorTemplate] = {
         retry_window="wait 1–5 minutes and retry",
         default_hint=(
             "(1) wait for indexing to complete before retrying, "
-            "(2) call get_data_sources(alive_only=false) to check the processing state, "
+            "(2) call get_data_sources(ready_only=false) to check the processing state, "
             "(3) try a different data source if available"
         ),
     ),
@@ -240,8 +239,7 @@ async def handle_api_error(
             are easy to attribute.
         recovery_hints: Optional per-tool overrides for the ``Try: ...`` text,
             keyed by HTTP status code. Use this when a generic hint isn't
-            enough — e.g. ``chat`` overrides 404 with
-            ``"check the conversation_id"``.
+            enough for a specific tool.
 
     Raises:
         ToolError: Always raised — sets ``isError: true`` in the MCP response
