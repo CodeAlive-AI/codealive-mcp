@@ -30,14 +30,17 @@ from core import codealive_lifespan, setup_logging, setup_debug_logging, init_tr
 import core.client as _client_module  # for /ready flag access
 from middleware import N8NRemoveParametersMiddleware, ObservabilityMiddleware
 from tools import (
-    chat,
-    codebase_consultant,
-    codebase_search,
+    get_data_sources,
+    semantic_search,
+    grep_search,
+    get_repository_ontology,
+    get_file_tree,
+    read_file,
     fetch_artifacts,
     get_artifact_relationships,
-    get_data_sources,
-    grep_search,
-    semantic_search,
+    get_artifact_query_schema,
+    query_artifact_metadata,
+    chat,
 )
 
 # Initialize FastMCP server with lifespan and enhanced system instructions
@@ -55,19 +58,18 @@ mcp = FastMCP(
 
     Default workflow (used for ALL tasks unless the user explicitly requests `chat`):
     1. First use `get_data_sources` to identify available repositories and workspaces
-    2. Use `semantic_search` for natural-language retrieval by meaning
-    3. Use `grep_search` for literal string or regex matching when the pattern matters
-    4. To get full content:
+    2. Use `get_repository_ontology` for high-level orientation when exactly one repository is in scope
+    3. Use `semantic_search` for natural-language retrieval by meaning
+    4. Use `grep_search` for literal string or regex matching when the pattern matters
+    5. To get full content:
        - For repos in your working directory: use `Read()` on the local files
-       - For external repos: use `fetch_artifacts` with identifiers from search results
-    5. Use `get_artifact_relationships` or `fetch_artifacts` to drill into the most relevant hits
-    6. If your environment supports subagents and you need the highest reliability or depth,
-       prefer an agentic workflow where a subagent combines `semantic_search`, `grep_search`,
-       artifact fetches, relationship inspection, and local file reads
+       - For external repos: use `fetch_artifacts` with identifiers from search results or `read_file`
+    6. Use `get_artifact_relationships` for graph expansion and `query_artifact_metadata`
+       for aggregate metadata analytics after checking `get_artifact_query_schema`
 
     User-invoked tool — `chat`:
     - `chat` is disabled by default. Call it ONLY when the user has explicitly
-      named the tool (e.g. "use chat", "use codebase_consultant", "call the chat tool").
+      named the tool (e.g. "use chat", "call the chat tool").
       Phrases like "ask CodeAlive" or "search CodeAlive" do NOT qualify — they
       refer to CodeAlive tools in general (semantic_search, grep_search, etc.).
     - For every other case — lookups, architecture understanding, debugging,
@@ -80,11 +82,12 @@ mcp = FastMCP(
     - Use `grep_search(regex=false)` for exact strings and `grep_search(regex=true)` for regex patterns
     - Use specific function/class names or file path scopes when looking for particular implementations
     - Treat `semantic_search` and `grep_search` as the default discovery tools
-    - Prefer `semantic_search` over the deprecated `codebase_search` legacy alias
+    - MCP v3 exposes only Tool API v3 tools; deprecated aliases are intentionally absent
     - Use `get_artifact_relationships` only with exact artifact identifiers from prior search/fetch results.
       It expands a known artifact's relationship graph; it does not search by path, class name, or guessed symbol.
       For exact source code, call `fetch_artifacts` on identifiers returned by search or relationships.
-    - Remember that context from previous messages is maintained in the same conversation
+    - `chat` is stateless in v3. Include prior findings, artifact identifiers,
+      assumptions, scope, and constraints in each question.
 
     Flexible data source usage:
     - You can use a workspace name as a single data source to search or chat across all its repositories at once
@@ -161,10 +164,6 @@ mcp.tool(
     annotations=_READ_ONLY_TOOL,
 )(get_data_sources)
 mcp.tool(
-    title="Search Codebase (Deprecated)",
-    annotations=_READ_ONLY_TOOL,
-)(codebase_search)
-mcp.tool(
     title="Semantic Search",
     annotations=_READ_ONLY_TOOL,
 )(semantic_search)
@@ -173,9 +172,17 @@ mcp.tool(
     annotations=_READ_ONLY_TOOL,
 )(grep_search)
 mcp.tool(
-    title="Chat About Codebase",
+    title="Get Repository Ontology",
     annotations=_READ_ONLY_TOOL,
-)(chat)
+)(get_repository_ontology)
+mcp.tool(
+    title="Get File Tree",
+    annotations=_READ_ONLY_TOOL,
+)(get_file_tree)
+mcp.tool(
+    title="Read File",
+    annotations=_READ_ONLY_TOOL,
+)(read_file)
 mcp.tool(
     title="Fetch Artifacts",
     annotations=_READ_ONLY_TOOL,
@@ -185,9 +192,17 @@ mcp.tool(
     annotations=_READ_ONLY_TOOL,
 )(get_artifact_relationships)
 mcp.tool(
-    title="Consult Codebase (Deprecated)",
+    title="Get ArtifactQuery Schema",
     annotations=_READ_ONLY_TOOL,
-)(codebase_consultant)
+)(get_artifact_query_schema)
+mcp.tool(
+    title="Query Artifact Metadata",
+    annotations=_READ_ONLY_TOOL,
+)(query_artifact_metadata)
+mcp.tool(
+    title="Chat About Codebase",
+    annotations=_READ_ONLY_TOOL,
+)(chat)
 
 
 def main():

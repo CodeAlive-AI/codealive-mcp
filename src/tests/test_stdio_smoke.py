@@ -19,7 +19,9 @@ def _mock_codealive_server():
     requests = []
 
     class Handler(BaseHTTPRequestHandler):
-        def do_GET(self):
+        def do_POST(self):
+            length = int(self.headers.get("Content-Length", "0"))
+            body = self.rfile.read(length).decode("utf-8") if length else "{}"
             requests.append(
                 {
                     "path": self.path,
@@ -27,26 +29,32 @@ def _mock_codealive_server():
                     "tool": self.headers.get("X-CodeAlive-Tool"),
                     "integration": self.headers.get("X-CodeAlive-Integration"),
                     "client": self.headers.get("X-CodeAlive-Client"),
+                    "body": json.loads(body),
                 }
             )
-            if self.path == "/api/datasources/ready":
+            if self.path == "/api/tools/get_data_sources":
                 body = json.dumps(
-                    [
-                        {
-                            "id": "repo-1",
-                            "name": "backend",
-                            "type": "Repository",
-                            "url": "https://github.com/CodeAlive-AI/backend",
-                            "state": "Ready",
+                    {
+                        "rendered": "backend\ncore-workspace",
+                        "obj": {
+                            "data_sources": [
+                                {
+                                    "id": "repo-1",
+                                    "name": "backend",
+                                    "type": "Repository",
+                                    "url": "https://github.com/CodeAlive-AI/backend",
+                                    "state": "Ready",
+                                },
+                                {
+                                    "id": "ws-1",
+                                    "name": "core-workspace",
+                                    "type": "Workspace",
+                                    "repositoryIds": ["repo-1"],
+                                    "state": "Alive",
+                                },
+                            ]
                         },
-                        {
-                            "id": "ws-1",
-                            "name": "core-workspace",
-                            "type": "Workspace",
-                            "repositoryIds": ["repo-1"],
-                            "state": "Alive",
-                        },
-                    ]
+                    }
                 ).encode("utf-8")
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
@@ -72,7 +80,7 @@ def _mock_codealive_server():
 
 
 @pytest.mark.asyncio
-async def test_stdio_server_lists_tools_and_uses_normalized_ready_endpoint():
+async def test_stdio_server_lists_tools_and_uses_tool_api_v3_endpoint():
     server_script = Path(__file__).resolve().parents[1] / "codealive_mcp_server.py"
 
     with _mock_codealive_server() as (port, requests):
@@ -95,12 +103,15 @@ async def test_stdio_server_lists_tools_and_uses_normalized_ready_endpoint():
                 tool_names = sorted(tool.name for tool in tools_result.tools)
                 assert tool_names == [
                     "chat",
-                    "codebase_consultant",
-                    "codebase_search",
                     "fetch_artifacts",
+                    "get_artifact_query_schema",
                     "get_artifact_relationships",
                     "get_data_sources",
+                    "get_file_tree",
+                    "get_repository_ontology",
                     "grep_search",
+                    "query_artifact_metadata",
+                    "read_file",
                     "semantic_search",
                 ]
 
@@ -113,10 +124,11 @@ async def test_stdio_server_lists_tools_and_uses_normalized_ready_endpoint():
 
         assert requests == [
             {
-                "path": "/api/datasources/ready",
+                "path": "/api/tools/get_data_sources",
                 "authorization": "Bearer stdio-smoke-test-key",
                 "tool": "get_data_sources",
                 "integration": "mcp",
-                "client": "fastmcp",
+                "client": "fastmcp-v3",
+                "body": {"ready_only": True, "output_format": "agentic"},
             }
         ]

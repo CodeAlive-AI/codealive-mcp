@@ -556,23 +556,6 @@ async def test_agent_workflow(s: ClientSession, target: str) -> None:
            len(text) > 100 and not r.isError,
            f"len={len(text)}")
 
-    # 5. deprecated aliases
-    r = await s.call_tool("codebase_consultant", {
-        "question": "What testing patterns are used?",
-        "data_sources": [target],
-    })
-    record("workflow: codebase_consultant (deprecated)",
-           len(r.content[0].text) > 50 and not r.isError,
-           f"len={len(r.content[0].text)}")
-
-    r = await s.call_tool("codebase_search", {
-        "query": "error handling",
-        "data_sources": [target],
-    })
-    record("workflow: codebase_search (deprecated)",
-           not r.isError,
-           f"len={len(r.content[0].text)}")
-
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 

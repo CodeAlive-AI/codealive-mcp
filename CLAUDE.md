@@ -95,7 +95,7 @@ This is a Model Context Protocol (MCP) server that provides AI clients with acce
 ### Core Components
 
 - **`codealive_mcp_server.py`**: Main entry point — bootstraps logging, tracing, registers tools and middleware
-- **Eight tools**: `get_data_sources`, `semantic_search`, `grep_search`, `fetch_artifacts`, `get_artifact_relationships`, `chat`, `codebase_search`, `codebase_consultant`
+- **Eleven tools**: `get_data_sources`, `semantic_search`, `grep_search`, `get_repository_ontology`, `get_file_tree`, `read_file`, `fetch_artifacts`, `get_artifact_relationships`, `get_artifact_query_schema`, `query_artifact_metadata`, `chat`
 - **`core/client.py`**: `CodeAliveContext` dataclass + `codealive_lifespan` (httpx.AsyncClient lifecycle, `_server_ready` flag)
 - **`core/logging.py`**: loguru structured JSON logging + PII masking + OTel context injection
 - **`core/observability.py`**: OpenTelemetry TracerProvider setup with OTLP export
@@ -106,7 +106,7 @@ This is a Model Context Protocol (MCP) server that provides AI clients with acce
 1. **FastMCP Framework**: Uses FastMCP 3.x with lifespan context, middleware hooks, and built-in `Client` for testing
 2. **HTTP Auth via `get_http_headers`**: FastMCP 3.x strips the `authorization` header by default (to prevent accidental credential forwarding to downstream services). Our `get_api_key_from_context()` in `core/client.py` must use `get_http_headers(include={"authorization"})` to read Bearer tokens from HTTP/streamable-http clients. **Do not remove the `include=` parameter** — without it, all HTTP-transport clients (LibreChat, n8n, etc.) will fail with a misleading STDIO-mode error.
 3. **HTTP Client Management**: Single persistent `httpx.AsyncClient` with connection pooling, created in lifespan
-3. **Streaming Support**: `chat` and the deprecated `codebase_consultant` alias use SSE streaming (`response.aiter_lines()`) for chat completions
+3. **Tool API v3 Backend Contract**: every MCP tool delegates to `POST /api/tools/{name}` and requests `output_format=agentic`
 4. **Environment Configuration**: Supports both .env files and command-line arguments with precedence
 5. **Error Handling**: Centralized in `utils/errors.py` — all tools use `handle_api_error()` with `method=` prefix
 6. **N8N Middleware**: Strips extra parameters (sessionId, action, chatInput, toolCallId) from n8n tool calls before validation
@@ -158,7 +158,7 @@ This project uses **loguru** for structured JSON logging. All logs go to **stder
 
 2. **All logs go to stderr.** The stdio MCP transport uses stdout for protocol messages. Any stray `print()` or stdout write will corrupt the MCP protocol and break the client. If you add a new log sink, it must target `sys.stderr`.
 
-3. **Never call `response.text` without a debug guard.** `log_api_response()` is protected by `_is_debug_enabled()` because reading `response.text` consumes the response body. The `chat` tool and deprecated `codebase_consultant` alias stream SSE via `response.aiter_lines()` — calling `.text` first would silently consume the stream and produce empty results. If you add new response logging, always check `_is_debug_enabled()` first:
+3. **Never call `response.text` without a debug guard.** `log_api_response()` is protected by `_is_debug_enabled()` because reading `response.text` consumes the response body. If you add new response logging, always check `_is_debug_enabled()` first:
    ```python
    if not _is_debug_enabled():
        return  # Do NOT touch response body at INFO level
@@ -264,8 +264,10 @@ Tools that return **structured metadata** (identifiers, match counts, line
 numbers, relationship groups, data source listings) return a `dict` (or list of
 dicts). FastMCP serializes it automatically via `pydantic_core.to_json`, which
 preserves Unicode — no manual `json.dumps()` needed. Examples:
-`semantic_search`, `grep_search`, `codebase_search`, `get_data_sources`,
-`get_artifact_relationships`.
+`semantic_search`, `grep_search`, `get_data_sources`,
+`get_repository_ontology`, `get_file_tree`, `read_file`,
+`get_artifact_relationships`, `get_artifact_query_schema`, and
+`query_artifact_metadata`.
 
 **Never call `json.dumps(...)` from a tool's return path.** Python's `json.dumps`
 defaults to `ensure_ascii=True` and escapes Cyrillic/CJK/etc. to `\uXXXX`.
@@ -289,7 +291,7 @@ description alone — descriptions are not always re-read mid-conversation, but
 the response is always in front of the model when it decides what to do next.
 
 Examples in this repo:
-- `codebase_search` returns a `hint` field telling the agent that `description`
+- `semantic_search` and `grep_search` return a `hint` field telling the agent that `description`
   is a triage pointer only and that real understanding must come from
   `fetch_artifacts(identifier)` or a local `Read(path)`. Implementation:
   `_SEARCH_HINT` in `src/utils/response_transformer.py`.
@@ -352,7 +354,7 @@ Key points:
 - Custom lifespan yields a real `CodeAliveContext` with a mock-backed httpx client
 - `monkeypatch.setenv("CODEALIVE_API_KEY", ...)` for `get_api_key_from_context` fallback
 - Use `raise_on_error=False` when testing error paths, then assert on `result.content[0].text`
-- For SSE streaming (`chat` / `codebase_consultant`), return `httpx.Response(200, text=sse_body)` — `aiter_lines()` works on buffered responses
+- For chat-style buffered responses, return `httpx.Response(200, json=payload)` and assert against the Tool API v3 envelope content
 
 ### Unit Test Patterns
 

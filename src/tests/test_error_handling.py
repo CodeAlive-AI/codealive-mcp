@@ -79,7 +79,7 @@ async def test_handle_500_server_error():
 
 @pytest.mark.asyncio
 async def test_handle_422_data_source_not_ready():
-    """422 errors must point at get_data_sources(alive_only=false)."""
+    """422 errors must point at get_data_sources(ready_only=false)."""
     ctx = MagicMock()
     ctx.error = AsyncMock()
 
@@ -88,7 +88,7 @@ async def test_handle_422_data_source_not_ready():
 
     error_msg = ctx.error.call_args[0][0]
     assert "Retry: yes" in error_msg
-    assert "alive_only=false" in error_msg
+    assert "ready_only=false" in error_msg
 
 
 @pytest.mark.asyncio
@@ -170,7 +170,7 @@ async def test_recovery_hints_override_default_404():
     ctx = MagicMock()
     ctx.error = AsyncMock()
 
-    custom = "(1) check conversation_id, (2) drop conversation_id and retry"
+    custom = "(1) include prior context in the stateless chat question, (2) retry without legacy conversation fields"
     with pytest.raises(ToolError) as exc_info:
         await handle_api_error(
             ctx, _make_http_error(404), "chat",

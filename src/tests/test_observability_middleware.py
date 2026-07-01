@@ -50,7 +50,7 @@ def otel_setup():
     provider.shutdown()
 
 
-def _make_context(tool_name: str = "codebase_search", arguments: dict | None = None):
+def _make_context(tool_name: str = "semantic_search", arguments: dict | None = None):
     ctx = MagicMock()
     ctx.message.name = tool_name
     ctx.message.arguments = arguments or {}
@@ -65,7 +65,7 @@ class TestSuccessfulToolCall:
     @pytest.mark.asyncio
     async def test_returns_result_from_call_next(self, otel_setup):
         middleware = ObservabilityMiddleware()
-        context = _make_context("codebase_search")
+        context = _make_context("semantic_search")
         call_next = AsyncMock(return_value="<results>xml</results>")
 
         result = await middleware.on_call_tool(context, call_next)
