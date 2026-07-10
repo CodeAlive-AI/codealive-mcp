@@ -1,17 +1,27 @@
 """Tool API v3 stateless chat."""
 
-from typing import Optional, Union
+from typing import Annotated, Optional, Union
 
 from fastmcp import Context
+from pydantic import Field
 
-from .tool_api import call_tool_api, normalize_optional_list, require_text
+from .tool_api import ToolApiResult, call_tool_api, normalize_optional_list, require_text
 
 
 async def chat(
     ctx: Context,
-    question: str,
-    data_sources: Optional[Union[str, list[str]]] = None,
-) -> str:
+    question: Annotated[
+        str,
+        Field(
+            min_length=1,
+            description="Self-contained stateless question including relevant prior context.",
+        ),
+    ],
+    data_sources: Annotated[
+        Optional[Union[str, list[str]]],
+        Field(description="Repository or workspace names returned by get_data_sources."),
+    ] = None,
+) -> ToolApiResult:
     """Ask stateless CodeAlive chat through Tool API v3.
 
     Call only when the user explicitly asks for chat/synthesis. Tool API v3

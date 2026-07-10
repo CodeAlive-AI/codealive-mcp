@@ -1,11 +1,12 @@
 """Tool API v3 search tools."""
 
-from typing import Optional, Union
+from typing import Annotated, Optional, Union
 
 from fastmcp import Context
 from fastmcp.exceptions import ToolError
+from pydantic import Field
 
-from .tool_api import call_tool_api, normalize_optional_list, require_text
+from .tool_api import ToolApiResult, call_tool_api, normalize_optional_list, require_text
 
 
 def _validate_max_results(max_results: Optional[int], tool_name: str) -> None:
@@ -15,13 +16,28 @@ def _validate_max_results(max_results: Optional[int], tool_name: str) -> None:
 
 async def semantic_search(
     ctx: Context,
-    question: str,
-    data_sources: Optional[Union[str, list[str]]] = None,
-    paths: Optional[Union[str, list[str]]] = None,
-    extensions: Optional[Union[str, list[str]]] = None,
-    max_results: Optional[int] = None,
+    question: Annotated[
+        str,
+        Field(min_length=1, description="Natural-language question about indexed code."),
+    ],
+    data_sources: Annotated[
+        Optional[Union[str, list[str]]],
+        Field(description="Repository or workspace names returned by get_data_sources."),
+    ] = None,
+    paths: Annotated[
+        Optional[Union[str, list[str]]],
+        Field(description="Repository-relative path prefixes to include."),
+    ] = None,
+    extensions: Annotated[
+        Optional[Union[str, list[str]]],
+        Field(description="File extensions to include, such as cs, ts, or py."),
+    ] = None,
+    max_results: Annotated[
+        Optional[int],
+        Field(ge=1, le=500, description="Maximum number of results (1-500)."),
+    ] = None,
     exclude_markdown: bool = False,
-) -> str:
+) -> ToolApiResult:
     """Search indexed code by meaning using Tool API v3.
 
     `question` must be a natural-language English sentence. Use `data_sources`
@@ -43,14 +59,29 @@ async def semantic_search(
 
 async def grep_search(
     ctx: Context,
-    query: str,
-    data_sources: Optional[Union[str, list[str]]] = None,
-    paths: Optional[Union[str, list[str]]] = None,
-    extensions: Optional[Union[str, list[str]]] = None,
-    max_results: Optional[int] = None,
+    query: Annotated[
+        str,
+        Field(min_length=1, description="Exact literal text or regular expression to find."),
+    ],
+    data_sources: Annotated[
+        Optional[Union[str, list[str]]],
+        Field(description="Repository or workspace names returned by get_data_sources."),
+    ] = None,
+    paths: Annotated[
+        Optional[Union[str, list[str]]],
+        Field(description="Repository-relative path prefixes to include."),
+    ] = None,
+    extensions: Annotated[
+        Optional[Union[str, list[str]]],
+        Field(description="File extensions to include, such as cs, ts, or py."),
+    ] = None,
+    max_results: Annotated[
+        Optional[int],
+        Field(ge=1, le=500, description="Maximum number of results (1-500)."),
+    ] = None,
     exclude_markdown: bool = False,
     regex: bool = False,
-) -> str:
+) -> ToolApiResult:
     """Search indexed code by exact literal text or regex using Tool API v3."""
     tool_name = "grep_search"
     require_text(query, tool_name, "query")

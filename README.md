@@ -46,7 +46,7 @@ After setup, try these commands with your AI assistant:
 - *"Find the exact regex that matches JWT tokens"* → Uses `grep_search`
 - *"Explain how the payment flow works in this codebase"* → Usually starts with `semantic_search`/`grep_search`, then optionally uses `chat`
 
-`semantic_search` and `grep_search` should be the default tools for most agents. `chat` is a slower stateless synthesis fallback, can take up to 30 seconds, and is usually unnecessary when an agent can run a multi-step workflow with ontology, search, fetch/read, relationships, ArtifactQuery, and local file reads. If your agent supports subagents, the highest-confidence path is to delegate a focused subagent that orchestrates `semantic_search` and `grep_search` first.
+`semantic_search` and `grep_search` should be the default tools for most agents. `chat` is a slower stateless synthesis fallback that can take substantially longer than retrieval, and is usually unnecessary when an agent can run a multi-step workflow with ontology, search, fetch/read, relationships, ArtifactQuery, and local file reads. If your agent supports subagents, the highest-confidence path is to delegate a focused subagent that orchestrates `semantic_search` and `grep_search` first.
 
 ## 📚 Agent Skill
 
@@ -922,6 +922,20 @@ python src/codealive_mcp_server.py --transport http --host localhost --port 8000
 curl http://localhost:8000/health
 ```
 
+HTTP transport validates `Host` and browser `Origin` headers. Loopback hosts
+(`localhost`, `127.0.0.1`, `::1`) work without extra configuration. For a
+shared hostname, configure an exact allowlist:
+
+```bash
+export CODEALIVE_MCP_ALLOWED_HOSTS="mcp.codealive.yourcompany.com"
+# Only for browser callers; ordinary MCP clients do not send Origin.
+export CODEALIVE_MCP_ALLOWED_ORIGINS="https://mcp.codealive.yourcompany.com"
+python src/codealive_mcp_server.py --transport http --host 0.0.0.0 --port 8000
+```
+
+The equivalent repeatable CLI options are `--allowed-host` and
+`--allowed-origin`. Do not use `*` for an Internet-facing server.
+
 ### Testing Your Local Installation
 
 After making changes, quickly verify everything works:
@@ -1023,6 +1037,7 @@ curl http://localhost:8000/health
 
 2. **For Self-Hosted CodeAlive:**
    - Set `CODEALIVE_BASE_URL` to your CodeAlive instance URL (e.g., `https://codealive.yourcompany.com`)
+   - Set `CODEALIVE_MCP_ALLOWED_HOSTS` to the exact hostname clients use for this MCP server
    - Clients must provide their API key via `Authorization: Bearer YOUR_KEY` header
 
 See `docker-compose.example.yml` for the complete configuration template.

@@ -15,35 +15,29 @@ from loguru import logger
 from opentelemetry import trace as otel_trace
 
 # ---------------------------------------------------------------------------
-# PII masking
+# Value-shape descriptions
 # ---------------------------------------------------------------------------
 
-# Request-body keys that may contain user content
-_PII_FIELDS = frozenset({"query", "question", "messages", "message"})
-_PII_MAX_LEN = 80
-_RESPONSE_BODY_MAX_LEN = 500
+def _value_shape(value: Any) -> Dict[str, Any]:
+    """Describe a value without retaining user-supplied content."""
+    if value is None:
+        return {"type": "null"}
+    if isinstance(value, bool):
+        return {"type": "boolean"}
+    if isinstance(value, str):
+        return {"type": "string", "length": len(value)}
+    if isinstance(value, (list, tuple)):
+        return {"type": "array", "length": len(value)}
+    if isinstance(value, dict):
+        return {"type": "object", "keys": sorted(str(key) for key in value)}
+    if isinstance(value, (int, float)):
+        return {"type": "number"}
+    return {"type": type(value).__name__}
 
 
-def _mask_pii(value: str, max_len: int = _PII_MAX_LEN) -> str:
-    if len(value) <= max_len:
-        return value
-    return value[:max_len] + f"...[{len(value)} chars]"
-
-
-def _sanitize_body(body: Dict[str, Any]) -> Dict[str, Any]:
-    """Return a shallow copy with PII fields truncated."""
-    sanitized: Dict[str, Any] = {}
-    for k, v in body.items():
-        if k in _PII_FIELDS:
-            if isinstance(v, str):
-                sanitized[k] = _mask_pii(v)
-            elif isinstance(v, list):
-                sanitized[k] = f"[{len(v)} items]"
-            else:
-                sanitized[k] = "<masked>"
-        else:
-            sanitized[k] = v
-    return sanitized
+def _mapping_shape(values: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """Describe mapping fields without logging their values."""
+    return {key: _value_shape(value) for key, value in values.items()}
 
 
 # ---------------------------------------------------------------------------
@@ -142,7 +136,7 @@ def log_api_request(
     body: Optional[Dict[str, Any]] = None,
     request_id: Optional[str] = None,
 ) -> str:
-    """Log an outgoing API request at DEBUG level with PII masking.
+    """Log an outgoing API request at DEBUG level without argument values.
 
     Returns the ``request_id`` for correlation with the response log.
     """
@@ -152,22 +146,17 @@ def log_api_request(
     if not _is_debug_enabled():
         return request_id
 
-    safe_headers = {
-        k: ("Bearer ***" if k.lower() == "authorization" else v)
-        for k, v in headers.items()
-    }
-
     extra: Dict[str, Any] = {
         "event": "api_request",
         "request_id": request_id,
         "http_method": method,
         "url": url,
-        "headers": safe_headers,
+        "header_names": sorted(headers),
     }
 
     if params:
         if isinstance(params, dict):
-            extra["params"] = params
+            extra["parameter_shape"] = _mapping_shape(params)
         else:
             param_dict: Dict[str, Any] = {}
             for key, value in params:
@@ -177,10 +166,10 @@ def log_api_request(
                     param_dict[key].append(value)
                 else:
                     param_dict[key] = value
-            extra["params"] = param_dict
+            extra["parameter_shape"] = _mapping_shape(param_dict)
 
     if body:
-        extra["body"] = _sanitize_body(body)
+        extra["body_shape"] = _mapping_shape(body)
 
     logger.bind(**extra).debug("API request: {method} {url}", method=method, url=url)
 
@@ -191,13 +180,7 @@ def log_api_response(
     response: httpx.Response,
     request_id: Optional[str] = None,
 ) -> None:
-    """Log an API response at DEBUG level with body truncation.
-
-    IMPORTANT: This function reads ``response.text`` which consumes the
-    response body.  It is guarded by a level check so that streaming
-    responses (e.g. chat completions) are not accidentally consumed at
-    INFO level.
-    """
+    """Log API response metadata without reading or retaining its body."""
     if not _is_debug_enabled():
         return
 
@@ -211,17 +194,9 @@ def log_api_response(
         "url": str(response.url),
     }
 
-    try:
-        body_text = response.text
-        if len(body_text) > _RESPONSE_BODY_MAX_LEN:
-            extra["response_body"] = (
-                body_text[:_RESPONSE_BODY_MAX_LEN]
-                + f"...[{len(body_text)} chars total]"
-            )
-        else:
-            extra["response_body"] = body_text
-    except Exception:
-        extra["response_body"] = "<unreadable>"
+    content_length = response.headers.get("content-length")
+    if content_length and content_length.isdigit():
+        extra["response_size_bytes"] = int(content_length)
 
     logger.bind(**extra).debug(
         "API response: {status_code} {url}",

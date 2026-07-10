@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastmcp import Context
 from fastmcp.exceptions import ToolError
+from fastmcp.tools.tool import ToolResult
 
 from tools.artifact_query import get_artifact_query_schema, query_artifact_metadata
 from tools.artifact_relationships import get_artifact_relationships
@@ -15,14 +16,20 @@ from tools.repository import get_file_tree, get_repository_ontology, read_file
 from tools.search import grep_search, semantic_search
 
 
-def _context_with_response(rendered: str = "<result>ok</result>"):
+def _context_with_response(
+    rendered: str = "<result>ok</result>",
+    obj: dict | None = None,
+):
     ctx = MagicMock(spec=Context)
     ctx.info = AsyncMock()
     ctx.warning = AsyncMock()
     ctx.error = AsyncMock()
 
     response = MagicMock()
-    response.json.return_value = {"rendered": rendered, "obj": {"ok": True}}
+    response.json.return_value = {
+        "rendered": rendered,
+        "obj": obj if obj is not None else {"ok": True},
+    }
     response.raise_for_status = MagicMock()
 
     client = AsyncMock()
@@ -172,3 +179,27 @@ async def test_local_bounds_validation_fail_before_network_call():
         await get_artifact_relationships(ctx, identifier="repo::Foo", max_count_per_type=0)
 
     client.post.assert_not_called()
+
+
+@pytest.mark.asyncio
+@patch("tools.tool_api.get_api_key_from_context")
+async def test_repairable_backend_error_sets_native_mcp_error(mock_get_api_key):
+    mock_get_api_key.return_value = "test_key"
+    error = {
+        "code": "invalid_tool_arguments",
+        "message": "question is required",
+        "retry": "yes - repair the tool arguments and call the tool again",
+        "try": "Provide question and retry.",
+    }
+    ctx, _ = _context_with_response(
+        rendered="<tool_error><code>invalid_tool_arguments</code></tool_error>",
+        obj={"error": error},
+    )
+
+    result = await semantic_search(ctx, question="missing upstream validation")
+
+    assert isinstance(result, ToolResult)
+    assert result.is_error is True
+    assert len(result.content) == 1
+    assert result.content[0].text == "<tool_error><code>invalid_tool_arguments</code></tool_error>"
+    assert result.structured_content == {"error": error}

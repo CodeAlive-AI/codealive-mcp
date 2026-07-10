@@ -5,9 +5,9 @@ description = "MCP server for the CodeAlive API"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "fastmcp==3.2.0",
+    "fastmcp==3.4.4",
     "httpx==0.28.1",
-    "python-dotenv==1.2.1",
+    "python-dotenv==1.2.2",
     "loguru==0.7.3",
     "opentelemetry-api==1.39.1",
     "opentelemetry-sdk==1.39.1",
@@ -18,7 +18,7 @@ dependencies = [
 
 [project.optional-dependencies]
 test = [
-    "pytest==9.0.2",
+    "pytest==9.0.3",
     "pytest-asyncio==1.3.0",
     "pytest-mock==3.15.1",
     "pytest-cov==7.1.0",
@@ -44,3 +44,24 @@ fallback_version = "3.0.0"
 # Older versions silently ignore the whole [tool.uv] section on parse error.
 required-version = "~=0.11.0"
 exclude-newer = "7 days"
+# FastMCP 3.4.4 is an explicitly reviewed security upgrade. Keep the global
+# quarantine for transitive dependencies and require an intentional timestamp
+# change before a future FastMCP version can enter the lock file.
+constraint-dependencies = [
+    "cryptography>=48.0.1",
+    "idna>=3.15",
+    "pydantic-settings>=2.14.2",
+    "pyjwt>=2.13.0",
+    "urllib3>=2.7.0",
+]
+
+[tool.uv.exclude-newer-package]
+fastmcp = "2026-07-10"
+fastmcp-slim = "2026-07-10"
+cryptography = "2026-07-10"
+idna = "2026-07-10"
+pydantic-settings = "2026-07-10"
+pyjwt = "2026-07-10"
+pytest = "2026-07-10"
+python-dotenv = "2026-07-10"
+urllib3 = "2026-07-10"

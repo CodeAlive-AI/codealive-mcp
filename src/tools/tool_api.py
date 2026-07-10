@@ -7,9 +7,12 @@ from urllib.parse import urljoin
 import httpx
 from fastmcp import Context
 from fastmcp.exceptions import ToolError
+from fastmcp.tools.tool import ToolResult
 
 from core import CodeAliveContext, get_api_key_from_context, log_api_request, log_api_response
 from utils import handle_api_error
+
+ToolApiResult = str | ToolResult
 
 
 def normalize_optional_list(value: Optional[Union[str, list[str]]]) -> list[str]:
@@ -49,7 +52,7 @@ async def call_tool_api(
     payload: dict[str, Any],
     *,
     action_label: Optional[str] = None,
-) -> str:
+) -> ToolApiResult:
     context: CodeAliveContext = ctx.request_context.lifespan_context
     api_key = get_api_key_from_context(ctx)
     body = {**omit_empty(payload), "output_format": "agentic"}
@@ -69,12 +72,23 @@ async def call_tool_api(
         log_api_response(response, request_id)
         response.raise_for_status()
         data = response.json()
+        obj = data.get("obj")
         rendered = data.get("rendered")
+        if isinstance(obj, dict) and isinstance(obj.get("error"), dict):
+            content = rendered if isinstance(rendered, str) else json.dumps(
+                obj,
+                ensure_ascii=False,
+                indent=2,
+            )
+            return ToolResult(
+                content=content,
+                structured_content=obj,
+                is_error=True,
+            )
         if isinstance(rendered, str):
             return rendered
-        obj = data.get("obj")
         return json.dumps(obj, ensure_ascii=False, indent=2)
-    except (httpx.HTTPStatusError, Exception) as exc:
+    except Exception as exc:
         await handle_api_error(
             ctx,
             exc,

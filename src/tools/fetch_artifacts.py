@@ -1,18 +1,28 @@
 """Tool API v3 artifact fetch."""
 
-from typing import Optional, Union
+from typing import Annotated, Optional, Union
 
 from fastmcp import Context
 from fastmcp.exceptions import ToolError
+from pydantic import Field
 
-from .tool_api import call_tool_api, normalize_optional_list
+from .tool_api import ToolApiResult, call_tool_api, normalize_optional_list
 
 
 async def fetch_artifacts(
     ctx: Context,
-    identifiers: Union[str, list[str]],
-    data_source: Optional[str] = None,
-) -> str:
+    identifiers: Annotated[
+        Union[
+            str,
+            Annotated[list[str], Field(min_length=1, max_length=50)],
+        ],
+        Field(description="Artifact identifiers returned by search, read, or relationship tools."),
+    ],
+    data_source: Annotated[
+        Optional[str],
+        Field(description="Optional repository name or id used to disambiguate identifiers."),
+    ] = None,
+) -> ToolApiResult:
     """Fetch full artifact content for identifiers returned by search tools."""
     normalized = normalize_optional_list(identifiers)
     if not normalized:
