@@ -7,15 +7,15 @@ exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for 
 exclude-newer-span = "P7D"
 
 [options.exclude-newer-package]
-idna = "2026-07-10T19:00:00Z"
-pytest = "2026-07-10T19:00:00Z"
-urllib3 = "2026-07-10T19:00:00Z"
-pydantic-settings = "2026-07-10T19:00:00Z"
-pyjwt = "2026-07-10T19:00:00Z"
-python-dotenv = "2026-07-10T19:00:00Z"
-fastmcp = "2026-07-10T19:00:00Z"
-cryptography = "2026-07-10T19:00:00Z"
-fastmcp-slim = "2026-07-10T19:00:00Z"
+idna = "2026-07-10T00:00:00Z"
+pytest = "2026-07-10T00:00:00Z"
+urllib3 = "2026-07-10T00:00:00Z"
+pydantic-settings = "2026-07-10T00:00:00Z"
+pyjwt = "2026-07-10T00:00:00Z"
+python-dotenv = "2026-07-10T00:00:00Z"
+fastmcp = "2026-07-10T00:00:00Z"
+cryptography = "2026-07-10T00:00:00Z"
+fastmcp-slim = "2026-07-10T00:00:00Z"
 
 [manifest]
 constraints = [

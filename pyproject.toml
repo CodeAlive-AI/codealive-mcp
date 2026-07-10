@@ -56,12 +56,12 @@ constraint-dependencies = [
 ]
 
 [tool.uv.exclude-newer-package]
-fastmcp = "2026-07-10"
-fastmcp-slim = "2026-07-10"
-cryptography = "2026-07-10"
-idna = "2026-07-10"
-pydantic-settings = "2026-07-10"
-pyjwt = "2026-07-10"
-pytest = "2026-07-10"
-python-dotenv = "2026-07-10"
-urllib3 = "2026-07-10"
+fastmcp = "2026-07-10T00:00:00Z"
+fastmcp-slim = "2026-07-10T00:00:00Z"
+cryptography = "2026-07-10T00:00:00Z"
+idna = "2026-07-10T00:00:00Z"
+pydantic-settings = "2026-07-10T00:00:00Z"
+pyjwt = "2026-07-10T00:00:00Z"
+pytest = "2026-07-10T00:00:00Z"
+python-dotenv = "2026-07-10T00:00:00Z"
+urllib3 = "2026-07-10T00:00:00Z"
