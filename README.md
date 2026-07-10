@@ -28,11 +28,14 @@ Once connected, you'll have access to these powerful tools:
 1. **`get_data_sources`** - List your indexed repositories and workspaces
 2. **`semantic_search`** - Canonical semantic search across indexed artifacts
 3. **`grep_search`** - Exact literal or regex text search inside file content, plus literal file-name/path matching (returns files like `Form.xml` even when their content never mentions the name), with line-level previews for content matches
-4. **`fetch_artifacts`** - Load the full source for relevant search hits (missing or inaccessible identifiers are reported back in a `<not_found>` block, not silently dropped)
-5. **`get_artifact_relationships`** - Expand call graph, inheritance, and reference relationships for one artifact
-6. **`chat`** - Slower synthesized codebase Q&A, typically only after search
-7. **`codebase_search`** - Deprecated legacy semantic search alias kept for backward compatibility
-8. **`codebase_consultant`** - Deprecated alias for `chat`
+4. **`get_repository_ontology`** - Get repository-level orientation for one selected repository
+5. **`get_file_tree`** - Inspect a bounded file tree for one repository
+6. **`read_file`** - Read a repository-relative file path, optionally with a line range
+7. **`fetch_artifacts`** - Load the full source for relevant search hits (missing or inaccessible identifiers are reported back, not silently dropped)
+8. **`get_artifact_relationships`** - Expand call graph, inheritance, and reference relationships for one artifact
+9. **`get_artifact_query_schema`** - Inspect supported ArtifactQuery entities, fields, and examples
+10. **`query_artifact_metadata`** - Run read-only metadata analytics across selected repositories
+11. **`chat`** - Stateless, slower synthesized codebase Q&A; call only when explicitly requested
 
 ## 🎯 Usage Examples
 
@@ -43,7 +46,7 @@ After setup, try these commands with your AI assistant:
 - *"Find the exact regex that matches JWT tokens"* → Uses `grep_search`
 - *"Explain how the payment flow works in this codebase"* → Usually starts with `semantic_search`/`grep_search`, then optionally uses `chat`
 
-`semantic_search` and `grep_search` should be the default tools for most agents. `chat` is a slower synthesis fallback, can take up to 30 seconds, and is usually unnecessary when an agent can run a multi-step workflow with search, fetch, relationships, and local file reads. If your agent supports subagents, the highest-confidence path is to delegate a focused subagent that orchestrates `semantic_search` and `grep_search` first.
+`semantic_search` and `grep_search` should be the default tools for most agents. `chat` is a slower stateless synthesis fallback that can take substantially longer than retrieval, and is usually unnecessary when an agent can run a multi-step workflow with ontology, search, fetch/read, relationships, ArtifactQuery, and local file reads. If your agent supports subagents, the highest-confidence path is to delegate a focused subagent that orchestrates `semantic_search` and `grep_search` first.
 
 ## 📚 Agent Skill
 
@@ -840,10 +843,14 @@ See [JetBrains MCP Documentation](https://www.jetbrains.com/help/ai-assistant/mc
    - `get_data_sources` - List available repositories
    - `semantic_search` - Search code semantically
    - `grep_search` - Search by exact text or regex
+   - `get_repository_ontology` - Orient around one repository
+   - `get_file_tree` - Inspect repository files
+   - `read_file` - Read one repository-relative file
+   - `fetch_artifacts` - Fetch source for search result identifiers
    - `get_artifact_relationships` - Expand relationships for one artifact
-   - `chat` - Slower synthesized codebase Q&A, usually after search
-   - `codebase_search` - Legacy semantic search alias
-   - `codebase_consultant` - Deprecated alias for `chat`
+   - `get_artifact_query_schema` - Inspect metadata query schema
+   - `query_artifact_metadata` - Run metadata analytics
+   - `chat` - Stateless synthesized codebase Q&A, only when explicitly requested
 
 **Example Workflow:**
 ```
@@ -914,6 +921,20 @@ python src/codealive_mcp_server.py --transport http --host localhost --port 8000
 # Test health endpoint
 curl http://localhost:8000/health
 ```
+
+HTTP transport validates `Host` and browser `Origin` headers. Loopback hosts
+(`localhost`, `127.0.0.1`, `::1`) work without extra configuration. For a
+shared hostname, configure an exact allowlist:
+
+```bash
+export CODEALIVE_MCP_ALLOWED_HOSTS="mcp.codealive.yourcompany.com"
+# Only for browser callers; ordinary MCP clients do not send Origin.
+export CODEALIVE_MCP_ALLOWED_ORIGINS="https://mcp.codealive.yourcompany.com"
+python src/codealive_mcp_server.py --transport http --host 0.0.0.0 --port 8000
+```
+
+The equivalent repeatable CLI options are `--allowed-host` and
+`--allowed-origin`. Do not use `*` for an Internet-facing server.
 
 ### Testing Your Local Installation
 
@@ -1016,6 +1037,7 @@ curl http://localhost:8000/health
 
 2. **For Self-Hosted CodeAlive:**
    - Set `CODEALIVE_BASE_URL` to your CodeAlive instance URL (e.g., `https://codealive.yourcompany.com`)
+   - Set `CODEALIVE_MCP_ALLOWED_HOSTS` to the exact hostname clients use for this MCP server
    - Clients must provide their API key via `Authorization: Bearer YOUR_KEY` header
 
 See `docker-compose.example.yml` for the complete configuration template.

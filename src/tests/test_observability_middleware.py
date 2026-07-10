@@ -50,7 +50,7 @@ def otel_setup():
     provider.shutdown()
 
 
-def _make_context(tool_name: str = "codebase_search", arguments: dict | None = None):
+def _make_context(tool_name: str = "semantic_search", arguments: dict | None = None):
     ctx = MagicMock()
     ctx.message.name = tool_name
     ctx.message.arguments = arguments or {}
@@ -65,7 +65,7 @@ class TestSuccessfulToolCall:
     @pytest.mark.asyncio
     async def test_returns_result_from_call_next(self, otel_setup):
         middleware = ObservabilityMiddleware()
-        context = _make_context("codebase_search")
+        context = _make_context("semantic_search")
         call_next = AsyncMock(return_value="<results>xml</results>")
 
         result = await middleware.on_call_tool(context, call_next)
@@ -116,7 +116,7 @@ class TestSuccessfulToolCall:
         assert span.attributes["mcp.tool.name"] == "unknown"
 
     @pytest.mark.asyncio
-    async def test_lifecycle_logs_are_debug_with_tool_arguments(self, otel_setup):
+    async def test_lifecycle_logs_only_include_tool_argument_shape(self, otel_setup):
         middleware = ObservabilityMiddleware()
         tool_arguments = {"identifier": "org/repo::src/svc.py::run", "profile": "callsOnly"}
         context = _make_context("get_artifact_relationships", tool_arguments)
@@ -134,8 +134,13 @@ class TestSuccessfulToolCall:
             if record["message"].startswith("Tool call ")
         ]
         assert [record["level"].name for record in lifecycle] == ["DEBUG", "DEBUG"]
-        assert lifecycle[0]["extra"]["tool_arguments"] == tool_arguments
-        assert lifecycle[1]["extra"]["tool_arguments"] == tool_arguments
+        expected_shape = {
+            "identifier": {"type": "string", "length": len(tool_arguments["identifier"])},
+            "profile": {"type": "string", "length": len(tool_arguments["profile"])},
+        }
+        assert lifecycle[0]["extra"]["tool_argument_shape"] == expected_shape
+        assert lifecycle[1]["extra"]["tool_argument_shape"] == expected_shape
+        assert tool_arguments["identifier"] not in str(lifecycle)
 
 
 # ---------------------------------------------------------------------------
@@ -163,7 +168,7 @@ class TestFailedToolCall:
 
         span = otel_setup.get_finished_spans()[0]
         assert span.status.status_code == trace.StatusCode.ERROR
-        assert "bad input" in span.status.description
+        assert span.status.description == "ValueError"
 
     @pytest.mark.asyncio
     async def test_span_records_exception_event(self, otel_setup):
@@ -177,14 +182,10 @@ class TestFailedToolCall:
         span = otel_setup.get_finished_spans()[0]
         exception_events = [e for e in span.events if e.name == "exception"]
         assert len(exception_events) >= 1
-        # At least one event must carry the exception details
-        types = [e.attributes["exception.type"] for e in exception_events]
-        messages = [e.attributes["exception.message"] for e in exception_events]
-        assert "RuntimeError" in types
-        assert "boom" in messages
+        assert exception_events[0].attributes == {"exception.type": "RuntimeError"}
 
     @pytest.mark.asyncio
-    async def test_failure_logs_warning_with_full_tool_arguments(self, otel_setup):
+    async def test_failure_logs_warning_without_tool_values_or_error_message(self, otel_setup):
         middleware = ObservabilityMiddleware()
         tool_arguments = {
             "identifier": "org/repo::src/svc.py::run",
@@ -207,9 +208,15 @@ class TestFailedToolCall:
         failure = failures[0]
         assert failure["level"].name == "WARNING"
         assert failure["extra"]["tool"] == "get_artifact_relationships"
-        assert failure["extra"]["tool_arguments"] == tool_arguments
+        assert failure["extra"]["tool_argument_shape"] == {
+            "identifier": {"type": "string", "length": len(tool_arguments["identifier"])},
+            "profile": {"type": "string", "length": len(tool_arguments["profile"])},
+            "max_count_per_type": {"type": "number"},
+        }
         assert failure["extra"]["error_type"] == "ValueError"
-        assert failure["extra"]["error"] == "bad profile"
+        assert "error" not in failure["extra"]
+        assert tool_arguments["identifier"] not in str(failure)
+        assert "bad profile" not in str(failure)
 
 
 class TestExtractToolArguments:

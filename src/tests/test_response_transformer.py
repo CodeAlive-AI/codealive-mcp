@@ -255,7 +255,7 @@ class TestResponseTransformer:
             "results": [
                 {
                     "kind": "Symbol",
-                    "identifier": "CodeAlive-AI/codealive-mcp::src/tools/search.py::codebase_search",
+                    "identifier": "CodeAlive-AI/codealive-mcp::src/tools/search.py::semantic_search",
                     "location": {
                         "path": "src/tools/search.py",
                         "range": {"start": {"line": 18}, "end": {"line": 168}}
@@ -291,7 +291,7 @@ class TestResponseTransformer:
         assert first["startLine"] == 18
         assert first["endLine"] == 168
         assert first["kind"] == "Symbol"
-        assert first["identifier"] == "CodeAlive-AI/codealive-mcp::src/tools/search.py::codebase_search"
+        assert first["identifier"] == "CodeAlive-AI/codealive-mcp::src/tools/search.py::semantic_search"
         assert first["contentByteSize"] == 8500
         assert first["description"] == "Main search function"
         # Data-source identity must be surfaced (not stripped) so the agent can feed it back

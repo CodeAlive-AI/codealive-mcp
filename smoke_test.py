@@ -135,12 +135,15 @@ class SmokeTest:
 
             expected_tools = {
                 "chat",
-                "codebase_consultant",
-                "codebase_search",
                 "fetch_artifacts",
                 "get_artifact_relationships",
+                "get_artifact_query_schema",
                 "get_data_sources",
+                "get_file_tree",
+                "get_repository_ontology",
                 "grep_search",
+                "query_artifact_metadata",
+                "read_file",
                 "semantic_search",
             }
             actual_tools = {tool.name for tool in tools}
@@ -244,35 +247,6 @@ class SmokeTest:
             self.print_error(f"Tool execution failed: {str(e)}")
             return False
 
-    async def test_codebase_consultant(self) -> bool:
-        """Test the codebase_consultant tool (deprecated alias)."""
-        self.print_test("codebase_consultant Tool (deprecated)")
-        try:
-            result = await self.session.call_tool("codebase_consultant", {
-                "question": "test question",
-                "data_sources": ["test-repo"]
-            })
-
-            if result.isError:
-                # Error is expected if no valid API key
-                error_str = str(result.content)
-                if "API key" in error_str or "data source" in error_str or "authorization" in error_str.lower():
-                    self.print_success("Tool responds correctly (API key/data source required)")
-                    self.print_info("This is expected in smoke test without valid API key")
-                    return True
-                else:
-                    self.print_error(f"Unexpected error: {result.content}")
-                    return False
-
-            # If we have a valid API key and data source, check response
-            self.print_success("Tool executed successfully")
-            self.print_info(f"Response: {str(result.content)[:100]}...")
-            return True
-
-        except Exception as e:
-            self.print_error(f"Tool execution failed: {str(e)}")
-            return False
-
     async def test_parameter_validation(self) -> bool:
         """Test that tools validate parameters correctly."""
         self.print_test("Parameter Validation")
@@ -316,7 +290,6 @@ class SmokeTest:
                 await self.test_get_data_sources()
                 await self.test_semantic_search()
                 await self.test_chat()
-                await self.test_codebase_consultant()
                 await self.test_parameter_validation()
 
         except Exception as e:

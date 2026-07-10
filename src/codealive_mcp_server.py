@@ -30,85 +30,18 @@ from core import codealive_lifespan, setup_logging, setup_debug_logging, init_tr
 import core.client as _client_module  # for /ready flag access
 from middleware import N8NRemoveParametersMiddleware, ObservabilityMiddleware
 from tools import (
-    chat,
-    codebase_consultant,
-    codebase_search,
+    get_data_sources,
+    semantic_search,
+    grep_search,
+    get_repository_ontology,
+    get_file_tree,
+    read_file,
     fetch_artifacts,
     get_artifact_relationships,
-    get_data_sources,
-    grep_search,
-    semantic_search,
+    get_artifact_query_schema,
+    query_artifact_metadata,
+    chat,
 )
-
-# Initialize FastMCP server with lifespan and enhanced system instructions
-mcp = FastMCP(
-    name="CodeAlive MCP Server",
-    instructions="""
-    This server provides access to the CodeAlive API for AI-powered code assistance and code understanding.
-
-    CodeAlive enables you to:
-    - Analyze code repositories and workspaces
-    - Search through code using natural language
-    - Understand code structure, dependencies, and patterns
-    - Answer questions about code implementation details
-    - Integrate with local git repositories for seamless code exploration
-
-    Default workflow (used for ALL tasks unless the user explicitly requests `chat`):
-    1. First use `get_data_sources` to identify available repositories and workspaces
-    2. Use `semantic_search` for natural-language retrieval by meaning
-    3. Use `grep_search` for literal string or regex matching when the pattern matters
-    4. To get full content:
-       - For repos in your working directory: use `Read()` on the local files
-       - For external repos: use `fetch_artifacts` with identifiers from search results
-    5. Use `get_artifact_relationships` or `fetch_artifacts` to drill into the most relevant hits
-    6. If your environment supports subagents and you need the highest reliability or depth,
-       prefer an agentic workflow where a subagent combines `semantic_search`, `grep_search`,
-       artifact fetches, relationship inspection, and local file reads
-
-    User-invoked tool — `chat`:
-    - `chat` is disabled by default. Call it ONLY when the user has explicitly
-      named the tool (e.g. "use chat", "use codebase_consultant", "call the chat tool").
-      Phrases like "ask CodeAlive" or "search CodeAlive" do NOT qualify — they
-      refer to CodeAlive tools in general (semantic_search, grep_search, etc.).
-    - For every other case — lookups, architecture understanding, debugging,
-      summaries — use semantic_search, grep_search, fetch_artifacts, and
-      get_artifact_relationships. Do not treat "after search" as a justification
-      for calling chat.
-
-    For effective code exploration:
-    - Start with broad natural-language queries in `semantic_search` to understand the overall structure
-    - Use `grep_search(regex=false)` for exact strings and `grep_search(regex=true)` for regex patterns
-    - Use specific function/class names or file path scopes when looking for particular implementations
-    - Treat `semantic_search` and `grep_search` as the default discovery tools
-    - Prefer `semantic_search` over the deprecated `codebase_search` legacy alias
-    - Use `get_artifact_relationships` only with exact artifact identifiers from prior search/fetch results.
-      It expands a known artifact's relationship graph; it does not search by path, class name, or guessed symbol.
-      For exact source code, call `fetch_artifacts` on identifiers returned by search or relationships.
-    - Remember that context from previous messages is maintained in the same conversation
-
-    Flexible data source usage:
-    - You can use a workspace name as a single data source to search or chat across all its repositories at once
-    - Alternatively, you can use specific repository names for more targeted searches
-    - For complex queries, you can combine multiple repository names from different workspaces
-    - Choose between workspace-level or repository-level access based on the scope of the query
-
-    Repository integration:
-    - CodeAlive can connect to repositories you've indexed in the system
-    - If a user is working within a git repository that matches a CodeAlive-indexed repository (by URL),
-      you can suggest using CodeAlive's search and chat to understand the codebase
-    - Data sources include repository URLs to help match with local git repositories
-
-    When analyzing search results:
-    - Pay attention to file paths to understand the project structure
-    - Look for patterns across multiple matching files
-    - Consider the relationships between different code components
-    """,
-    lifespan=codealive_lifespan
-)
-
-# Register middleware — order matters: n8n cleanup runs first, then tracing wraps the clean call
-mcp.add_middleware(N8NRemoveParametersMiddleware())
-mcp.add_middleware(ObservabilityMiddleware())
 
 
 def _package_version() -> str:
@@ -116,6 +49,31 @@ def _package_version() -> str:
         return version("codealive-mcp")
     except PackageNotFoundError:
         return "unknown"
+
+
+# Initialize FastMCP server with lifespan and enhanced system instructions
+mcp = FastMCP(
+    name="CodeAlive MCP Server",
+    version=_package_version(),
+    instructions="""
+    Use CodeAlive to inspect indexed repositories and workspaces.
+
+    Default workflow: DISCOVER → SEARCH → READ → EXPAND.
+    1. Call get_data_sources to identify visible data sources.
+    2. Use get_repository_ontology for one-repository orientation.
+    3. Use semantic_search for meaning and grep_search for literal or regex matches.
+    4. Read evidence with read_file or fetch_artifacts using returned identifiers.
+    5. Expand known identifiers with get_artifact_relationships. Use ArtifactQuery tools for metadata analytics.
+
+    Call chat only when the user explicitly requests that tool. Chat is stateless; include prior findings,
+    identifiers, assumptions, scope, and constraints in every question. Deprecated MCP aliases are absent.
+    """,
+    lifespan=codealive_lifespan
+)
+
+# Register middleware — order matters: n8n cleanup runs first, then tracing wraps the clean call
+mcp.add_middleware(N8NRemoveParametersMiddleware())
+mcp.add_middleware(ObservabilityMiddleware())
 
 
 def _runtime_metadata() -> dict[str, str]:
@@ -154,16 +112,17 @@ async def readiness_check(request: Request) -> JSONResponse:
 
 
 # Register tools with metadata suitable for Claude Desktop and MCP directories.
-_READ_ONLY_TOOL = {"readOnlyHint": True}
+_READ_ONLY_TOOL = {
+    "readOnlyHint": True,
+    "destructiveHint": False,
+    "idempotentHint": True,
+    "openWorldHint": True,
+}
 
 mcp.tool(
     title="List Data Sources",
     annotations=_READ_ONLY_TOOL,
 )(get_data_sources)
-mcp.tool(
-    title="Search Codebase (Deprecated)",
-    annotations=_READ_ONLY_TOOL,
-)(codebase_search)
 mcp.tool(
     title="Semantic Search",
     annotations=_READ_ONLY_TOOL,
@@ -173,9 +132,17 @@ mcp.tool(
     annotations=_READ_ONLY_TOOL,
 )(grep_search)
 mcp.tool(
-    title="Chat About Codebase",
+    title="Get Repository Ontology",
     annotations=_READ_ONLY_TOOL,
-)(chat)
+)(get_repository_ontology)
+mcp.tool(
+    title="Get File Tree",
+    annotations=_READ_ONLY_TOOL,
+)(get_file_tree)
+mcp.tool(
+    title="Read File",
+    annotations=_READ_ONLY_TOOL,
+)(read_file)
 mcp.tool(
     title="Fetch Artifacts",
     annotations=_READ_ONLY_TOOL,
@@ -185,9 +152,17 @@ mcp.tool(
     annotations=_READ_ONLY_TOOL,
 )(get_artifact_relationships)
 mcp.tool(
-    title="Consult Codebase (Deprecated)",
+    title="Get ArtifactQuery Schema",
     annotations=_READ_ONLY_TOOL,
-)(codebase_consultant)
+)(get_artifact_query_schema)
+mcp.tool(
+    title="Query Artifact Metadata",
+    annotations=_READ_ONLY_TOOL,
+)(query_artifact_metadata)
+mcp.tool(
+    title="Chat About Codebase",
+    annotations=_READ_ONLY_TOOL,
+)(chat)
 
 
 def main():
@@ -196,8 +171,18 @@ def main():
     parser.add_argument("--api-key", help="CodeAlive API Key")
     parser.add_argument("--base-url", help="CodeAlive Base URL")
     parser.add_argument("--transport", help="Transport type (stdio or http)", default="stdio")
-    parser.add_argument("--host", help="Host for HTTP transport", default="0.0.0.0")
+    parser.add_argument("--host", help="Host for HTTP transport", default="127.0.0.1")
     parser.add_argument("--port", help="Port for HTTP transport", type=int, default=8000)
+    parser.add_argument(
+        "--allowed-host",
+        action="append",
+        help="Host accepted by HTTP transport protection; repeat for multiple hosts",
+    )
+    parser.add_argument(
+        "--allowed-origin",
+        action="append",
+        help="Origin accepted by HTTP transport protection; repeat for multiple origins",
+    )
     parser.add_argument("--debug", action="store_true", help="Enable debug mode for verbose logging")
     parser.add_argument("--ignore-ssl", action="store_true", help="Ignore SSL certificate validation")
 
@@ -269,6 +254,16 @@ def main():
 
     # Run the server with the selected transport
     if args.transport == "http":
+        allowed_hosts = args.allowed_host or [
+            value.strip()
+            for value in os.getenv("CODEALIVE_MCP_ALLOWED_HOSTS", "").split(",")
+            if value.strip()
+        ]
+        allowed_origins = args.allowed_origin or [
+            value.strip()
+            for value in os.getenv("CODEALIVE_MCP_ALLOWED_ORIGINS", "").split(",")
+            if value.strip()
+        ]
         # Use /api path to avoid conflicts with health endpoint
         mcp.run(
             transport="http",
@@ -276,6 +271,9 @@ def main():
             port=args.port,
             path="/api",
             stateless_http=True,
+            host_origin_protection=True,
+            allowed_hosts=allowed_hosts or None,
+            allowed_origins=allowed_origins or None,
             uvicorn_config={
                 "forwarded_allow_ips": "*",
             },

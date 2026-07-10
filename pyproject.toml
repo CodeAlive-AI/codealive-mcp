@@ -5,7 +5,7 @@ description = "MCP server for the CodeAlive API"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "fastmcp==3.2.0",
+    "fastmcp==3.4.4",
     "httpx==0.28.1",
     "python-dotenv==1.2.2",
     "loguru==0.7.3",
@@ -37,10 +37,31 @@ packages = ["src"]
 package-dir = {"" = "."}
 
 [tool.setuptools_scm]
-fallback_version = "2.0.4"
+fallback_version = "3.0.0"
 
 [tool.uv]
 # Relative dates in exclude-newer (e.g. "7 days") require uv ≥ 0.11.
 # Older versions silently ignore the whole [tool.uv] section on parse error.
 required-version = "~=0.11.0"
 exclude-newer = "7 days"
+# FastMCP 3.4.4 is an explicitly reviewed security upgrade. Keep the global
+# quarantine for transitive dependencies and require an intentional timestamp
+# change before a future FastMCP version can enter the lock file.
+constraint-dependencies = [
+    "cryptography>=48.0.1",
+    "idna>=3.15",
+    "pydantic-settings>=2.14.2",
+    "pyjwt>=2.13.0",
+    "urllib3>=2.7.0",
+]
+
+[tool.uv.exclude-newer-package]
+fastmcp = "2026-07-10T00:00:00Z"
+fastmcp-slim = "2026-07-10T00:00:00Z"
+cryptography = "2026-07-10T00:00:00Z"
+idna = "2026-07-10T00:00:00Z"
+pydantic-settings = "2026-07-10T00:00:00Z"
+pyjwt = "2026-07-10T00:00:00Z"
+pytest = "2026-07-10T00:00:00Z"
+python-dotenv = "2026-07-10T00:00:00Z"
+urllib3 = "2026-07-10T00:00:00Z"

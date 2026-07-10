@@ -42,6 +42,14 @@ services:
       # ==========================================
       # OPTIONAL SETTINGS
       # ==========================================
+      # Required when clients use a hostname other than localhost/127.0.0.1.
+      # Use a comma-separated exact allowlist; do not use "*" on public servers.
+      # CODEALIVE_MCP_ALLOWED_HOSTS: "mcp.codealive.yourcompany.com"
+
+      # Usually unnecessary for non-browser MCP clients. Set exact origins only
+      # when browser JavaScript calls the MCP endpoint.
+      # CODEALIVE_MCP_ALLOWED_ORIGINS: "https://mcp.codealive.yourcompany.com"
+
       # Enable debug mode (verbose logging)
       # DEBUG_MODE: "false"
 

@@ -13,83 +13,35 @@ sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent.parent))
 
 import core.logging as logging_module
 from core.logging import (
-    _mask_pii,
-    _sanitize_body,
+    _mapping_shape,
+    _value_shape,
     _otel_patcher,
     _is_debug_enabled,
     setup_logging,
     setup_debug_logging,
     log_api_request,
     log_api_response,
-    _PII_MAX_LEN,
-    _RESPONSE_BODY_MAX_LEN,
 )
 
 
 # ---------------------------------------------------------------------------
-# _mask_pii
+# value-shape descriptions
 # ---------------------------------------------------------------------------
 
-class TestMaskPii:
-    def test_short_string_unchanged(self):
-        assert _mask_pii("hello") == "hello"
+class TestValueShape:
+    def test_describes_string_without_retaining_content(self):
+        assert _value_shape("private question") == {"type": "string", "length": 16}
 
-    def test_exact_limit_unchanged(self):
-        value = "x" * _PII_MAX_LEN
-        assert _mask_pii(value) == value
+    def test_describes_collection_lengths(self):
+        assert _value_shape(["private", "values"]) == {"type": "array", "length": 2}
 
-    def test_over_limit_truncated(self):
-        value = "x" * (_PII_MAX_LEN + 20)
-        result = _mask_pii(value)
-        assert result.startswith("x" * _PII_MAX_LEN)
-        assert f"[{len(value)} chars]" in result
-        assert len(result) < len(value)
-
-    def test_custom_max_len(self):
-        result = _mask_pii("abcdefgh", max_len=4)
-        assert result == "abcd...[8 chars]"
-
-    def test_empty_string(self):
-        assert _mask_pii("") == ""
-
-
-# ---------------------------------------------------------------------------
-# _sanitize_body
-# ---------------------------------------------------------------------------
-
-class TestSanitizeBody:
-    def test_pii_string_field_masked(self):
-        body = {"query": "x" * 200, "mode": "auto"}
-        result = _sanitize_body(body)
-        assert len(result["query"]) < 200
-        assert result["mode"] == "auto"
-
-    def test_pii_list_field_masked(self):
-        body = {"messages": [{"role": "user", "content": "secret"}]}
-        result = _sanitize_body(body)
-        assert result["messages"] == "[1 items]"
-
-    def test_pii_non_string_non_list_masked(self):
-        body = {"question": 42}
-        result = _sanitize_body(body)
-        assert result["question"] == "<masked>"
-
-    def test_non_pii_fields_preserved(self):
-        body = {"mode": "deep", "Names": ["repo1"], "IncludeContent": False}
-        result = _sanitize_body(body)
-        assert result == body
-
-    def test_all_pii_fields_recognized(self):
-        body = {"query": "a" * 200, "question": "b" * 200, "message": "c" * 200, "messages": ["d"]}
-        result = _sanitize_body(body)
-        for key in ("query", "question", "message"):
-            assert len(result[key]) < 200
-        assert result["messages"] == "[1 items]"
-
-    def test_original_body_not_mutated(self):
-        body = {"query": "x" * 200}
-        _sanitize_body(body)
-        assert len(body["query"]) == 200
+    def test_describes_mapping_keys_without_values(self):
+        result = _mapping_shape({"question": "secret", "max_results": 10})
+        assert result == {
+            "question": {"type": "string", "length": 6},
+            "max_results": {"type": "number"},
+        }
+        assert "secret" not in json.dumps(result)
 
 
 # ---------------------------------------------------------------------------
@@ -224,7 +176,8 @@ class TestLogApiRequest:
 
         output = sink.getvalue()
         assert "sk-secret-key-12345" not in output
-        assert "Bearer ***" in output
+        parsed = json.loads(output.strip())
+        assert parsed["record"]["extra"]["header_names"] == ["Authorization", "Content-Type"]
         logger.remove()
 
     def test_masks_pii_in_body(self):
@@ -243,8 +196,12 @@ class TestLogApiRequest:
         output = sink.getvalue()
         # Full query should not appear
         assert long_query not in output
-        # Mode should be preserved
-        assert "auto" in output
+        parsed = json.loads(output.strip())
+        assert parsed["record"]["extra"]["body_shape"] == {
+            "query": {"type": "string", "length": len(long_query)},
+            "mode": {"type": "string", "length": 4},
+        }
+        assert "auto" not in output
         logger.remove()
 
     def test_handles_params_as_dict(self):
@@ -256,7 +213,9 @@ class TestLogApiRequest:
 
         output = sink.getvalue()
         parsed = json.loads(output.strip())
-        assert parsed["record"]["extra"]["params"] == {"key": "val"}
+        assert parsed["record"]["extra"]["parameter_shape"] == {
+            "key": {"type": "string", "length": 3}
+        }
         logger.remove()
 
     def test_handles_params_as_list_of_tuples(self):
@@ -268,8 +227,10 @@ class TestLogApiRequest:
 
         output = sink.getvalue()
         parsed = json.loads(output.strip())
-        assert parsed["record"]["extra"]["params"]["a"] == ["1", "2"]
-        assert parsed["record"]["extra"]["params"]["b"] == "3"
+        assert parsed["record"]["extra"]["parameter_shape"] == {
+            "a": {"type": "array", "length": 2},
+            "b": {"type": "string", "length": 1},
+        }
         logger.remove()
 
 
@@ -284,43 +245,42 @@ class TestLogApiResponse:
     def teardown_method(self):
         logging_module._current_level = "INFO"
 
-    def _make_response(self, text: str, status_code: int = 200, content_type: str = "application/json"):
+    def _make_response(self, status_code: int = 200, content_length: int | None = None):
         response = MagicMock(spec=httpx.Response)
         response.status_code = status_code
         response.url = httpx.URL("https://example.com/api")
-        response.text = text
-        response.headers = {"content-type": content_type}
+        response.headers = {}
+        if content_length is not None:
+            response.headers["content-length"] = str(content_length)
         return response
 
-    def test_short_body_not_truncated(self):
+    def test_logs_reported_response_size_without_body(self):
         sink = io.StringIO()
         logger.remove()
         logger.add(sink, level="DEBUG", serialize=True)
 
-        response = self._make_response('{"ok": true}')
+        response = self._make_response(content_length=12)
         log_api_response(response, request_id="test123")
 
         output = sink.getvalue()
         parsed = json.loads(output.strip())
-        assert parsed["record"]["extra"]["response_body"] == '{"ok": true}'
+        assert parsed["record"]["extra"]["response_size_bytes"] == 12
+        assert "response_body" not in parsed["record"]["extra"]
         assert parsed["record"]["extra"]["request_id"] == "test123"
         logger.remove()
 
-    def test_long_body_truncated(self):
+    def test_does_not_read_response_body(self):
         sink = io.StringIO()
         logger.remove()
         logger.add(sink, level="DEBUG", serialize=True)
 
-        long_body = "x" * (_RESPONSE_BODY_MAX_LEN + 200)
-        response = self._make_response(long_body)
+        response = self._make_response()
+        type(response).text = property(lambda self: (_ for _ in ()).throw(AssertionError("body read")))
         log_api_response(response)
 
         output = sink.getvalue()
         parsed = json.loads(output.strip())
-        body = parsed["record"]["extra"]["response_body"]
-        assert body.startswith("x" * _RESPONSE_BODY_MAX_LEN)
-        assert "chars total" in body
-        assert len(body) < len(long_body)
+        assert "response_body" not in parsed["record"]["extra"]
         logger.remove()
 
     def test_default_request_id(self):
@@ -328,28 +288,10 @@ class TestLogApiResponse:
         logger.remove()
         logger.add(sink, level="DEBUG", serialize=True)
 
-        response = self._make_response('{}')
+        response = self._make_response()
         log_api_response(response)
 
         output = sink.getvalue()
         parsed = json.loads(output.strip())
         assert parsed["record"]["extra"]["request_id"] == "unknown"
-        logger.remove()
-
-    def test_unreadable_response(self):
-        sink = io.StringIO()
-        logger.remove()
-        logger.add(sink, level="DEBUG", serialize=True)
-
-        response = MagicMock(spec=httpx.Response)
-        response.status_code = 200
-        response.url = httpx.URL("https://example.com/api")
-        response.headers = {"content-type": "application/json"}
-        type(response).text = property(lambda self: (_ for _ in ()).throw(RuntimeError("stream consumed")))
-
-        log_api_response(response)
-
-        output = sink.getvalue()
-        parsed = json.loads(output.strip())
-        assert parsed["record"]["extra"]["response_body"] == "<unreadable>"
         logger.remove()
