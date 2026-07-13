@@ -56,6 +56,9 @@ def _summarise_field_errors(d: dict[str, Any]) -> Optional[str]:
 
 # GitHub Issues URL is verified in README.md and manifest.json — safe to embed.
 _ISSUES_URL = "https://github.com/CodeAlive-AI/codealive-mcp/issues"
+_PROVIDER_CAPACITY_EXHAUSTED_TYPE = (
+    "https://app.codealive.ai/errors/provider-capacity-exhausted"
+)
 
 
 def _method_prefix(method: Optional[str]) -> str:
@@ -282,8 +285,20 @@ async def handle_api_error(
                 extras.append(f"requestId={request_id}")
             return msg if not extras else f"{msg} ({' | '.join(extras)})"
 
-        template = _ERROR_TEMPLATES.get(error_code)
-        if template is not None:
+        problem_type = problem.get("type") if problem else None
+        retryable = problem.get("retryable") if problem else None
+        if (
+            error_code == 500
+            and problem_type == _PROVIDER_CAPACITY_EXHAUSTED_TYPE
+            and retryable is False
+        ):
+            error_msg = _enrich(
+                "Server capacity unavailable (500): CodeAlive cannot complete this "
+                "operation because an internal service is unavailable. "
+                "Retry: no — CodeAlive must restore service; repeated calls will not help. "
+                "Try: stop retrying and try again later"
+            )
+        elif (template := _ERROR_TEMPLATES.get(error_code)) is not None:
             hint = (recovery_hints or {}).get(error_code, template.default_hint)
             error_msg = _enrich(_format_error(template, hint))
         elif error_code >= 500:

@@ -1,5 +1,7 @@
 """Test suite for error handling utilities."""
 
+import json
+
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 import httpx
@@ -75,6 +77,37 @@ async def test_handle_500_server_error():
     error_msg = ctx.error.call_args[0][0]
     assert "Retry: yes" in error_msg
     assert "github.com/CodeAlive-AI/codealive-mcp/issues" in error_msg
+
+
+@pytest.mark.asyncio
+async def test_handle_provider_capacity_exhausted_is_not_retried():
+    """A permanent CodeAlive provider-capacity failure must not look like a transient 500."""
+    ctx = MagicMock()
+    ctx.error = AsyncMock()
+    problem = {
+        "type": "https://app.codealive.ai/errors/provider-capacity-exhausted",
+        "title": "Server capacity unavailable",
+        "status": 500,
+        "detail": "CodeAlive cannot complete this operation because an internal service is unavailable. Our team has been notified.",
+        "retryable": False,
+        "requestId": "req-cap-123",
+    }
+
+    with pytest.raises(ToolError, match="Server capacity unavailable"):
+        await handle_api_error(
+            ctx,
+            _make_http_error(500, json.dumps(problem)),
+            "semantic search",
+            method="semantic_search",
+        )
+
+    error_msg = ctx.error.call_args[0][0]
+    assert "Retry: no" in error_msg
+    assert "req-cap-123" in error_msg
+    assert "retry once" not in error_msg
+    assert "github.com/CodeAlive-AI/codealive-mcp/issues" not in error_msg
+    assert "Gemini" not in error_msg
+    assert "spending cap" not in error_msg
 
 
 @pytest.mark.asyncio
