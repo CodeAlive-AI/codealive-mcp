@@ -1,0 +1,22 @@
+#!/usr/bin/env sh
+# Block pushes when the locked MCP dependency graph contains a known
+# vulnerability. This mirrors the `uv audit` gate in .github/workflows/ci.yml.
+set -eu
+
+# CI runs the same audit itself; avoid doing it twice on runner-side pushes.
+if [ -n "${CI:-}" ] || [ -n "${GITHUB_ACTIONS:-}" ]; then
+    exit 0
+fi
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+if ! command -v uv >/dev/null 2>&1; then
+    echo "[pre-push] uv is required to audit MCP dependencies." >&2
+    echo "[pre-push] Install it from https://docs.astral.sh/uv/ and retry." >&2
+    exit 1
+fi
+
+echo "[pre-push] Auditing locked Python dependencies…"
+uv audit --locked
+echo "[pre-push] Dependency audit passed."

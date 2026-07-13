@@ -941,6 +941,9 @@ The equivalent repeatable CLI options are `--allowed-host` and
 After making changes, quickly verify everything works:
 
 ```bash
+# Install the repository pre-push dependency audit once per clone
+./scripts/setup-hooks.sh
+
 # Quick smoke test (recommended)
 make smoke-test
 
