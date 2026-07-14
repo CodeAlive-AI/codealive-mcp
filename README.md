@@ -118,6 +118,8 @@ Then allow execution.
 
 ## 🤖 AI Client Integrations
 
+> **Connecting the server is half the setup.** Coding agents default to their built-in search (Cursor's `codebase_search`, Claude Code's `Grep`/`Glob`, Codex's shell grep) unless project instructions tell them to prefer CodeAlive tools. After connecting, add a short rules section to your `AGENTS.md` / `CLAUDE.md` / `.cursor/rules/*.mdc` — ready-made snippets and the patterns behind them are in [Instructing Coding Agents](https://docs.codealive.ai/guides/instructing-agents).
+
 <details>
 <summary><b>Claude Code</b></summary>
 
@@ -134,6 +136,8 @@ claude mcp add codealive-docker /usr/bin/docker run --rm -i -e CODEALIVE_API_KEY
 ```
 
 Replace `YOUR_API_KEY_HERE` with your actual API key.
+
+Then add a CodeAlive routing section to your project's `CLAUDE.md` so Claude prefers CodeAlive `semantic_search`/`grep_search` over built-in `Grep`/`Glob` for exploration — full snippet: [Claude Code setup guide](https://docs.codealive.ai/integrations/mcp/claude-code#custom-instructions).
 
 </details>
 
@@ -180,6 +184,8 @@ Replace `YOUR_API_KEY_HERE` with your actual API key.
   }
 }
 ```
+
+Cursor's built-in `codebase_search` can't be disabled and wins by default — add `.cursor/rules/codealive.mdc` with an explicit precedence rule so the agent calls CodeAlive `semantic_search` first. Ready-made rule: [Cursor setup guide](https://docs.codealive.ai/integrations/mcp/cursor#project-rules-for-codealive).
 
 </details>
 
@@ -241,6 +247,8 @@ export CODEALIVE_API_KEY="YOUR_API_KEY_HERE"
 No `[features]` flag is needed for stdio. `env_vars` forwards values from the parent shell — safer than embedding the key in `args`.
 
 **Codex App UI:** Settings → MCP Servers → Add Server. The UI writes the same `~/.codex/config.toml` entry. The CLI and IDE extension pick it up automatically.
+
+Then add a CodeAlive routing section to your repo-root `AGENTS.md` so Codex prefers CodeAlive `semantic_search`/`grep_search` over shell grep for exploration — full snippet: [Codex setup guide](https://docs.codealive.ai/integrations/mcp/codex#instructing-codex-via-agents-md).
 
 </details>
 
