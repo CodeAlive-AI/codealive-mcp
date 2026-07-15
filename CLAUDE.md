@@ -22,6 +22,7 @@ pip install -e .
 - Keep Python dependency specifiers exact where this repository already pins them, including test extras and `build-system`.
 - If `pyproject.toml` changes affect resolved packages, verify the result through the lock/install path used by CI.
 - Do not introduce floating versions in CI or release automation when exact pins are practical.
+- Do not adopt a versioned dependency, runtime, build tool, or GitHub Action until its release is more than seven days old. Keep `tool.uv.exclude-newer = "7 days"` and audit release dates for non-Python tooling separately.
 
 ### Running the MCP Server
 ```bash

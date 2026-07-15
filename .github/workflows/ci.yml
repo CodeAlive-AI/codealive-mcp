@@ -9,6 +9,11 @@ on:
 env:
   DOCKER_REGISTRY: ghcr.io
   IMAGE_NAME: ghcr.io/codealive-ai/codealive-mcp
+  # All tool versions below were published more than seven days before this release.
+  PYTHON_VERSION: '3.11.15'
+  NODE_VERSION: '24.18.0'
+  UV_VERSION: '0.11.28'
+  MCPB_VERSION: '2.1.2'
 
 permissions:
   contents: read
@@ -19,17 +24,16 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
-          python-version: '3.11'
+          python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install "uv~=0.11.0"
+          python -m pip install "uv==${UV_VERSION}"
           uv sync --locked --extra test
 
       - name: Audit locked dependencies
@@ -40,7 +44,7 @@ jobs:
           uv run python -m pytest src/tests/ -v --cov=src --cov-report=term-missing --cov-report=xml --junitxml=junit/test-results.xml
 
       - name: Upload test results
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: pytest-results
@@ -53,30 +57,30 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
         with:
-          python-version: '3.11'
+          python-version: ${{ env.PYTHON_VERSION }}
 
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: '22'
+          node-version: ${{ env.NODE_VERSION }}
 
       - name: Validate MCPB manifest
-        run: npx -y @anthropic-ai/mcpb@2.1.2 validate manifest.json
+        run: npx -y "@anthropic-ai/mcpb@${MCPB_VERSION}" validate manifest.json
 
       - name: Build MCPB bundle
         run: |
           mkdir -p dist
-          npx -y @anthropic-ai/mcpb@2.1.2 pack . dist/codealive-mcp.mcpb
+          npx -y "@anthropic-ai/mcpb@${MCPB_VERSION}" pack . dist/codealive-mcp.mcpb
 
       - name: Verify MCPB bundle contents
         run: |
           python scripts/verify_mcpb.py dist/codealive-mcp.mcpb
 
       - name: Upload MCPB artifact
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: codealive-mcpb
           path: dist/codealive-mcp.mcpb
@@ -86,11 +90,11 @@ jobs:
     needs: [test, package]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
 
-      - uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
 
       - name: Calculate Docker version
         id: docker_version
@@ -114,7 +118,7 @@ jobs:
 
       - name: Login to GitHub Container Registry
         if: github.event_name == 'push'
-        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4.4.0
         with:
           registry: ${{ env.DOCKER_REGISTRY }}
           username: ${{ github.actor }}
@@ -123,7 +127,7 @@ jobs:
       # PR: build only (no push) to validate Dockerfile — single platform for speed
       - name: Build Docker image (PR validation)
         if: github.event_name == 'pull_request'
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           push: false
           load: true
@@ -134,7 +138,7 @@ jobs:
       # Push to main: build multi-platform and push the production GHCR tag.
       - name: Build and push Docker image (GHCR)
         if: github.event_name == 'push'
-        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
           push: true
           platforms: linux/amd64,linux/arm64

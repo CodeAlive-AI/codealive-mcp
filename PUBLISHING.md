@@ -1,142 +1,73 @@
-# CodeAlive MCP Publishing Guide
+# CodeAlive MCP publishing guide
 
-This document explains how to publish new versions of the CodeAlive MCP server.
+Releases are created manually through the `Release` GitHub Actions workflow. The
+workflow tests the exact locked graph, publishes multi-architecture Docker images,
+publishes `server.json` to the MCP Registry, packages the Claude Desktop MCPB
+extension, and attaches it to the GitHub release.
 
-## 🚀 Quick Start
+## Release policy
 
-To publish a new version:
+- A versioned dependency, runtime, build tool, or GitHub Action must have been
+  released more than seven days before it is adopted.
+- Python resolution enforces this with `tool.uv.exclude-newer = "7 days"`.
+- Direct dependencies, CI runtimes, MCPB, MCP Publisher, and Actions are pinned.
+  Action pins use full commit SHAs; the MCP Publisher archive has an exact SHA-256.
+- Official container images may receive security rebuilds without changing the
+  Python release. The Dockerfile therefore pins the Python patch release and Debian
+  suite while accepting upstream security rebuilds of that tag.
 
-1. **Update version** in `pyproject.toml`:
-   ```toml
-   version = "0.3.0"  # Change this number
-   ```
+## Prepare a release
 
-2. **Commit and push**:
+1. Select the latest eligible versions and confirm their publication dates.
+2. Update the exact pins in `pyproject.toml` and the workflow `env` blocks.
+3. Regenerate and check the lock with the repository's pinned uv version:
+
    ```bash
-   git add pyproject.toml
-   git commit -m "Bump version to 0.3.0"
-   git push
+   uvx --from uv==0.11.28 uv lock --upgrade
+   uvx --from uv==0.11.28 uv lock --check
    ```
 
-3. **Done!** The rest happens automatically.
+4. Set the next release in all committed fallback/package metadata:
 
-## 🤖 What Happens Automatically
+   - `pyproject.toml` → `tool.setuptools_scm.fallback_version`
+   - `manifest.json` → `version`
+   - `server.json` → `version`
 
-When you push a version change to `main`, the GitHub Action:
+5. Run the release-equivalent checks:
 
-1. ✅ **Tests** - Runs pytest with coverage
-2. 🏗️ **Builds** - Creates Docker image for multiple platforms
-3. 🏷️ **Tags** - Creates git tag `v0.3.0` automatically
-4. 📦 **Publishes** - Pushes to:
-   - GitHub Container Registry (`ghcr.io/codealive-ai/codealive-mcp`)
-   - MCP Registry (`io.github.codealive-ai/codealive-mcp`)
-5. 📝 **Releases** - Creates GitHub release with usage examples
+   ```bash
+   uvx --from uv==0.11.28 uv sync --locked --extra test
+   uvx --from uv==0.11.28 uv run python -m pytest src/tests/ -v --cov=src
+   uvx --from uv==0.11.28 uv audit --locked
+   make smoke-test
+   npx -y @anthropic-ai/mcpb@2.1.2 validate manifest.json
+   npx -y @anthropic-ai/mcpb@2.1.2 pack . dist/codealive-mcp.mcpb
+   python scripts/verify_mcpb.py dist/codealive-mcp.mcpb
+   docker build --build-arg VERSION=3.0.2 -t codealive-mcp:release-check .
+   ```
 
-## 📋 Hybrid Deployment
+6. Commit and push the verified changes to `main`. Wait for CI and CodeQL to pass.
 
-Users can access your MCP server in two ways:
+## Publish
 
-### Option 1: Docker Container (Local)
-```json
-{
-  "name": "io.github.codealive-ai/codealive-mcp",
-  "transport": {
-    "type": "stdio",
-    "command": "docker",
-    "args": [
-      "run", "--rm", "-i", "-e", "CODEALIVE_API_KEY",
-      "ghcr.io/codealive-ai/codealive-mcp:v0.3.0"
-    ]
-  },
-  "env": {
-    "CODEALIVE_API_KEY": "your-api-key-here"
-  }
-}
-```
+Run `Release` from GitHub Actions with the exact version, for example `3.0.2`.
+The protected `release` environment may require approval. Do not create the tag by
+hand: the workflow creates it only after the Docker push succeeds.
 
-> Replace `v0.3.0` with the version being published.
+The workflow publishes:
 
-### Option 2: Remote HTTP Endpoint (Cloud)
-```json
-{
-  "name": "io.github.codealive-ai/codealive-mcp",
-  "transport": {
-    "type": "http",
-    "url": "https://mcp.codealive.ai/api"
-  },
-  "headers": {
-    "Authorization": "Bearer your-api-key-here"
-  }
-}
-```
+- `ghcr.io/codealive-ai/codealive-mcp:<version>`, `v<version>`, `latest`, and a
+  commit-SHA tag for `linux/amd64` and `linux/arm64`;
+- `io.github.CodeAlive-AI/codealive-mcp` in the MCP Registry;
+- Git tag and GitHub release `v<version>`;
+- `codealive-mcp.mcpb`, ready to install in Claude Desktop.
 
-## 📁 Project Structure
+## Post-release verification
 
-```
-.github/workflows/main.yml    # Single workflow handles everything
-server.json                   # MCP Registry configuration (hybrid)
-pyproject.toml               # Python package config (version source)
-Dockerfile                   # Container with MCP validation label
-```
+Confirm that the GitHub release contains the MCPB asset, both container platforms
+resolve, the MCP Registry reports the new version as latest, and a clean MCPB
+installation starts successfully. Existing Claude Desktop users should install the
+new MCPB and restart Claude Desktop.
 
-## 🔧 Configuration Files
-
-### `server.json` (MCP Registry)
-- **Hybrid deployment** with both Docker and remote options
-- **Auto-synced version** from pyproject.toml
-- **Validation** ensures proper structure
-
-### `pyproject.toml` (Source of Truth)
-- **Version control** - change here to trigger releases
-- **Dependencies** and Python package metadata
-
-### `.github/workflows/main.yml` (Automation)
-- **Smart publishing** - only when version changes
-- **Multi-platform** Docker builds (amd64 + arm64)
-- **OIDC authentication** for MCP Registry
-
-## 🛠️ Manual Testing
-
-Test locally before pushing:
-
-```bash
-# Validate server.json structure
-python -c "
-import json
-with open('server.json') as f:
-    data = json.load(f)
-print('✓ Valid JSON')
-print(f'Name: {data[\"name\"]}')
-print(f'Version: {data[\"version\"]}')
-"
-
-# Run tests
-python -m pytest src/tests/ -v
-
-# Build Docker image locally
-docker build -t codealive-mcp-test .
-```
-
-## 🔍 Monitoring
-
-- **GitHub Actions**: Check workflow runs
-- **Releases**: View at https://github.com/CodeAlive-AI/codealive-mcp/releases
-- **Docker Images**: Check https://github.com/CodeAlive-AI/codealive-mcp/pkgs/container/codealive-mcp
-- **MCP Registry**: Server appears as `io.github.codealive-ai/codealive-mcp`
-
-## ❓ Troubleshooting
-
-**Workflow didn't trigger publishing?**
-- Check if version in `pyproject.toml` actually changed
-- Ensure push was to `main` branch
-- Look for existing git tag with same version
-
-**MCP Registry publishing failed?**
-- Verify `server.json` structure is valid
-- Check GitHub OIDC permissions are enabled
-- Ensure namespace `io.github.codealive-ai` is correct
-
-**Docker build failed?**
-- Test locally: `docker build .`
-- Check platform compatibility (we build for amd64 + arm64)
-- Verify base image and dependencies are available
+Remote clients continue to use `https://mcp.codealive.ai/api` with an
+`Authorization: Bearer <key>` header.
