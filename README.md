@@ -99,10 +99,8 @@ Select your preferred AI client below for instant setup:
 
 You may ask your AI agent to install the CodeAlive MCP server for you.
 
-1. Copy-Paste the following prompt into your AI agent (remember to insert your API key):
+1. Copy-paste the following prompt into your AI agent. Do not include your API key in the prompt:
 ```
-Here is CodeAlive API key: PASTE_YOUR_API_KEY_HERE
-
 Add the CodeAlive MCP server by following the installation guide from the README at https://raw.githubusercontent.com/CodeAlive-AI/codealive-mcp/main/README.md
 
 Find the section "AI Client Integrations" and locate your client (Claude Code, Cursor, Gemini CLI, etc.). Each client has specific setup instructions:
@@ -110,7 +108,7 @@ Find the section "AI Client Integrations" and locate your client (Claude Code, C
 - For Claude Code: Use `claude mcp add` with the --transport http flag
 - For other clients: Follow the configuration snippets provided
 
-Prefer the Remote HTTP option when available. If API key is not provided above, help me issue a CodeAlive API key first.
+Prefer the Remote HTTP option when available. Do not ask me to paste an API key into chat. When the key is needed, ask me to create a CodeAlive API key and copy it to my clipboard. After I confirm, insert it directly from the clipboard into the required secure configuration without displaying, echoing, logging, or exposing it in command arguments, command output, or model context. If you cannot safely use the clipboard without exposing the value, tell me exactly where to paste it myself.
 ```
 Then allow execution.
 
