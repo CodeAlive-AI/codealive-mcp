@@ -11,13 +11,22 @@ from pathlib import Path
 
 
 FORBIDDEN_PATTERNS = (
+    ".coverage",
     ".claude/*",
     ".claude-plugin/*",
+    ".dockerignore",
+    ".githooks/*",
     ".env",
     ".env.*",
     ".mcpregistry_*",
+    "CLAUDE.md",
+    "Dockerfile",
+    "Makefile",
     "codealive-context-engine/*",
+    "integration_test.py",
+    "mcp-publisher",
     "plugins/*",
+    "scripts/*",
     "smoke_test.py",
     "src/tests/*",
     "uv.lock",

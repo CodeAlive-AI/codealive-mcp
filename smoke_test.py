@@ -196,7 +196,7 @@ class SmokeTest:
         self.print_test("semantic_search Tool")
         try:
             result = await self.session.call_tool("semantic_search", {
-                "query": "test query",
+                "question": "test query",
                 "data_sources": ["test-repo"],
             })
 
@@ -253,16 +253,16 @@ class SmokeTest:
         try:
             # Test with invalid parameters
             result = await self.session.call_tool("semantic_search", {
-                "query": "",  # Empty query should fail
+                "question": "",  # Empty question should fail
                 "data_sources": ["test"],
             })
 
-            # Should get an error about empty query
+            # Should get an error about an empty question
             if result.isError or "empty" in str(result.content).lower() or "cannot be empty" in str(result.content):
                 self.print_success("Parameter validation working correctly")
                 return True
             else:
-                self.print_error("Empty query was not rejected")
+                self.print_error("Empty question was not rejected")
                 return False
 
         except Exception as e:
