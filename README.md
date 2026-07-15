@@ -6,7 +6,7 @@
 
 **Connect your AI assistant to CodeAlive's powerful code understanding platform in seconds!**
 
-This MCP (Model Context Protocol) server enables AI clients like Claude Code, Cursor, Claude Desktop, Continue, VS Code (GitHub Copilot), Cline, Codex, OpenCode, Qwen Code, Gemini CLI, Roo Code, Goose, Kilo Code, Windsurf, Kiro, Qoder, n8n, and Amazon Q Developer to access CodeAlive's advanced semantic code search and codebase interaction features.
+This MCP (Model Context Protocol) server enables AI clients like Claude Code, Cursor, Claude Desktop, Continue, VS Code (GitHub Copilot), Cline, Codex, OpenCode, SourceCraft Code Assistant, SourceCraft CLI, Zed, KodaCode, GigaCode, Qwen Code, Gemini CLI, Roo Code, Goose, Kilo Code, Windsurf, Kiro, Qoder, n8n, and Amazon Q Developer to access CodeAlive's advanced semantic code search and codebase interaction features.
 
 ## What is CodeAlive?
 
@@ -91,9 +91,9 @@ npx skills add CodeAlive-AI/codealive-skills@codealive-context-engine
 3. Click **"+ Create API Key"**
 4. Copy your API key immediately - you won't see it again!
 
-### Step 2: Choose Your AI Client
+### Step 2: Open Your Client Guide
 
-Select your preferred AI client below for instant setup:
+Choose your client in the [MCP integration guides](https://docs.codealive.ai/integrations/mcp) and follow the current setup instructions there.
 
 ## 🚀 Quick Start (Agentic Installation)
 
@@ -101,12 +101,7 @@ You may ask your AI agent to install the CodeAlive MCP server for you.
 
 1. Copy-paste the following prompt into your AI agent. Do not include your API key in the prompt:
 ```
-Add the CodeAlive MCP server by following the installation guide from the README at https://raw.githubusercontent.com/CodeAlive-AI/codealive-mcp/main/README.md
-
-Find the section "AI Client Integrations" and locate your client (Claude Code, Cursor, Gemini CLI, etc.). Each client has specific setup instructions:
-- For Gemini CLI: Use the one-command setup with `gemini mcp add`
-- For Claude Code: Use `claude mcp add` with the --transport http flag
-- For other clients: Follow the configuration snippets provided
+Add the CodeAlive MCP server by following the guide for my client at https://docs.codealive.ai/integrations/mcp
 
 Prefer the Remote HTTP option when available. Do not ask me to paste an API key into chat. When the key is needed, ask me to create a CodeAlive API key and copy it to my clipboard. After I confirm, insert it directly from the clipboard into the required secure configuration without displaying, echoing, logging, or exposing it in command arguments, command output, or model context. If you cannot safely use the clipboard without exposing the value, tell me exactly where to paste it myself.
 ```
@@ -116,759 +111,40 @@ Then allow execution.
 
 ## 🤖 AI Client Integrations
 
-> **Connecting the server is half the setup.** Coding agents default to their built-in search (Cursor's `codebase_search`, Claude Code's `Grep`/`Glob`, Codex's shell grep) unless project instructions tell them to prefer CodeAlive tools. After connecting, add a short rules section to your `AGENTS.md` / `CLAUDE.md` / `.cursor/rules/*.mdc` — ready-made snippets and the patterns behind them are in [Instructing Coding Agents](https://docs.codealive.ai/guides/instructing-agents).
-
-<details>
-<summary><b>Claude Code</b></summary>
-
-**Option 1: Remote HTTP (Recommended)**
-
-```bash
-claude mcp add --transport http codealive https://mcp.codealive.ai/api --header "Authorization: Bearer YOUR_API_KEY_HERE"
-```
-
-**Option 2: Docker (STDIO)**
-
-```bash
-claude mcp add codealive-docker /usr/bin/docker run --rm -i -e CODEALIVE_API_KEY=YOUR_API_KEY_HERE ghcr.io/codealive-ai/codealive-mcp:main
-```
-
-Replace `YOUR_API_KEY_HERE` with your actual API key.
-
-Then add a CodeAlive routing section to your project's `CLAUDE.md` so Claude prefers CodeAlive `semantic_search`/`grep_search` over built-in `Grep`/`Glob` for exploration — full snippet: [Claude Code setup guide](https://docs.codealive.ai/integrations/mcp/claude-code#custom-instructions).
-
-</details>
-
-<details>
-<summary><b>Cursor</b></summary>
-
-**Option 1: Remote HTTP (Recommended)**
-
-1. Open Cursor → Settings (`Cmd+,` or `Ctrl+,`)
-2. Navigate to **"Tools & MCP"** in the left panel (older builds called this **"Tools & Integrations"**)
-3. Click **"New MCP Server"**
-4. Paste this configuration:
-
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "url": "https://mcp.codealive.ai/api",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY_HERE"
-      }
-    }
-  }
-}
-```
-
-5. Save — Cursor reloads the server automatically. The entry is stored in `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global).
-
-> **Tip:** Cursor also supports a one-click install deeplink — `cursor://anysphere.cursor-deeplink/mcp/install?name=codealive&config=BASE64_CONFIG`. Only follow deeplinks from trusted sources.
-
-**Option 2: Docker (STDIO)**
-
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:main"
-      ]
-    }
-  }
-}
-```
-
-Cursor's built-in `codebase_search` can't be disabled and wins by default — add `.cursor/rules/codealive.mdc` with an explicit precedence rule so the agent calls CodeAlive `semantic_search` first. Ready-made rule: [Cursor setup guide](https://docs.codealive.ai/integrations/mcp/cursor#project-rules-for-codealive).
-
-</details>
-
-<details>
-<summary><b>Codex (CLI, App, IDE Extension)</b></summary>
-
-OpenAI Codex ships in three form-factors that **share the same configuration**: the **Codex CLI**, the **Codex App** (macOS / Windows), and the **Codex IDE Extension** (VS Code `openai.chatgpt` and JetBrains 2025.3+). All three read `~/.codex/config.toml`, so one snippet covers every Codex surface. A project-level `.codex/config.toml` in the repo root is also supported for trusted projects.
-
-**Option 1: One-line add (Recommended)**
-
-```bash
-codex mcp add codealive --url https://mcp.codealive.ai/api
-```
-
-Then open `~/.codex/config.toml` and add the bearer-token reference plus the Streamable HTTP feature flag:
-
-```toml
-[features]
-rmcp_client = true
-
-[mcp_servers.codealive]
-url = "https://mcp.codealive.ai/api"
-bearer_token_env_var = "CODEALIVE_API_KEY"
-```
-
-Finally, export the key:
-```bash
-export CODEALIVE_API_KEY="YOUR_API_KEY_HERE"
-```
-
-Verify with `codex mcp list`.
-
-> **Note:** Streamable HTTP requires `[features].rmcp_client = true`. The old top-level `experimental_use_rmcp_client = true` flag is deprecated. `bearer_token_env_var` is preferred over inline `headers = { Authorization = "Bearer …" }` because it keeps secrets out of the config file.
-
-**Option 2: Inline header (HTTP)**
-
-```toml
-[features]
-rmcp_client = true
-
-[mcp_servers.codealive]
-url = "https://mcp.codealive.ai/api"
-headers = { Authorization = "Bearer YOUR_API_KEY_HERE" }
-```
-
-**Option 3: Docker (STDIO)**
-
-```toml
-[mcp_servers.codealive]
-command = "docker"
-args = ["run", "--rm", "-i", "ghcr.io/codealive-ai/codealive-mcp:main"]
-env_vars = ["CODEALIVE_API_KEY"]
-```
-
-```bash
-export CODEALIVE_API_KEY="YOUR_API_KEY_HERE"
-```
-
-No `[features]` flag is needed for stdio. `env_vars` forwards values from the parent shell — safer than embedding the key in `args`.
-
-**Codex App UI:** Settings → MCP Servers → Add Server. The UI writes the same `~/.codex/config.toml` entry. The CLI and IDE extension pick it up automatically.
-
-Then add a CodeAlive routing section to your repo-root `AGENTS.md` so Codex prefers CodeAlive `semantic_search`/`grep_search` over shell grep for exploration — full snippet: [Codex setup guide](https://docs.codealive.ai/integrations/mcp/codex#instructing-codex-via-agents-md).
-
-</details>
-
-<details>
-<summary><b>Gemini CLI</b></summary>
-
-**One command setup (complete):**
-
-```bash
-gemini mcp add --transport http secure-http https://mcp.codealive.ai/api --header "Authorization: Bearer YOUR_API_KEY_HERE"
-```
-
-Replace `YOUR_API_KEY_HERE` with your actual API key. That's it - no config files needed! 🎉
-
-</details>
-
-<details>
-<summary><b>Continue</b></summary>
-
-**Option 1: Remote HTTP (Recommended)**
-
-1. Create/edit `.continue/config.yaml` in your project or `~/.continue/config.yaml`
-2. Add this configuration:
-
-```yaml
-mcpServers:
-  - name: CodeAlive
-    type: streamable-http
-    url: https://mcp.codealive.ai/api
-    requestOptions:
-      headers:
-        Authorization: "Bearer YOUR_API_KEY_HERE"
-```
-
-3. Restart VS Code
-
-**Option 2: Docker (STDIO)**
-
-```yaml
-mcpServers:
-  - name: CodeAlive
-    type: stdio
-    command: docker
-    args:
-      - run
-      - --rm
-      - -i
-      - -e
-      - CODEALIVE_API_KEY=YOUR_API_KEY_HERE
-      - ghcr.io/codealive-ai/codealive-mcp:main
-```
-
-</details>
-
-<details>
-<summary><b>Visual Studio Code with GitHub Copilot</b></summary>
-
-**Option 1: Remote HTTP (Recommended)**
-
-> **Note:** VS Code supports both Streamable HTTP and SSE transports, with automatic fallback to SSE if Streamable HTTP fails.
-
-1. Open Command Palette (`Ctrl+Shift+P` or `Cmd+Shift+P`)
-2. Run **"MCP: Add Server"**
-3. Choose **"HTTP"** server type
-4. Enter this configuration:
-
-```json
-{
-  "servers": {
-    "codealive": {
-      "type": "http",
-      "url": "https://mcp.codealive.ai/api",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY_HERE"
-      }
-    }
-  }
-}
-```
-
-5. Restart VS Code
-
-**Option 2: Docker (STDIO)**
-
-Create `.vscode/mcp.json` in your workspace:
-
-```json
-{
-  "servers": {
-    "codealive": {
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:main"
-      ]
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><b>Claude Desktop</b></summary>
-
-**Option 1: Extension bundle `.mcpb` (Recommended)**
-
-The `.mcpb` bundle gives you one-click install, secure token storage, and self-hosted `baseUrl` configuration — no Docker or CLI required.
-
-1. Download `codealive-mcp.mcpb` from the [latest GitHub Release](https://github.com/CodeAlive-AI/codealive-mcp/releases/latest)
-2. In Claude Desktop, open **Settings → Extensions → Install Extension...**
-3. Select the downloaded `.mcpb` file and configure:
-   - **CodeAlive API Key**: your bearer token
-   - **CodeAlive Base URL**: defaults to `https://app.codealive.ai`; for self-hosted, use your deployment origin (e.g. `https://codealive.yourcompany.com`)
-   - **Ignore TLS Errors**: only for dev/self-signed environments
-
-**Option 2: Docker (STDIO)**
-
-1. Edit your config file:
-   - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-
-2. Add this configuration:
-
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:main"
-      ]
-    }
-  }
-}
-```
-
-3. Restart Claude Desktop
-
-</details>
-
-<details>
-<summary><b>Cline</b></summary>
-
-**Option 1: Remote HTTP (Recommended)**
-
-1. Open Cline extension in VS Code
-2. Click the MCP Servers icon to configure
-3. Add this configuration to your MCP settings:
-
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "url": "https://mcp.codealive.ai/api",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY_HERE"
-      }
-    }
-  }
-}
-```
-
-4. Save and restart VS Code
-
-**Option 2: Docker (STDIO)**
-
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:main"
-      ]
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><b>OpenCode</b></summary>
-
-Add CodeAlive as a **remote** MCP server in your `opencode.json`.
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "mcp": {
-    "codealive": {
-      "type": "remote",
-      "url": "https://mcp.codealive.ai/api",
-      "enabled": true,
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY_HERE"
-      }
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><b>Qwen Code</b></summary>
-
-Qwen Code supports MCP via `mcpServers` in its `settings.json` and multiple transports (stdio/SSE/streamable-http). Use **streamable-http** when available; otherwise use Docker (stdio).
-
-**`~/.qwen/settings.json` (Streamable HTTP)**
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "type": "streamable-http",
-      "url": "https://mcp.codealive.ai/api",
-      "requestOptions": {
-        "headers": {
-          "Authorization": "Bearer YOUR_API_KEY_HERE"
-        }
-      }
-    }
-  }
-}
-```
-
-**Fallback: Docker (stdio)**
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "type": "stdio",
-      "command": "docker",
-      "args": ["run", "--rm", "-i",
-               "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-               "ghcr.io/codealive-ai/codealive-mcp:main"]
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><b>Roo Code</b></summary>
-
-Roo Code reads a JSON settings file similar to Cline.
-
-**Global config:** `mcp_settings.json` (Roo) or `cline_mcp_settings.json` (Cline-style)
-
-**Option A — Remote HTTP**
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "type": "streamable-http",
-      "url": "https://mcp.codealive.ai/api",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY_HERE"
-      }
-    }
-  }
-}
-```
-
-**Option B — Docker (STDIO)**
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "type": "stdio",
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:main"
-      ]
-    }
-  }
-}
-```
-
-> **Tip:** If your Roo build doesn't honor HTTP headers, use the Docker/STDIO option.
-
-</details>
-
-<details>
-<summary><b>Goose</b></summary>
-
-**UI path:** Settings → MCP Servers → Add → choose Streamable HTTP
-
-**Streamable HTTP configuration:**
-- **Name:** `codealive`
-- **Endpoint URL:** `https://mcp.codealive.ai/api`
-- **Headers:** `Authorization: Bearer YOUR_API_KEY_HERE`
-
-**Docker (STDIO) alternative:**
-
-Add a STDIO extension with:
-- **Command:** `docker`
-- **Args:** `run --rm -i -e CODEALIVE_API_KEY=YOUR_API_KEY_HERE ghcr.io/codealive-ai/codealive-mcp:main`
-
-</details>
-
-<details>
-<summary><b>Kilo Code</b></summary>
-
-**UI path:** Manage → Integrations → Model Context Protocol (MCP) → Add Server
-
-**HTTP**
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "type": "streamable-http",
-      "url": "https://mcp.codealive.ai/api",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY_HERE"
-      }
-    }
-  }
-}
-```
-
-**STDIO (Docker)**
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "type": "stdio",
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:main"
-      ]
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><b>Windsurf (Codeium)</b></summary>
-
-**File:** `~/.codeium/windsurf/mcp_config.json`
-
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "type": "streamable-http",
-      "serverUrl": "https://mcp.codealive.ai/api",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY_HERE"
-      }
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><b>Kiro</b></summary>
-
-> **Note:** Kiro does not yet support remote MCP servers natively. Use the `mcp-remote` workaround to connect to remote HTTP servers.
-
-**Prerequisites:**
-```bash
-npm install -g mcp-remote
-```
-
-**UI path:** Settings → MCP → Add Server
-
-**Global file:** `~/.kiro/settings/mcp.json`
-**Workspace file:** `.kiro/settings/mcp.json`
-
-**Remote HTTP (via mcp-remote workaround)**
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "mcp-remote",
-        "https://mcp.codealive.ai/api",
-        "--header",
-        "Authorization: Bearer ${CODEALIVE_API_KEY}"
-      ],
-      "env": {
-        "CODEALIVE_API_KEY": "YOUR_API_KEY_HERE"
-      }
-    }
-  }
-}
-```
-
-**Docker (STDIO)**
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "type": "stdio",
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:main"
-      ]
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><b>Qoder</b></summary>
-
-**UI path:** User icon → Qoder Settings → MCP → My Servers → + Add (Agent mode)
-
-**SSE (remote HTTP)**
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "type": "sse",
-      "url": "https://mcp.codealive.ai/api",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY_HERE"
-      }
-    }
-  }
-}
-```
-
-**STDIO (Docker)**
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "type": "stdio",
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:main"
-      ]
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><b>Amazon Q Developer (CLI & IDE)</b></summary>
-
-**Q Developer CLI**
-
-**Config file:** `~/.aws/amazonq/mcp.json` or workspace `.amazonq/mcp.json`
-
-**HTTP server**
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "type": "http",
-      "url": "https://mcp.codealive.ai/api",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY_HERE"
-      }
-    }
-  }
-}
-```
-
-**STDIO (Docker)**
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "type": "stdio",
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:main"
-      ]
-    }
-  }
-}
-```
-
-**Q Developer IDE (VS Code / JetBrains)**
-
-**Global:** `~/.aws/amazonq/agents/default.json`
-**Local (workspace):** `.aws/amazonq/agents/default.json`
-
-**Minimal entry (HTTP):**
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "type": "http",
-      "url": "https://mcp.codealive.ai/api",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY_HERE"
-      },
-      "timeout": 310000
-    }
-  }
-}
-```
-
-Use the IDE UI: Q panel → Chat → tools icon → Add MCP Server → choose http or stdio.
-
-</details>
-
-<details>
-<summary><b>JetBrains AI Assistant</b></summary>
-
-> **Note:** JetBrains AI Assistant requires the `mcp-remote` workaround for connecting to remote HTTP MCP servers.
-
-**Prerequisites:**
-```bash
-npm install -g mcp-remote
-```
-
-**Config file:** Settings/Preferences → AI Assistant → Model Context Protocol → Configure
-
-Add this configuration:
-
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "command": "npx",
-      "args": [
-        "mcp-remote",
-        "https://mcp.codealive.ai/api",
-        "--header",
-        "Authorization: Bearer ${CODEALIVE_API_KEY}"
-      ],
-      "env": {
-        "CODEALIVE_API_KEY": "YOUR_API_KEY_HERE"
-      }
-    }
-  }
-}
-```
-
-**For self-hosted deployments**, replace the URL:
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "command": "npx",
-      "args": [
-        "mcp-remote",
-        "http://your-server:8000/api",
-        "--header",
-        "Authorization: Bearer ${CODEALIVE_API_KEY}"
-      ],
-      "env": {
-        "CODEALIVE_API_KEY": "YOUR_API_KEY_HERE"
-      }
-    }
-  }
-}
-```
-
-See [JetBrains MCP Documentation](https://www.jetbrains.com/help/ai-assistant/mcp.html#workaround-for-remote-servers) for more details.
-
-</details>
-
-<details>
-<summary><b>n8n</b></summary>
-
-**Using AI Agent Node with MCP Tools**
-
-1. Add an **AI Agent** node to your workflow
-2. Configure the agent with MCP tools:
-   ```
-   Server URL: https://mcp.codealive.ai/api
-   Authorization Header: Bearer YOUR_API_KEY_HERE
-   ```
-
-3. The server automatically handles n8n's extra parameters (sessionId, action, chatInput, toolCallId)
-4. Use the available tools:
-   - `get_data_sources` - List available repositories
-   - `semantic_search` - Search code semantically
-   - `grep_search` - Search by exact text or regex
-   - `get_repository_ontology` - Orient around one repository
-   - `get_file_tree` - Inspect repository files
-   - `read_file` - Read one repository-relative file
-   - `fetch_artifacts` - Fetch source for search result identifiers
-   - `get_artifact_relationships` - Expand relationships for one artifact
-   - `get_artifact_query_schema` - Inspect metadata query schema
-   - `query_artifact_metadata` - Run metadata analytics
-   - `chat` - Stateless synthesized codebase Q&A, only when explicitly requested
-
-**Example Workflow:**
-```
-Trigger → AI Agent (with CodeAlive MCP tools) → Process Response
-```
-
-**Note:** n8n middleware is built-in, so no special configuration is needed. The server will automatically strip n8n's extra parameters before processing tool calls.
-
-</details>
+Client-specific configuration is maintained in the CodeAlive documentation so file paths, transports, and authentication guidance stay current.
+
+**Start here:** [MCP integration guides](https://docs.codealive.ai/integrations/mcp)
+
+| Client | Setup guide |
+|---|---|
+| Claude Code | [Claude Code](https://docs.codealive.ai/integrations/mcp/claude-code) |
+| Claude Desktop | [Claude Desktop](https://docs.codealive.ai/integrations/mcp/claude-desktop) |
+| Cursor | [Cursor](https://docs.codealive.ai/integrations/mcp/cursor) |
+| Visual Studio Code | [VS Code](https://docs.codealive.ai/integrations/mcp/vscode) |
+| Windsurf | [Windsurf](https://docs.codealive.ai/integrations/mcp/windsurf) |
+| Cline | [Cline](https://docs.codealive.ai/integrations/mcp/cline) |
+| Continue | [Continue](https://docs.codealive.ai/integrations/mcp/continue) |
+| Codex | [Codex](https://docs.codealive.ai/integrations/mcp/codex) |
+| Gemini CLI | [Gemini CLI](https://docs.codealive.ai/integrations/mcp/gemini-cli) |
+| Amazon Q Developer | [Amazon Q](https://docs.codealive.ai/integrations/mcp/amazon-q) |
+| OpenCode | [OpenCode](https://docs.codealive.ai/integrations/mcp/opencode) |
+| SourceCraft Code Assistant and SourceCraft CLI | [SourceCraft](https://docs.codealive.ai/integrations/mcp/sourcecraft) |
+| Zed | [Zed](https://docs.codealive.ai/integrations/mcp/zed) |
+| ChatGPT | [ChatGPT](https://docs.codealive.ai/integrations/mcp/chatgpt) |
+| OpenClaw | [OpenClaw](https://docs.codealive.ai/integrations/mcp/openclaw) |
+| KodaCode, GigaCode, Roo Code, Goose, Kilo Code, Qwen Code, Kiro, Qoder, JetBrains AI Assistant, n8n, and more | [Other agents](https://docs.codealive.ai/integrations/mcp/other-agents) |
+
+For an unlisted client, use these generic connection details and adapt them to the client's MCP configuration format:
+
+- **Endpoint:** `https://mcp.codealive.ai/api`
+- **Transport:** Streamable HTTP
+- **Authentication header:** `Authorization: Bearer YOUR_API_KEY_HERE`
+
+For a private deployment, replace the endpoint with your server's `/api` URL. See [Self-Hosting](https://docs.codealive.ai/integrations/mcp/self-hosting) for deployment guidance.
+
+> **Connecting the server is half the setup.** Coding agents may continue using their built-in search unless project instructions tell them to prefer CodeAlive. Ready-made rules for `AGENTS.md`, `CLAUDE.md`, and client-specific instruction files are in [Instructing Coding Agents](https://docs.codealive.ai/guides/instructing-agents).
 
 ---
-
 ## 🔧 Advanced: Local Development
 
 **For developers who want to customize or contribute to the MCP server.**
@@ -898,24 +174,7 @@ pip install -e .
 
 ### Local Server Configuration
 
-Once installed locally, configure your AI client to use the local server:
-
-#### Claude Code (Local)
-```bash
-claude mcp add codealive-local /path/to/codealive-mcp/.venv/bin/python /path/to/codealive-mcp/src/codealive_mcp_server.py --env CODEALIVE_API_KEY=YOUR_API_KEY_HERE
-```
-
-#### Other Clients (Local)
-Replace the Docker `command` and `args` with:
-```json
-{
-  "command": "/path/to/codealive-mcp/.venv/bin/python",
-  "args": ["/path/to/codealive-mcp/src/codealive_mcp_server.py"],
-  "env": {
-    "CODEALIVE_API_KEY": "YOUR_API_KEY_HERE"
-  }
-}
-```
+After installing the server locally, point your MCP client at `.venv/bin/python` with `src/codealive_mcp_server.py` as the first argument and provide `CODEALIVE_API_KEY` in the process environment. Client-specific configuration belongs in the [MCP integration guides](https://docs.codealive.ai/integrations/mcp).
 
 ### Running HTTP Server Locally
 
@@ -973,41 +232,12 @@ The smoke test verifies:
 - Parameter validation works
 - Runs in ~5 seconds
 
-### Smithery Installation
-
-Auto-install for Claude Desktop via [Smithery](https://smithery.ai/server/@CodeAlive-AI/codealive-mcp):
-
-```bash
-npx -y @smithery/cli install @CodeAlive-AI/codealive-mcp --client claude
-```
-
 ---
 
 ## 🌐 Community Plugins
 
-### Gemini CLI — CodeAlive Extension
-
-**Repo:** https://github.com/akolotov/gemini-cli-codealive-extension
-
-Gemini CLI extension that wires CodeAlive into your terminal with prebuilt slash commands and MCP config. It includes:
-- `GEMINI.md` guidance so Gemini knows how to use CodeAlive tools effectively
-- Slash commands: `/codealive:chat`, `/codealive:find`, `/codealive:search`
-- Easy setup via Gemini CLI's extension system
-
-**Install**
-```bash
-gemini extensions install https://github.com/akolotov/gemini-cli-codealive-extension
-```
-
-**Configure**
-```bash
-# Option 1: .env next to where you run `gemini`
-CODEALIVE_API_KEY="your_codealive_api_key_here"
-
-# Option 2: environment variable
-export CODEALIVE_API_KEY="your_codealive_api_key_here"
-gemini
-```
+- [Gemini CLI — CodeAlive Extension](https://github.com/akolotov/gemini-cli-codealive-extension)
+- [Gemini CLI setup guide](https://docs.codealive.ai/integrations/mcp/gemini-cli)
 
 ---
 
@@ -1051,145 +281,26 @@ curl http://localhost:8000/health
 
 See `docker-compose.example.yml` for the complete configuration template.
 
-### Connecting AI Clients to Your Deployed Instance
+### Connecting MCP Clients to Your Deployed Instance
 
-Once deployed, configure your AI clients to use your HTTP endpoint:
+Use the same generic connection details as CodeAlive Cloud, replacing the endpoint with your deployment's `/api` URL:
 
-**Claude Code:**
-```bash
-claude mcp add --transport http codealive http://your-server:8000/api --header "Authorization: Bearer YOUR_API_KEY_HERE"
-```
+- **Endpoint:** `https://your-server.example.com/api`
+- **Transport:** Streamable HTTP
+- **Authentication header:** `Authorization: Bearer YOUR_API_KEY_HERE`
 
-**VS Code:**
-```bash
-code --add-mcp "{\"name\":\"codealive\",\"type\":\"http\",\"url\":\"http://your-server:8000/api\",\"headers\":{\"Authorization\":\"Bearer YOUR_API_KEY_HERE\"}}"
-```
-
-**Cursor / Other Clients:**
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "url": "http://your-server:8000/api",
-      "headers": {
-        "Authorization": "Bearer YOUR_API_KEY_HERE"
-      }
-    }
-  }
-}
-```
-
-Replace `your-server:8000` with your actual deployment URL and port.
-
----
+For the exact configuration format, open the relevant [client integration guide](https://docs.codealive.ai/integrations/mcp).
 
 ## 🪟 Windows & WSL
 
-<details>
-<summary><b>Overview</b></summary>
+Use the client-specific documentation for Windows and WSL setup:
 
-Claude Code on Windows runs inside WSL (Windows Subsystem for Linux). Claude Desktop runs natively on Windows. This creates specific challenges when configuring MCP servers — especially around binary paths, environment variables, and networking.
+- [Claude Code](https://docs.codealive.ai/integrations/mcp/claude-code)
+- [Claude Desktop](https://docs.codealive.ai/integrations/mcp/claude-desktop)
+- [All MCP integration guides](https://docs.codealive.ai/integrations/mcp)
+- [Troubleshooting](https://docs.codealive.ai/troubleshooting)
 
-**The simplest solution for both Claude Code and Claude Desktop on Windows is Remote HTTP** — it avoids all subprocess spawning and path issues entirely.
-
-</details>
-
-<details>
-<summary><b>Claude Code in WSL</b></summary>
-
-When Claude Code runs inside WSL, it operates as a normal Linux environment. Use the same commands as on Linux/macOS:
-
-**Remote HTTP (Recommended — avoids all WSL issues):**
-```bash
-claude mcp add --transport http codealive https://mcp.codealive.ai/api --header "Authorization: Bearer YOUR_API_KEY_HERE"
-```
-
-**Docker STDIO (if Docker Desktop WSL integration is enabled):**
-```bash
-claude mcp add codealive-docker /usr/bin/docker run --rm -i -e CODEALIVE_API_KEY=YOUR_API_KEY_HERE ghcr.io/codealive-ai/codealive-mcp:main
-```
-
-> **Note:** If `docker` is not found, ensure Docker Desktop has WSL integration enabled for your distro, or use the full path `/usr/bin/docker`.
-
-</details>
-
-<details>
-<summary><b>Claude Desktop on Windows (Docker STDIO)</b></summary>
-
-Claude Desktop on Windows **cannot** connect to MCP servers running inside WSL directly. Use one of these approaches:
-
-**Option 1: Docker Desktop (Recommended)**
-
-If Docker Desktop is installed on Windows, `docker.exe` is in the Windows PATH:
-
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:main"
-      ]
-    }
-  }
-}
-```
-
-**Option 2: wsl.exe Proxy**
-
-If Docker is only available inside WSL, use `wsl.exe` as a bridge:
-
-```json
-{
-  "mcpServers": {
-    "codealive": {
-      "command": "wsl.exe",
-      "args": [
-        "--", "docker", "run", "--rm", "-i",
-        "-e", "CODEALIVE_API_KEY=YOUR_API_KEY_HERE",
-        "ghcr.io/codealive-ai/codealive-mcp:main"
-      ]
-    }
-  }
-}
-```
-
-</details>
-
-<details>
-<summary><b>Self-Hosted MCP Server in WSL2</b></summary>
-
-If you run the MCP HTTP server inside WSL2 and connect from Windows-side clients:
-
-**WSL2 NAT networking issue:** By default, `localhost` inside WSL2 is not reachable from Windows. Two workarounds:
-
-1. **Enable mirrored networking** (Windows 11 22H2+) — add to `%USERPROFILE%\.wslconfig`:
-   ```ini
-   [wsl2]
-   networkingMode=mirrored
-   ```
-   Then restart WSL: `wsl --shutdown`. After this, `localhost` is shared between Windows and WSL2.
-
-2. **Use WSL2 VM IP** — run `hostname -I` inside WSL to get the IP, then connect to `http://<WSL_IP>:8000/api` instead of `http://localhost:8000/api`.
-
-</details>
-
-<details>
-<summary><b>Common WSL Pitfalls</b></summary>
-
-| Problem | Cause | Fix |
-|---------|-------|-----|
-| `docker: command not found` | Docker not in WSL PATH | Enable Docker Desktop WSL integration for your distro, or use full path `/usr/bin/docker` |
-| `ENOENT` / `spawn error` for `npx` or `python` | Binary not in non-interactive shell PATH | Use absolute path (e.g., `/home/user/.nvm/versions/node/v20/bin/npx`) |
-| Environment variables missing | WSL non-login shell doesn't source `.bashrc` | Add vars explicitly in MCP config `env` block |
-| `Connection refused` to self-hosted server | WSL2 NAT isolates localhost | Enable mirrored networking or use WSL2 VM IP |
-| Claude Desktop can't reach WSL MCP server | Claude Desktop doesn't support WSL subprocess spawning | Use Remote HTTP, Docker Desktop, or `wsl.exe` proxy |
-
-</details>
-
----
+For self-hosted servers running in WSL2, Windows clients must be able to reach the server's `/api` endpoint. Use mirrored networking on supported Windows 11 versions or connect through the WSL2 VM address.
 
 ## 🐞 Troubleshooting
 
