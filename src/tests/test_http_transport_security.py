@@ -97,3 +97,29 @@ def test_http_main_enables_guard_and_reads_environment_allowlists(monkeypatch):
     assert options["host_origin_protection"] is True
     assert options["allowed_hosts"] == ["mcp.codealive.ai", "codealive-mcp-server"]
     assert options["allowed_origins"] == ["https://mcp.codealive.ai"]
+
+
+def test_http_main_fails_closed_when_oauth_exchange_secret_is_missing(monkeypatch):
+    monkeypatch.setattr(server, "setup_logging", MagicMock())
+    monkeypatch.setattr(server, "init_tracing", MagicMock())
+    monkeypatch.setenv("CODEALIVE_MCP_OAUTH_ENABLED", "true")
+    monkeypatch.delenv("CODEALIVE_OAUTH_INTERNAL_CLIENT_SECRET", raising=False)
+    monkeypatch.setattr(sys, "argv", ["codealive-mcp", "--transport", "http"])
+
+    with pytest.raises(SystemExit) as error:
+        server.main()
+
+    assert error.value.code == 1
+
+
+def test_debug_mode_does_not_disable_tls_verification(monkeypatch):
+    run = MagicMock()
+    monkeypatch.setattr(server.mcp, "run", run)
+    monkeypatch.setattr(server, "setup_logging", MagicMock())
+    monkeypatch.setattr(server, "init_tracing", MagicMock())
+    monkeypatch.delenv("CODEALIVE_IGNORE_SSL", raising=False)
+    monkeypatch.setattr(sys, "argv", ["codealive-mcp", "--transport", "http", "--debug"])
+
+    server.main()
+
+    assert "CODEALIVE_IGNORE_SSL" not in server.os.environ

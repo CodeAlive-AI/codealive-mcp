@@ -11,6 +11,7 @@ from fastmcp.server.dependencies import get_http_headers
 from loguru import logger
 
 from .config import Config, REQUEST_TIMEOUT_SECONDS
+from .oauth import ToolTokenExchangeCache
 
 
 @dataclass
@@ -19,6 +20,8 @@ class CodeAliveContext:
     client: httpx.AsyncClient
     api_key: str
     base_url: str
+    config: Config | None = None
+    tool_token_cache: ToolTokenExchangeCache | None = None
 
 
 # Module-level readiness state for the /ready endpoint.
@@ -96,7 +99,9 @@ async def codealive_lifespan(server: FastMCP) -> AsyncIterator[CodeAliveContext]
         yield CodeAliveContext(
             client=client,
             api_key="",  # Will be set per-request in HTTP mode
-            base_url=config.base_url
+            base_url=config.base_url,
+            config=config,
+            tool_token_cache=ToolTokenExchangeCache(),
         )
     finally:
         _server_ready = False

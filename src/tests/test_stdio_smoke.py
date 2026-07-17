@@ -86,7 +86,7 @@ async def test_stdio_server_lists_tools_and_uses_tool_api_v3_endpoint():
     with _mock_codealive_server() as (port, requests):
         env = {
             **os.environ,
-            "CODEALIVE_API_KEY": "stdio-smoke-test-key",
+            "CODEALIVE_API_KEY": "ca_1720000000000_0123456789abcdef0123456789abcdef0123456789a",
             "CODEALIVE_BASE_URL": f"http://127.0.0.1:{port}/api",
         }
         server_params = StdioServerParameters(
@@ -125,7 +125,7 @@ async def test_stdio_server_lists_tools_and_uses_tool_api_v3_endpoint():
         assert requests == [
             {
                 "path": "/api/tools/get_data_sources",
-                "authorization": "Bearer stdio-smoke-test-key",
+                "authorization": "Bearer ca_1720000000000_0123456789abcdef0123456789abcdef0123456789a",
                 "tool": "get_data_sources",
                 "integration": "mcp",
                 "client": "fastmcp-v3",

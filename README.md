@@ -206,6 +206,10 @@ The equivalent repeatable CLI options are `--allowed-host` and
 After making changes, quickly verify everything works:
 
 ```bash
+# Match pyproject.toml exactly; older uv versions reject the locked setup.
+uv --version  # expected: uv 0.11.28
+uv sync --locked --extra test
+
 # Install the repository pre-push dependency audit once per clone
 ./scripts/setup-hooks.sh
 
@@ -223,6 +227,9 @@ make unit-test
 
 # Run all tests
 make test
+
+# Equivalent direct locked test run
+uv run pytest src/tests/ -q
 ```
 
 The smoke test verifies:
@@ -280,6 +287,30 @@ curl http://localhost:8000/health
    - Clients must provide their API key via `Authorization: Bearer YOUR_KEY` header
 
 See `docker-compose.example.yml` for the complete configuration template.
+
+### OAuth 2.1 deployment profile
+
+Remote HTTP deployments can enable browser authorization while keeping legacy API-key clients
+working during rollout. OAuth mode publishes MCP Protected Resource Metadata, validates exact
+issuer/resource-bound JWTs, and exchanges them for a separate short-lived Tool API token. The
+incoming MCP bearer token is never forwarded downstream.
+
+| Environment variable | Purpose |
+|---|---|
+| `CODEALIVE_MCP_OAUTH_ENABLED=true` | Enables OAuth validation and MCP authorization discovery for HTTP transport |
+| `CODEALIVE_OAUTH_ISSUER` | Exact OpenIddict issuer, with a trailing slash |
+| `CODEALIVE_MCP_RESOURCE` | Exact public MCP resource URL; its path is also the HTTP MCP path |
+| `CODEALIVE_TOOL_API_RESOURCE` | Downstream audience; defaults to `urn:codealive:tool-api` |
+| `CODEALIVE_OAUTH_INTERNAL_CLIENT_ID` | Confidential resource-server client used only for token exchange |
+| `CODEALIVE_OAUTH_INTERNAL_CLIENT_SECRET` | Required secret for that internal client; startup fails closed when it is missing |
+
+The authorization server and MCP service values must match exactly. In CodeAlive Web.Server the
+corresponding settings live under `McpOAuth` (`Enabled`, `Issuer`, `Resource`,
+`ToolApiResource`, `InternalClientId`, and `InternalClientSecret`). Persist the Web.Server Data
+Protection key ring and OpenIddict signing/encryption certificates across replicas and restarts.
+Enable the Web.Server and MCP flags in the same rollout; a half-enabled deployment is not a valid
+steady state. API-key credentials retain their explicit legacy grammar and are never used as a
+fallback after OAuth validation fails.
 
 ### Connecting MCP Clients to Your Deployed Instance
 

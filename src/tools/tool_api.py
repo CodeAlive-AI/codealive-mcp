@@ -9,7 +9,16 @@ from fastmcp import Context
 from fastmcp.exceptions import ToolError
 from fastmcp.tools.tool import ToolResult
 
-from core import CodeAliveContext, get_api_key_from_context, log_api_request, log_api_response
+from core import (
+    CodeAliveContext,
+    Config,
+    exchange_for_tool_token,
+    get_api_key_from_context,
+    invalidate_tool_token_exchange,
+    is_oauth_credential,
+    log_api_request,
+    log_api_response,
+)
 from utils import handle_api_error
 
 ToolApiResult = str | ToolResult
@@ -54,10 +63,20 @@ async def call_tool_api(
     action_label: Optional[str] = None,
 ) -> ToolApiResult:
     context: CodeAliveContext = ctx.request_context.lifespan_context
-    api_key = get_api_key_from_context(ctx)
+    inbound_credential = get_api_key_from_context(ctx)
+    config = context.config or Config.from_environment()
+    oauth_credential = config.oauth_enabled and is_oauth_credential(inbound_credential)
+    outbound_credential = inbound_credential
+    if oauth_credential:
+        outbound_credential = await exchange_for_tool_token(
+            context.client,
+            config,
+            inbound_credential,
+            context.tool_token_cache,
+        )
     body = {**omit_empty(payload), "output_format": "agentic"}
     headers = {
-        "Authorization": f"Bearer {api_key}",
+        "Authorization": f"Bearer {outbound_credential}",
         "X-CodeAlive-Integration": "mcp",
         "X-CodeAlive-Tool": tool_name,
         "X-CodeAlive-Client": "fastmcp-v3",
@@ -69,6 +88,20 @@ async def call_tool_api(
 
     try:
         response = await context.client.post(endpoint, json=body, headers=headers)
+        if oauth_credential and response.status_code == 401:
+            await invalidate_tool_token_exchange(
+                context.tool_token_cache,
+                config,
+                inbound_credential,
+            )
+            outbound_credential = await exchange_for_tool_token(
+                context.client,
+                config,
+                inbound_credential,
+                context.tool_token_cache,
+            )
+            headers = {**headers, "Authorization": f"Bearer {outbound_credential}"}
+            response = await context.client.post(endpoint, json=body, headers=headers)
         log_api_response(response, request_id)
         response.raise_for_status()
         data = response.json()
