@@ -215,6 +215,34 @@ async def test_token_exchange_cache_invalidation_does_not_restore_stale_inflight
     assert await cache.get_or_create("key", stale_factory) == "fresh-token"
 
 
+@pytest.mark.asyncio
+async def test_token_exchange_cache_caller_cancellation_keeps_shared_exchange_alive():
+    cache = ToolTokenExchangeCache()
+    exchange_started = asyncio.Event()
+    release_exchange = asyncio.Event()
+    calls = 0
+
+    async def factory():
+        nonlocal calls
+        calls += 1
+        exchange_started.set()
+        await release_exchange.wait()
+        return "tool-token", float("inf")
+
+    cancelled_caller = asyncio.create_task(cache.get_or_create("key", factory))
+    await exchange_started.wait()
+    cancelled_caller.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await cancelled_caller
+
+    surviving_caller = asyncio.create_task(cache.get_or_create("key", factory))
+    release_exchange.set()
+
+    assert await surviving_caller == "tool-token"
+    assert await cache.get_or_create("key", factory) == "tool-token"
+    assert calls == 1
+
+
 def test_oauth_enabled_treats_default_https_port_as_same_resource():
     with pytest.raises(ValueError, match="must be distinct"):
         _config(

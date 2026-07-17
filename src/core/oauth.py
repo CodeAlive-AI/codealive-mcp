@@ -206,26 +206,42 @@ class ToolTokenExchangeCache:
             generation = self._generation
             inflight = self._inflight.get(key)
             if inflight is None:
-                task = asyncio.create_task(factory())
+                task = asyncio.create_task(
+                    self._run_factory(key, generation, factory)
+                )
                 self._inflight[key] = (task, generation)
             else:
                 task, generation = inflight
 
-        try:
-            token, cache_until = await asyncio.shield(task)
-        finally:
-            async with self._lock:
-                if self._inflight.get(key) == (task, generation):
-                    self._inflight.pop(key, None)
+        token, _ = await asyncio.shield(task)
+        return token
 
-        if cache_until > time.monotonic():
+    async def _run_factory(
+        self,
+        key: str,
+        generation: int,
+        factory: Callable[[], Awaitable[tuple[str, float]]],
+    ) -> tuple[str, float]:
+        task = asyncio.current_task()
+        try:
+            token, cache_until = await factory()
+            if cache_until <= time.monotonic():
+                return token, cache_until
+
             async with self._lock:
-                if self._generation == generation:
+                if (
+                    self._generation == generation
+                    and self._inflight.get(key) == (task, generation)
+                ):
                     self._entries[key] = (token, cache_until)
                     self._entries.move_to_end(key)
                     while len(self._entries) > self._maximum_entries:
                         self._entries.popitem(last=False)
-        return token
+            return token, cache_until
+        finally:
+            async with self._lock:
+                if self._inflight.get(key) == (task, generation):
+                    self._inflight.pop(key, None)
 
     async def invalidate(self, key: str) -> None:
         """Remove a rejected token without exposing the subject token in cache state."""
