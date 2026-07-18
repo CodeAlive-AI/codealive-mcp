@@ -74,6 +74,13 @@ def _same_resource_identifier(left_value: str, right_value: str) -> bool:
     return left.path == right.path and left.query == right.query and left.fragment == right.fragment
 
 
+def _is_absolute_resource_identifier(value: str) -> bool:
+    if not value or value != value.strip():
+        return False
+    parsed = urlsplit(value)
+    return bool(parsed.scheme) and bool(parsed.netloc or parsed.path)
+
+
 def normalize_base_url(base_url: Optional[str]) -> str:
     """Normalize a CodeAlive base URL to the deployment origin.
 
@@ -116,10 +123,16 @@ class Config:
     def __post_init__(self) -> None:
         if self.oauth_enabled:
             validate_oauth_urls(self.oauth_issuer, self.mcp_resource)
+            if not _is_absolute_resource_identifier(self.tool_api_resource):
+                raise ValueError(
+                    "CODEALIVE_TOOL_API_RESOURCE must be an absolute resource identifier"
+                )
             if _same_resource_identifier(self.mcp_resource, self.tool_api_resource):
                 raise ValueError(
                     "CODEALIVE_MCP_RESOURCE and CODEALIVE_TOOL_API_RESOURCE must be distinct"
                 )
+            if not self.oauth_internal_client_id or not self.oauth_internal_client_id.strip():
+                raise ValueError("CODEALIVE_OAUTH_INTERNAL_CLIENT_ID must not be empty")
 
     @classmethod
     def from_environment(cls) -> "Config":
@@ -133,7 +146,7 @@ class Config:
             oauth_enabled=os.environ.get("CODEALIVE_MCP_OAUTH_ENABLED", "false").lower() in ["true", "1", "yes"],
             oauth_issuer=os.environ.get("CODEALIVE_OAUTH_ISSUER", "https://auth.codealive.ai/"),
             mcp_resource=os.environ.get("CODEALIVE_MCP_RESOURCE", "https://mcp.codealive.ai/api"),
-            tool_api_resource=os.environ.get("CODEALIVE_TOOL_API_RESOURCE", "urn:codealive:tool-api").rstrip("/"),
+            tool_api_resource=os.environ.get("CODEALIVE_TOOL_API_RESOURCE", "urn:codealive:tool-api"),
             oauth_internal_client_id=os.environ.get("CODEALIVE_OAUTH_INTERNAL_CLIENT_ID", "codealive-mcp"),
             oauth_internal_client_secret=os.environ.get("CODEALIVE_OAUTH_INTERNAL_CLIENT_SECRET"),
         )

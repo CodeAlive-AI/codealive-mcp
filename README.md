@@ -308,6 +308,10 @@ The authorization server and MCP service values must match exactly. In CodeAlive
 corresponding settings live under `McpOAuth` (`Enabled`, `Issuer`, `Resource`,
 `ToolApiResource`, `InternalClientId`, and `InternalClientSecret`). Persist the Web.Server Data
 Protection key ring and OpenIddict signing/encryption certificates across replicas and restarts.
+For a zero-downtime internal credential rotation, give the new credential a new client ID, deploy
+Web.Server with both current and `PreviousInternalClientId`/`PreviousInternalClientSecret`, roll
+MCP replicas to the new current pair, then remove the previous pair. Web.Server deliberately fails
+startup instead of changing a secret in place under an existing client ID.
 Enable the Web.Server and MCP flags in the same rollout; a half-enabled deployment is not a valid
 steady state. API-key credentials retain their explicit legacy grammar and are never used as a
 fallback after OAuth validation fails.

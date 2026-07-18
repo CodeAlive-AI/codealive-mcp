@@ -66,6 +66,27 @@ def test_oauth_enabled_rejects_same_mcp_and_tool_api_resource():
         )
 
 
+@pytest.mark.parametrize("tool_resource", ["", "relative/resource", " urn:codealive:tool-api"])
+def test_oauth_enabled_rejects_non_absolute_tool_api_resource(tool_resource):
+    with pytest.raises(ValueError, match="TOOL_API_RESOURCE"):
+        _config(oauth_enabled=True, tool_api_resource=tool_resource)
+
+
+@pytest.mark.parametrize("client_id", ["", "   "])
+def test_oauth_enabled_rejects_empty_internal_client_id(client_id):
+    with pytest.raises(ValueError, match="INTERNAL_CLIENT_ID"):
+        _config(oauth_enabled=True, oauth_internal_client_id=client_id)
+
+
+def test_oauth_environment_does_not_silently_rewrite_tool_api_audience(monkeypatch):
+    monkeypatch.setenv("CODEALIVE_MCP_OAUTH_ENABLED", "true")
+    monkeypatch.setenv("CODEALIVE_TOOL_API_RESOURCE", "https://tools.example/api/")
+
+    config = Config.from_environment()
+
+    assert config.tool_api_resource == "https://tools.example/api/"
+
+
 @pytest.mark.asyncio
 async def test_protected_resource_metadata_and_challenge_are_exact():
     mcp = FastMCP("OAuth test", auth=build_oauth_provider(_config()))
