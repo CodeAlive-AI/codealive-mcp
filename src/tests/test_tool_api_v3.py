@@ -1,5 +1,6 @@
 """MCP Tool API v3 contract tests."""
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -203,3 +204,45 @@ async def test_repairable_backend_error_sets_native_mcp_error(mock_get_api_key):
     assert len(result.content) == 1
     assert result.content[0].text == "<tool_error><code>invalid_tool_arguments</code></tool_error>"
     assert result.structured_content == {"error": error}
+
+
+@pytest.mark.asyncio
+@patch("tools.tool_api.get_api_key_from_context")
+async def test_empty_repairable_projection_preserves_structured_error_content(mock_get_api_key):
+    mock_get_api_key.return_value = "test_key"
+    error_obj = {
+        "error": {
+            "code": "invalid_tool_arguments",
+            "message": "question is required",
+            "retry": "yes",
+            "try": "Provide question and retry.",
+        }
+    }
+    ctx, _ = _context_with_response(rendered="", obj=error_obj)
+
+    result = await semantic_search(ctx, question="missing upstream validation")
+
+    assert isinstance(result, ToolResult)
+    assert result.is_error is True
+    assert json.loads(result.content[0].text) == error_obj
+
+
+@pytest.mark.asyncio
+@patch("tools.tool_api.get_api_key_from_context")
+async def test_empty_agentic_projection_falls_back_to_structured_content(mock_get_api_key):
+    mock_get_api_key.return_value = "test_key"
+    structured = {
+        "artifacts": [
+            {
+                "identifier": "repo::src/Foo.cs::Foo",
+                "found": True,
+                "content": "public sealed class Foo {}",
+            }
+        ]
+    }
+    ctx, _ = _context_with_response(rendered="", obj=structured)
+
+    result = await fetch_artifacts(ctx, identifiers=["repo::src/Foo.cs::Foo"])
+
+    assert isinstance(result, str)
+    assert json.loads(result) == structured

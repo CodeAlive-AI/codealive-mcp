@@ -75,7 +75,7 @@ async def call_tool_api(
         obj = data.get("obj")
         rendered = data.get("rendered")
         if isinstance(obj, dict) and isinstance(obj.get("error"), dict):
-            content = rendered if isinstance(rendered, str) else json.dumps(
+            content = rendered if isinstance(rendered, str) and rendered.strip() else json.dumps(
                 obj,
                 ensure_ascii=False,
                 indent=2,
@@ -85,9 +85,16 @@ async def call_tool_api(
                 structured_content=obj,
                 is_error=True,
             )
-        if isinstance(rendered, str):
+        if isinstance(rendered, str) and rendered.strip():
             return rendered
-        return json.dumps(obj, ensure_ascii=False, indent=2)
+        if obj is not None:
+            # Preserve canonical structured evidence during a mixed-version rollout
+            # instead of reporting a successful MCP tool call with empty content.
+            return json.dumps(obj, ensure_ascii=False, indent=2)
+        raise ToolError(
+            f"[{tool_name}] Invalid Tool API response: neither a non-empty "
+            "'rendered' projection nor 'obj' was returned."
+        )
     except Exception as exc:
         await handle_api_error(
             ctx,
