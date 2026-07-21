@@ -3,11 +3,13 @@
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from fastmcp import Context
 from fastmcp.exceptions import ToolError
 from fastmcp.tools.tool import ToolResult
 
+from core.config import Config
 from tools.artifact_query import get_artifact_query_schema, query_artifact_metadata
 from tools.artifact_relationships import get_artifact_relationships
 from tools.chat import chat
@@ -15,6 +17,9 @@ from tools.datasources import get_data_sources
 from tools.fetch_artifacts import fetch_artifacts
 from tools.repository import get_file_tree, get_repository_ontology, read_file
 from tools.search import grep_search, semantic_search
+from tools.tool_api import call_tool_api
+
+LEGACY_API_KEY = "ca_1720000000000_0123456789abcdef0123456789abcdef0123456789a"
 
 
 def _context_with_response(
@@ -39,6 +44,8 @@ def _context_with_response(
     codealive_context = MagicMock()
     codealive_context.client = client
     codealive_context.base_url = "https://app.codealive.ai/api/"
+    codealive_context.config = Config(oauth_enabled=False)
+    codealive_context.tool_token_cache = None
 
     ctx.request_context.lifespan_context = codealive_context
     return ctx, client
@@ -138,7 +145,7 @@ def _context_with_response(
 )
 @patch("tools.tool_api.get_api_key_from_context")
 async def test_mcp_tools_post_canonical_v3_payloads(mock_get_api_key, tool_call, expected_path, expected_payload):
-    mock_get_api_key.return_value = "test_key"
+    mock_get_api_key.return_value = LEGACY_API_KEY
     ctx, client = _context_with_response("<agentic>done</agentic>")
 
     result = await tool_call(ctx)
@@ -147,7 +154,7 @@ async def test_mcp_tools_post_canonical_v3_payloads(mock_get_api_key, tool_call,
     call_args = client.post.call_args
     assert call_args.args[0] == expected_path
     assert call_args.kwargs["json"] == {**expected_payload, "output_format": "agentic"}
-    assert call_args.kwargs["headers"]["Authorization"] == "Bearer test_key"
+    assert call_args.kwargs["headers"]["Authorization"] == f"Bearer {LEGACY_API_KEY}"
     assert call_args.kwargs["headers"]["X-CodeAlive-Integration"] == "mcp"
     assert call_args.kwargs["headers"]["X-CodeAlive-Tool"] == expected_path.rsplit("/", 1)[1]
     assert call_args.kwargs["headers"]["X-CodeAlive-Client"] == "fastmcp-v3"
@@ -185,7 +192,7 @@ async def test_local_bounds_validation_fail_before_network_call():
 @pytest.mark.asyncio
 @patch("tools.tool_api.get_api_key_from_context")
 async def test_repairable_backend_error_sets_native_mcp_error(mock_get_api_key):
-    mock_get_api_key.return_value = "test_key"
+    mock_get_api_key.return_value = LEGACY_API_KEY
     error = {
         "code": "invalid_tool_arguments",
         "message": "question is required",
@@ -204,6 +211,86 @@ async def test_repairable_backend_error_sets_native_mcp_error(mock_get_api_key):
     assert len(result.content) == 1
     assert result.content[0].text == "<tool_error><code>invalid_tool_arguments</code></tool_error>"
     assert result.structured_content == {"error": error}
+
+
+@pytest.mark.asyncio
+@patch("tools.tool_api.invalidate_tool_token_exchange", new_callable=AsyncMock)
+@patch("tools.tool_api.exchange_for_tool_token", new_callable=AsyncMock)
+@patch("tools.tool_api.get_api_key_from_context")
+async def test_oauth_tool_call_evicts_rejected_exchange_and_retries_once(
+    mock_get_api_key,
+    mock_exchange,
+    mock_invalidate,
+):
+    mock_get_api_key.return_value = "header.payload.signature"
+    mock_exchange.side_effect = ["stale-tool-token", "fresh-tool-token"]
+    ctx, client = _context_with_response("done")
+    context = ctx.request_context.lifespan_context
+    context.config = MagicMock()
+    context.tool_token_cache = MagicMock()
+
+    unauthorized = MagicMock(status_code=401)
+    success = MagicMock(status_code=200)
+    success.json.return_value = {"rendered": "done", "obj": {"ok": True}}
+    success.raise_for_status = MagicMock()
+    client.post.side_effect = [unauthorized, success]
+
+    result = await call_tool_api(ctx, "semantic_search", {"question": "why"})
+
+    assert result == "done"
+    assert client.post.call_count == 2
+    assert client.post.call_args_list[0].kwargs["headers"]["Authorization"] == "Bearer stale-tool-token"
+    assert client.post.call_args_list[1].kwargs["headers"]["Authorization"] == "Bearer fresh-tool-token"
+    mock_invalidate.assert_awaited_once_with(
+        context.tool_token_cache,
+        context.config,
+        "header.payload.signature",
+        "stale-tool-token",
+    )
+
+
+@pytest.mark.asyncio
+@patch("tools.tool_api.exchange_for_tool_token", new_callable=AsyncMock)
+@patch("tools.tool_api.get_api_key_from_context")
+async def test_oauth_shaped_credential_is_not_exchanged_when_feature_is_disabled(
+    mock_get_api_key,
+    mock_exchange,
+):
+    credential = "header.payload.signature"
+    mock_get_api_key.return_value = credential
+    ctx, client = _context_with_response("done")
+    context = ctx.request_context.lifespan_context
+    context.config = Config(oauth_enabled=False)
+
+    result = await call_tool_api(ctx, "semantic_search", {"question": "why"})
+
+    assert result == "done"
+    assert client.post.call_args.kwargs["headers"]["Authorization"] == f"Bearer {credential}"
+    mock_exchange.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@patch("tools.tool_api.handle_api_error", new_callable=AsyncMock)
+@patch("tools.tool_api.exchange_for_tool_token", new_callable=AsyncMock)
+@patch("tools.tool_api.get_api_key_from_context")
+async def test_oauth_exchange_failure_uses_tool_error_path(
+    mock_get_api_key,
+    mock_exchange,
+    mock_handle_error,
+):
+    mock_get_api_key.return_value = "header.payload.signature"
+    mock_exchange.side_effect = httpx.ReadTimeout("authorization server timed out")
+    mock_handle_error.side_effect = ToolError("OAuth exchange unavailable")
+    ctx, client = _context_with_response("done")
+    context = ctx.request_context.lifespan_context
+    context.config = MagicMock(oauth_enabled=True)
+    context.tool_token_cache = MagicMock()
+
+    with pytest.raises(ToolError, match="OAuth exchange unavailable"):
+        await call_tool_api(ctx, "semantic_search", {"question": "why"})
+
+    client.post.assert_not_awaited()
+    mock_handle_error.assert_awaited_once()
 
 
 @pytest.mark.asyncio

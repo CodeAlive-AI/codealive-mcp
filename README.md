@@ -206,6 +206,10 @@ The equivalent repeatable CLI options are `--allowed-host` and
 After making changes, quickly verify everything works:
 
 ```bash
+# Match pyproject.toml exactly; older uv versions reject the locked setup.
+uv --version  # expected: uv 0.11.28
+uv sync --locked --extra test
+
 # Install the repository pre-push dependency audit once per clone
 ./scripts/setup-hooks.sh
 
@@ -223,6 +227,9 @@ make unit-test
 
 # Run all tests
 make test
+
+# Equivalent direct locked test run
+uv run pytest src/tests/ -q
 ```
 
 The smoke test verifies:
@@ -272,7 +279,9 @@ curl http://localhost:8000/health
 
 1. **For CodeAlive Cloud (default):**
    - Remove `CODEALIVE_BASE_URL` environment variable (uses default `https://app.codealive.ai`)
-   - Clients must provide their API key via `Authorization: Bearer YOUR_KEY` header
+   - For remote clients with OAuth support, configure only `https://mcp.codealive.ai/api` and
+     complete the browser sign-in when prompted
+   - Existing API-key clients remain supported via `Authorization: Bearer YOUR_KEY`
 
 2. **For Self-Hosted CodeAlive:**
    - Set `CODEALIVE_BASE_URL` to your CodeAlive instance URL (e.g., `https://codealive.yourcompany.com`)
@@ -280,6 +289,49 @@ curl http://localhost:8000/health
    - Clients must provide their API key via `Authorization: Bearer YOUR_KEY` header
 
 See `docker-compose.example.yml` for the complete configuration template.
+
+For example, current Codex and Claude Code clients can use browser OAuth without storing a
+CodeAlive API key:
+
+```bash
+codex mcp add codealive --url https://mcp.codealive.ai/api
+codex mcp login codealive
+
+claude mcp add --transport http codealive https://mcp.codealive.ai/api
+# Start Claude Code and run /mcp to authenticate.
+```
+
+Cursor and OpenCode also discover OAuth automatically from the same URL. Use
+`cursor-agent mcp login codealive` or `opencode mcp auth codealive` when their UI does not prompt
+automatically. API-key configuration remains available as a compatibility option.
+
+### OAuth 2.1 deployment profile
+
+Remote HTTP deployments can enable browser authorization while keeping legacy API-key clients
+working during rollout. OAuth mode publishes MCP Protected Resource Metadata, validates exact
+issuer/resource-bound JWTs, and exchanges them for a separate short-lived Tool API token. The
+incoming MCP bearer token is never forwarded downstream.
+
+| Environment variable | Purpose |
+|---|---|
+| `CODEALIVE_MCP_OAUTH_ENABLED=true` | Enables OAuth validation and MCP authorization discovery for HTTP transport |
+| `CODEALIVE_OAUTH_ISSUER` | Exact OpenIddict issuer, with a trailing slash |
+| `CODEALIVE_MCP_RESOURCE` | Exact public MCP resource URL; its path is also the HTTP MCP path |
+| `CODEALIVE_TOOL_API_RESOURCE` | Downstream audience; defaults to `urn:codealive:tool-api` |
+| `CODEALIVE_OAUTH_INTERNAL_CLIENT_ID` | Confidential resource-server client used only for token exchange |
+| `CODEALIVE_OAUTH_INTERNAL_CLIENT_SECRET` | Required secret for that internal client; startup fails closed when it is missing |
+
+The authorization server and MCP service values must match exactly. In CodeAlive Web.Server the
+corresponding settings live under `McpOAuth` (`Enabled`, `Issuer`, `Resource`,
+`ToolApiResource`, `InternalClientId`, and `InternalClientSecret`). Persist the Web.Server Data
+Protection key ring and OpenIddict signing/encryption certificates across replicas and restarts.
+For a zero-downtime internal credential rotation, give the new credential a new client ID, deploy
+Web.Server with both current and `PreviousInternalClientId`/`PreviousInternalClientSecret`, roll
+MCP replicas to the new current pair, then remove the previous pair. Web.Server deliberately fails
+startup instead of changing a secret in place under an existing client ID.
+Enable the Web.Server and MCP flags in the same rollout; a half-enabled deployment is not a valid
+steady state. API-key credentials retain their explicit legacy grammar and are never used as a
+fallback after OAuth validation fails.
 
 ### Connecting MCP Clients to Your Deployed Instance
 

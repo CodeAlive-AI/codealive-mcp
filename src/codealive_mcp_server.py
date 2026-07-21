@@ -10,10 +10,12 @@ import os
 import sys
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 from loguru import logger
+from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -26,7 +28,7 @@ load_dotenv(dotenv_path=dotenv_path)
 sys.path.insert(0, str(Path(__file__).parent))
 
 # Import core components
-from core import codealive_lifespan, setup_logging, setup_debug_logging, init_tracing, normalize_base_url, _server_ready
+from core import Config, MetadataAwareHostOriginGuardMiddleware, build_oauth_provider, codealive_lifespan, setup_logging, setup_debug_logging, init_tracing, normalize_base_url, _server_ready
 import core.client as _client_module  # for /ready flag access
 from middleware import N8NRemoveParametersMiddleware, ObservabilityMiddleware
 from tools import (
@@ -206,13 +208,11 @@ def main():
         os.environ["CODEALIVE_BASE_URL"] = normalized_base_url
         logger.info("Using base URL from command line: {url}", url=normalized_base_url)
 
-    # Disable SSL verification if explicitly requested or in debug mode
-    if args.ignore_ssl or debug:
+    # Debug logging must not weaken transport security. TLS verification is disabled only
+    # through the explicit opt-in flag used for local self-signed development endpoints.
+    if args.ignore_ssl:
         os.environ["CODEALIVE_IGNORE_SSL"] = "true"
-        if args.ignore_ssl:
-            logger.warning("SSL certificate validation disabled by --ignore-ssl flag")
-        elif debug:
-            logger.warning("SSL certificate validation disabled in debug mode")
+        logger.warning("SSL certificate validation disabled by --ignore-ssl flag")
 
     if debug:
         logger.debug(
@@ -247,6 +247,15 @@ def main():
             )
         logger.info("HTTP mode: API keys extracted from Authorization: Bearer headers")
 
+        oauth_config = Config.from_environment()
+        if oauth_config.oauth_enabled:
+            if not oauth_config.oauth_internal_client_secret:
+                logger.error(
+                    "OAuth mode requires CODEALIVE_OAUTH_INTERNAL_CLIENT_SECRET for downstream token exchange"
+                )
+                sys.exit(1)
+            mcp.auth = build_oauth_provider(oauth_config)
+
     if not base_url:
         logger.info(
             "CODEALIVE_BASE_URL not set, using default: https://app.codealive.ai"
@@ -254,6 +263,8 @@ def main():
 
     # Run the server with the selected transport
     if args.transport == "http":
+        oauth_config = Config.from_environment()
+        mcp_path = urlsplit(oauth_config.mcp_resource).path or "/api"
         allowed_hosts = args.allowed_host or [
             value.strip()
             for value in os.getenv("CODEALIVE_MCP_ALLOWED_HOSTS", "").split(",")
@@ -264,14 +275,28 @@ def main():
             for value in os.getenv("CODEALIVE_MCP_ALLOWED_ORIGINS", "").split(",")
             if value.strip()
         ]
+        transport_middleware = None
+        host_origin_protection = True
+        if oauth_config.oauth_enabled:
+            metadata_path = f"/.well-known/oauth-protected-resource{mcp_path}"
+            transport_middleware = [
+                Middleware(
+                    MetadataAwareHostOriginGuardMiddleware,
+                    metadata_path=metadata_path,
+                    allowed_hosts=allowed_hosts or None,
+                    allowed_origins=allowed_origins or None,
+                )
+            ]
+            host_origin_protection = False
         # Use /api path to avoid conflicts with health endpoint
         mcp.run(
             transport="http",
             host=args.host,
             port=args.port,
-            path="/api",
+            path=mcp_path,
             stateless_http=True,
-            host_origin_protection=True,
+            middleware=transport_middleware,
+            host_origin_protection=host_origin_protection,
             allowed_hosts=allowed_hosts or None,
             allowed_origins=allowed_origins or None,
             uvicorn_config={

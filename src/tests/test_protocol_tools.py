@@ -15,7 +15,7 @@ from codealive_mcp_server import mcp
 @pytest.fixture(autouse=True)
 def _stdio_environment(monkeypatch):
     monkeypatch.setenv("TRANSPORT_MODE", "stdio")
-    monkeypatch.setenv("CODEALIVE_API_KEY", "test-key")
+    monkeypatch.setenv("CODEALIVE_API_KEY", "ca_1720000000000_0123456789abcdef0123456789abcdef0123456789a")
     monkeypatch.setenv("CODEALIVE_BASE_URL", "https://app.codealive.ai")
 
 
