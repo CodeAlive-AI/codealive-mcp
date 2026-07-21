@@ -279,7 +279,9 @@ curl http://localhost:8000/health
 
 1. **For CodeAlive Cloud (default):**
    - Remove `CODEALIVE_BASE_URL` environment variable (uses default `https://app.codealive.ai`)
-   - Clients must provide their API key via `Authorization: Bearer YOUR_KEY` header
+   - For remote clients with OAuth support, configure only `https://mcp.codealive.ai/api` and
+     complete the browser sign-in when prompted
+   - Existing API-key clients remain supported via `Authorization: Bearer YOUR_KEY`
 
 2. **For Self-Hosted CodeAlive:**
    - Set `CODEALIVE_BASE_URL` to your CodeAlive instance URL (e.g., `https://codealive.yourcompany.com`)
@@ -287,6 +289,21 @@ curl http://localhost:8000/health
    - Clients must provide their API key via `Authorization: Bearer YOUR_KEY` header
 
 See `docker-compose.example.yml` for the complete configuration template.
+
+For example, current Codex and Claude Code clients can use browser OAuth without storing a
+CodeAlive API key:
+
+```bash
+codex mcp add codealive --url https://mcp.codealive.ai/api
+codex mcp login codealive
+
+claude mcp add --transport http codealive https://mcp.codealive.ai/api
+# Start Claude Code and run /mcp to authenticate.
+```
+
+Cursor and OpenCode also discover OAuth automatically from the same URL. Use
+`cursor-agent mcp login codealive` or `opencode mcp auth codealive` when their UI does not prompt
+automatically. API-key configuration remains available as a compatibility option.
 
 ### OAuth 2.1 deployment profile
 
