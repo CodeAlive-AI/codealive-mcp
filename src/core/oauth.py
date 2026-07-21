@@ -13,9 +13,10 @@ from urllib.parse import urljoin, urlsplit, urlunsplit
 import httpx
 from fastmcp.server.auth import AccessToken, RemoteAuthProvider, TokenVerifier
 from fastmcp.server.auth.providers.jwt import JWTVerifier
+from fastmcp.server.http import HostOriginGuardMiddleware
 from starlette.middleware import Middleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from .config import Config, validate_oauth_urls
@@ -118,17 +119,85 @@ class OAuthChallengeMiddleware:
         async def send_with_challenge(message):
             if message.get("type") == "http.response.start" and message.get("status") in {401, 403}:
                 status = message["status"]
-                error = ', error="insufficient_scope"' if status == 403 else ""
-                challenge = (
-                    f'Bearer realm="codealive-mcp", resource_metadata="{self.metadata_url}", '
-                    f'scope="mcp:tools"{error}'
-                )
-                headers = [(key, value) for key, value in message.get("headers", []) if key.lower() != b"www-authenticate"]
+                headers = []
+                existing_challenge = None
+                for key, value in message.get("headers", []):
+                    if key.lower() == b"www-authenticate":
+                        existing_challenge = value.decode("latin-1")
+                    else:
+                        headers.append((key, value))
+
+                # FastMCP supplies error/error_description for rejected OAuth tokens.
+                # Preserve those signals so clients know when to discard credentials,
+                # then add the MCP discovery attributes missing from its challenge.
+                preserved_attributes: list[str] = []
+                if existing_challenge:
+                    for match in re.finditer(
+                        r'([A-Za-z][A-Za-z0-9_-]*)=(?:"(?:\\.|[^"])*"|[^,\s]+)',
+                        existing_challenge,
+                    ):
+                        if match.group(1).lower() not in {
+                            "realm",
+                            "resource_metadata",
+                            "scope",
+                        }:
+                            preserved_attributes.append(match.group(0))
+
+                attributes = [
+                    'realm="codealive-mcp"',
+                    f'resource_metadata="{self.metadata_url}"',
+                    'scope="mcp:tools"',
+                    *preserved_attributes,
+                ]
+                if status == 403 and not any(
+                    attribute.lower().startswith("error=")
+                    for attribute in preserved_attributes
+                ):
+                    attributes.append('error="insufficient_scope"')
+                challenge = f"Bearer {', '.join(attributes)}"
                 headers.append((b"www-authenticate", challenge.encode("ascii")))
                 message = {**message, "headers": headers}
             await send(message)
 
         await self.app(scope, receive, send_with_challenge)
+
+
+class MetadataAwareHostOriginGuardMiddleware:
+    """Keep Host/Origin protection while allowing public metadata discovery."""
+
+    def __init__(
+        self,
+        app,
+        *,
+        metadata_path: str,
+        allowed_hosts: list[str] | None,
+        allowed_origins: list[str] | None,
+    ):
+        self.metadata_path = metadata_path
+        self.guard = HostOriginGuardMiddleware(
+            app,
+            allowed_hosts=allowed_hosts,
+            allowed_origins=allowed_origins,
+        )
+
+    async def __call__(self, scope, receive, send):
+        if (
+            scope.get("type") == "http"
+            and scope.get("path") == self.metadata_path
+            and scope.get("method") in {"GET", "OPTIONS"}
+        ):
+            # Metadata is public and contains only configured identifiers. Bypass
+            # Origin validation for this path, but retain the upstream Host check
+            # so DNS-rebinding protection remains active.
+            scope = {
+                **scope,
+                "headers": [
+                    (key, value)
+                    for key, value in scope.get("headers", [])
+                    if key.lower() != b"origin"
+                ],
+            }
+        await self.guard(scope, receive, send)
 
 
 class CodeAliveRemoteAuthProvider(RemoteAuthProvider):
@@ -149,7 +218,15 @@ class CodeAliveRemoteAuthProvider(RemoteAuthProvider):
     def get_routes(self, mcp_path: str | None = None) -> list[Route]:
         self.set_mcp_path(mcp_path)
 
-        async def protected_resource_metadata(_: Request) -> JSONResponse:
+        cors_headers = {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type",
+        }
+
+        async def protected_resource_metadata(request: Request) -> Response:
+            if request.method == "OPTIONS":
+                return Response(status_code=204, headers=cors_headers)
             return JSONResponse(
                 {
                     "resource": self._config.mcp_resource,
@@ -157,10 +234,19 @@ class CodeAliveRemoteAuthProvider(RemoteAuthProvider):
                     "scopes_supported": ["mcp:tools"],
                     "bearer_methods_supported": ["header"],
                 },
-                headers={"Cache-Control": "public, max-age=300"},
+                headers={
+                    "Cache-Control": "public, max-age=300",
+                    **cors_headers,
+                },
             )
 
-        return [Route(self._metadata_path, protected_resource_metadata, methods=["GET"])]
+        return [
+            Route(
+                self._metadata_path,
+                protected_resource_metadata,
+                methods=["GET", "OPTIONS"],
+            )
+        ]
 
     def get_middleware(self) -> list:
         return [
@@ -243,9 +329,17 @@ class ToolTokenExchangeCache:
                 if self._inflight.get(key) == (task, generation):
                     self._inflight.pop(key, None)
 
-    async def invalidate(self, key: str) -> None:
-        """Remove a rejected token without exposing the subject token in cache state."""
+    async def invalidate(self, key: str, rejected_token: str | None = None) -> None:
+        """Remove a rejected token without disturbing a newer shared exchange."""
         async with self._lock:
+            if rejected_token is not None:
+                cached = self._entries.get(key)
+                if cached is not None and cached[0] == rejected_token:
+                    self._entries.pop(key, None)
+                return
+
+            # Administrative invalidation is stronger than a downstream 401: it
+            # prevents a pre-invalidation exchange from repopulating the cache.
             self._generation += 1
             self._entries.pop(key, None)
             self._inflight.pop(key, None)
@@ -266,10 +360,14 @@ async def invalidate_tool_token_exchange(
     cache: ToolTokenExchangeCache | None,
     config: Config,
     subject_token: str,
+    rejected_token: str,
 ) -> None:
     """Evict the downstream token derived from one inbound MCP token."""
     if cache is not None:
-        await cache.invalidate(_tool_token_exchange_cache_key(config, subject_token))
+        await cache.invalidate(
+            _tool_token_exchange_cache_key(config, subject_token),
+            rejected_token,
+        )
 
 
 async def exchange_for_tool_token(

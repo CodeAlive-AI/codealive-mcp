@@ -8,10 +8,14 @@ import httpx
 import pytest
 from fastmcp import FastMCP
 from fastmcp.server.auth import AccessToken
+from starlette.middleware import Middleware
+from starlette.responses import Response
 
 from core.config import Config
 from core.oauth import (
     CodeAliveTokenVerifier,
+    MetadataAwareHostOriginGuardMiddleware,
+    OAuthChallengeMiddleware,
     ToolTokenExchangeCache,
     build_oauth_provider,
     exchange_for_tool_token,
@@ -101,6 +105,7 @@ async def test_protected_resource_metadata_and_challenge_are_exact():
 
     assert metadata.status_code == 200
     assert metadata.headers["cache-control"] == "public, max-age=300"
+    assert metadata.headers["access-control-allow-origin"] == "*"
     assert metadata.json() == {
         "resource": "https://mcp.codealive.ai/api",
         "authorization_servers": ["https://auth.codealive.ai/"],
@@ -113,6 +118,113 @@ async def test_protected_resource_metadata_and_challenge_are_exact():
         'resource_metadata="https://mcp.codealive.ai/.well-known/oauth-protected-resource/api", '
         'scope="mcp:tools"'
     )
+
+
+@pytest.mark.asyncio
+async def test_protected_resource_metadata_supports_cors_preflight():
+    mcp = FastMCP("OAuth test", auth=build_oauth_provider(_config()))
+    app = mcp.http_app(
+        path="/api",
+        stateless_http=True,
+        host_origin_protection=False,
+        middleware=[
+            Middleware(
+                MetadataAwareHostOriginGuardMiddleware,
+                metadata_path="/.well-known/oauth-protected-resource/api",
+                allowed_hosts=["mcp.codealive.ai"],
+                allowed_origins=["https://mcp.codealive.ai"],
+            )
+        ],
+    )
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="https://mcp.codealive.ai",
+        ) as client:
+            response = await client.options(
+                "/.well-known/oauth-protected-resource/api",
+                headers={
+                    "Origin": "https://inspector.example",
+                    "Access-Control-Request-Method": "GET",
+                },
+            )
+
+    assert response.status_code == 204
+    assert response.headers["access-control-allow-origin"] == "*"
+    assert "GET" in response.headers["access-control-allow-methods"]
+
+
+@pytest.mark.asyncio
+async def test_metadata_cors_exception_does_not_weaken_mcp_origin_or_host_guard():
+    mcp = FastMCP("OAuth test", auth=build_oauth_provider(_config()))
+    app = mcp.http_app(
+        path="/api",
+        stateless_http=True,
+        host_origin_protection=False,
+        middleware=[
+            Middleware(
+                MetadataAwareHostOriginGuardMiddleware,
+                metadata_path="/.well-known/oauth-protected-resource/api",
+                allowed_hosts=["mcp.codealive.ai"],
+                allowed_origins=["https://mcp.codealive.ai"],
+            )
+        ],
+    )
+    async with app.router.lifespan_context(app):
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="https://mcp.codealive.ai",
+        ) as client:
+            rejected_origin = await client.post(
+                "/api",
+                headers={"Origin": "https://attacker.example"},
+                json={},
+            )
+            rejected_host = await client.get(
+                "/.well-known/oauth-protected-resource/api",
+                headers={
+                    "Host": "attacker.example",
+                    "Origin": "https://inspector.example",
+                },
+            )
+
+    assert rejected_origin.status_code == 403
+    assert rejected_host.status_code == 421
+
+
+@pytest.mark.asyncio
+async def test_challenge_preserves_invalid_token_details():
+    async def rejected_app(scope, receive, send):
+        response = Response(
+            status_code=401,
+            headers={
+                "WWW-Authenticate": (
+                    'Bearer error="invalid_token", '
+                    'error_description="The access token expired"'
+                )
+            },
+        )
+        await response(scope, receive, send)
+
+    app = OAuthChallengeMiddleware(
+        rejected_app,
+        resource_path="/api",
+        metadata_url=(
+            "https://mcp.codealive.ai/"
+            ".well-known/oauth-protected-resource/api"
+        ),
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="https://mcp.codealive.ai",
+    ) as client:
+        response = await client.post("/api")
+
+    challenge = response.headers["www-authenticate"]
+    assert 'error="invalid_token"' in challenge
+    assert 'error_description="The access token expired"' in challenge
+    assert 'resource_metadata="https://mcp.codealive.ai/' in challenge
+    assert 'scope="mcp:tools"' in challenge
 
 
 @pytest.mark.asyncio
@@ -261,6 +373,37 @@ async def test_token_exchange_cache_caller_cancellation_keeps_shared_exchange_al
 
     assert await surviving_caller == "tool-token"
     assert await cache.get_or_create("key", factory) == "tool-token"
+    assert calls == 1
+
+
+@pytest.mark.asyncio
+async def test_rejected_cached_token_does_not_cancel_fresh_shared_exchange():
+    cache = ToolTokenExchangeCache()
+    await cache.get_or_create(
+        "key",
+        lambda: asyncio.sleep(0, result=("rejected-token", float("inf"))),
+    )
+    await cache.invalidate("key", "rejected-token")
+
+    fresh_started = asyncio.Event()
+    release_fresh = asyncio.Event()
+    calls = 0
+
+    async def fresh_factory():
+        nonlocal calls
+        calls += 1
+        fresh_started.set()
+        await release_fresh.wait()
+        return "fresh-token", float("inf")
+
+    first_retry = asyncio.create_task(cache.get_or_create("key", fresh_factory))
+    await fresh_started.wait()
+    await cache.invalidate("key", "rejected-token")
+    second_retry = asyncio.create_task(cache.get_or_create("key", fresh_factory))
+    release_fresh.set()
+
+    assert await first_retry == "fresh-token"
+    assert await second_retry == "fresh-token"
     assert calls == 1
 
 

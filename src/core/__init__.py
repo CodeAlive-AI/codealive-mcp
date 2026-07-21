@@ -2,6 +2,7 @@
 
 from .client import CodeAliveContext, get_api_key_from_context, codealive_lifespan, _server_ready
 from .oauth import (
+    MetadataAwareHostOriginGuardMiddleware,
     ToolTokenExchangeCache,
     build_oauth_provider,
     exchange_for_tool_token,
@@ -15,6 +16,7 @@ from .observability import init_tracing
 
 __all__ = [
     'CodeAliveContext',
+    'MetadataAwareHostOriginGuardMiddleware',
     'get_api_key_from_context',
     'build_oauth_provider',
     'exchange_for_tool_token',

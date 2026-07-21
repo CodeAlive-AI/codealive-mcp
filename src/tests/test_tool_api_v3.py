@@ -1,7 +1,9 @@
 """MCP Tool API v3 contract tests."""
 
+import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from fastmcp import Context
 from fastmcp.exceptions import ToolError
@@ -42,6 +44,8 @@ def _context_with_response(
     codealive_context = MagicMock()
     codealive_context.client = client
     codealive_context.base_url = "https://app.codealive.ai/api/"
+    codealive_context.config = Config(oauth_enabled=False)
+    codealive_context.tool_token_cache = None
 
     ctx.request_context.lifespan_context = codealive_context
     return ctx, client
@@ -241,6 +245,7 @@ async def test_oauth_tool_call_evicts_rejected_exchange_and_retries_once(
         context.tool_token_cache,
         context.config,
         "header.payload.signature",
+        "stale-tool-token",
     )
 
 
@@ -262,3 +267,69 @@ async def test_oauth_shaped_credential_is_not_exchanged_when_feature_is_disabled
     assert result == "done"
     assert client.post.call_args.kwargs["headers"]["Authorization"] == f"Bearer {credential}"
     mock_exchange.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@patch("tools.tool_api.handle_api_error", new_callable=AsyncMock)
+@patch("tools.tool_api.exchange_for_tool_token", new_callable=AsyncMock)
+@patch("tools.tool_api.get_api_key_from_context")
+async def test_oauth_exchange_failure_uses_tool_error_path(
+    mock_get_api_key,
+    mock_exchange,
+    mock_handle_error,
+):
+    mock_get_api_key.return_value = "header.payload.signature"
+    mock_exchange.side_effect = httpx.ReadTimeout("authorization server timed out")
+    mock_handle_error.side_effect = ToolError("OAuth exchange unavailable")
+    ctx, client = _context_with_response("done")
+    context = ctx.request_context.lifespan_context
+    context.config = MagicMock(oauth_enabled=True)
+    context.tool_token_cache = MagicMock()
+
+    with pytest.raises(ToolError, match="OAuth exchange unavailable"):
+        await call_tool_api(ctx, "semantic_search", {"question": "why"})
+
+    client.post.assert_not_awaited()
+    mock_handle_error.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@patch("tools.tool_api.get_api_key_from_context")
+async def test_empty_repairable_projection_preserves_structured_error_content(mock_get_api_key):
+    mock_get_api_key.return_value = "test_key"
+    error_obj = {
+        "error": {
+            "code": "invalid_tool_arguments",
+            "message": "question is required",
+            "retry": "yes",
+            "try": "Provide question and retry.",
+        }
+    }
+    ctx, _ = _context_with_response(rendered="", obj=error_obj)
+
+    result = await semantic_search(ctx, question="missing upstream validation")
+
+    assert isinstance(result, ToolResult)
+    assert result.is_error is True
+    assert json.loads(result.content[0].text) == error_obj
+
+
+@pytest.mark.asyncio
+@patch("tools.tool_api.get_api_key_from_context")
+async def test_empty_agentic_projection_falls_back_to_structured_content(mock_get_api_key):
+    mock_get_api_key.return_value = "test_key"
+    structured = {
+        "artifacts": [
+            {
+                "identifier": "repo::src/Foo.cs::Foo",
+                "found": True,
+                "content": "public sealed class Foo {}",
+            }
+        ]
+    }
+    ctx, _ = _context_with_response(rendered="", obj=structured)
+
+    result = await fetch_artifacts(ctx, identifiers=["repo::src/Foo.cs::Foo"])
+
+    assert isinstance(result, str)
+    assert json.loads(result) == structured

@@ -112,6 +112,30 @@ def test_http_main_fails_closed_when_oauth_exchange_secret_is_missing(monkeypatc
     assert error.value.code == 1
 
 
+def test_http_main_keeps_path_aware_origin_guard_when_oauth_is_enabled(monkeypatch):
+    run = MagicMock()
+    monkeypatch.setattr(server.mcp, "run", run)
+    monkeypatch.setattr(server, "setup_logging", MagicMock())
+    monkeypatch.setattr(server, "init_tracing", MagicMock())
+    monkeypatch.setattr(server.mcp, "auth", None)
+    monkeypatch.setenv("CODEALIVE_MCP_OAUTH_ENABLED", "true")
+    monkeypatch.setenv("CODEALIVE_OAUTH_INTERNAL_CLIENT_SECRET", "test-secret")
+    monkeypatch.setenv("CODEALIVE_MCP_ALLOWED_HOSTS", "mcp.codealive.ai")
+    monkeypatch.setenv(
+        "CODEALIVE_MCP_ALLOWED_ORIGINS",
+        "https://mcp.codealive.ai",
+    )
+    monkeypatch.setattr(sys, "argv", ["codealive-mcp", "--transport", "http"])
+
+    server.main()
+
+    options = run.call_args.kwargs
+    assert options["host_origin_protection"] is False
+    assert len(options["middleware"]) == 1
+    assert options["allowed_hosts"] == ["mcp.codealive.ai"]
+    assert options["allowed_origins"] == ["https://mcp.codealive.ai"]
+
+
 def test_debug_mode_does_not_disable_tls_verification(monkeypatch):
     run = MagicMock()
     monkeypatch.setattr(server.mcp, "run", run)

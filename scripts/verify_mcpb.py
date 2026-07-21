@@ -19,6 +19,7 @@ FORBIDDEN_PATTERNS = (
     ".env",
     ".env.*",
     ".mcpregistry_*",
+    "AGENTS.md",
     "CLAUDE.md",
     "Dockerfile",
     "Makefile",
