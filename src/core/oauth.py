@@ -41,6 +41,37 @@ def is_oauth_credential(token: str) -> bool:
     return not is_legacy_api_key(token)
 
 
+def _bearer_auth_parameters(challenge: str) -> list[tuple[str, str]]:
+    """Split server-generated Bearer parameters without regex backtracking."""
+    value = challenge.strip()
+    if not value.lower().startswith("bearer"):
+        return []
+    value = value[6:].lstrip()
+    parameters: list[tuple[str, str]] = []
+    start = 0
+    quoted = False
+    escaped = False
+    for index, character in enumerate(value):
+        if escaped:
+            escaped = False
+        elif quoted and character == "\\":
+            escaped = True
+        elif character == '"':
+            quoted = not quoted
+        elif character == "," and not quoted:
+            segment = value[start:index].strip()
+            name, separator, _ = segment.partition("=")
+            if separator and name.strip():
+                parameters.append((name.strip().lower(), segment))
+            start = index + 1
+
+    segment = value[start:].strip()
+    name, separator, _ = segment.partition("=")
+    if separator and name.strip():
+        parameters.append((name.strip().lower(), segment))
+    return parameters
+
+
 class CodeAliveTokenVerifier(TokenVerifier):
     """Accept legacy opaque API keys or strictly validate CodeAlive MCP JWTs."""
 
@@ -132,16 +163,15 @@ class OAuthChallengeMiddleware:
                 # then add the MCP discovery attributes missing from its challenge.
                 preserved_attributes: list[str] = []
                 if existing_challenge:
-                    for match in re.finditer(
-                        r'([A-Za-z][A-Za-z0-9_-]*)=(?:"(?:\\.|[^"])*"|[^,\s]+)',
-                        existing_challenge,
+                    for name, parameter in _bearer_auth_parameters(
+                        existing_challenge
                     ):
-                        if match.group(1).lower() not in {
+                        if name not in {
                             "realm",
                             "resource_metadata",
                             "scope",
                         }:
-                            preserved_attributes.append(match.group(0))
+                            preserved_attributes.append(parameter)
 
                 attributes = [
                     'realm="codealive-mcp"',

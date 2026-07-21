@@ -200,7 +200,7 @@ async def test_challenge_preserves_invalid_token_details():
             headers={
                 "WWW-Authenticate": (
                     'Bearer error="invalid_token", '
-                    'error_description="The access token expired"'
+                    'error_description="The access token expired, sign in again"'
                 )
             },
         )
@@ -222,7 +222,10 @@ async def test_challenge_preserves_invalid_token_details():
 
     challenge = response.headers["www-authenticate"]
     assert 'error="invalid_token"' in challenge
-    assert 'error_description="The access token expired"' in challenge
+    assert (
+        'error_description="The access token expired, sign in again"'
+        in challenge
+    )
     assert 'resource_metadata="https://mcp.codealive.ai/' in challenge
     assert 'scope="mcp:tools"' in challenge
 
