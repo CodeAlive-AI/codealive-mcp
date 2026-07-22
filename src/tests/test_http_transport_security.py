@@ -97,6 +97,20 @@ def test_http_main_enables_guard_and_reads_environment_allowlists(monkeypatch):
     assert options["host_origin_protection"] is True
     assert options["allowed_hosts"] == ["mcp.codealive.ai", "codealive-mcp-server"]
     assert options["allowed_origins"] == ["https://mcp.codealive.ai"]
+    assert options["uvicorn_config"]["access_log"] is True
+
+
+def test_http_main_can_disable_per_request_access_logs(monkeypatch):
+    run = MagicMock()
+    monkeypatch.setattr(server.mcp, "run", run)
+    monkeypatch.setattr(server, "setup_logging", MagicMock())
+    monkeypatch.setattr(server, "init_tracing", MagicMock())
+    monkeypatch.setenv("CODEALIVE_MCP_ACCESS_LOG_ENABLED", "false")
+    monkeypatch.setattr(sys, "argv", ["codealive-mcp", "--transport", "http"])
+
+    server.main()
+
+    assert run.call_args.kwargs["uvicorn_config"]["access_log"] is False
 
 
 def test_http_main_fails_closed_when_oauth_exchange_secret_is_missing(monkeypatch):

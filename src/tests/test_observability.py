@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import Event, ReadableSpan
+from opentelemetry.sdk.trace.sampling import Decision
 from opentelemetry.trace import SpanContext, SpanKind, Status, StatusCode, TraceFlags
 
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent.parent))
@@ -14,6 +15,25 @@ from core.observability import _SERVICE_NAME, _SanitizingSpanExporter, init_trac
 
 
 class TestInitTracing:
+    def test_standard_sampler_environment_controls_root_sampling(self, monkeypatch):
+        monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
+        monkeypatch.delenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", raising=False)
+        monkeypatch.setenv("OTEL_TRACES_SAMPLER", "parentbased_traceidratio")
+        monkeypatch.setenv("OTEL_TRACES_SAMPLER_ARG", "0.05")
+
+        with patch("core.observability.HTTPXClientInstrumentor"):
+            with patch("core.observability.StarletteInstrumentor"):
+                with patch("core.observability.trace.set_tracer_provider") as mock_set:
+                    init_tracing()
+
+        sampler = mock_set.call_args[0][0].sampler
+        assert sampler.should_sample(None, 1, "sampled").decision == Decision.RECORD_AND_SAMPLE
+        assert sampler.should_sample(
+            None,
+            (1 << 128) - 1,
+            "dropped",
+        ).decision == Decision.DROP
+
     def test_no_endpoint_creates_provider_without_exporter(self, monkeypatch):
         monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
         monkeypatch.delenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", raising=False)
