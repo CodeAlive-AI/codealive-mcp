@@ -2,6 +2,7 @@
 
 import io
 import json
+import logging
 import sys
 from unittest.mock import MagicMock
 
@@ -104,6 +105,35 @@ class TestSetupLogging:
         output = sink.getvalue()
         assert "debug-visible" in output
 
+        logger.remove(handler_id)
+
+    def test_fastmcp_logs_do_not_propagate_when_disabled(self, monkeypatch, capsys):
+        monkeypatch.setenv("FASTMCP_LOG_ENABLED", "false")
+        sink = io.StringIO()
+        setup_logging()
+        logger.remove()
+        handler_id = logger.add(sink, level="DEBUG", serialize=True)
+
+        logging.getLogger("fastmcp.server.server").warning(
+            "Invalid arguments: secret query text"
+        )
+
+        assert "secret query text" not in sink.getvalue()
+        assert "secret query text" not in capsys.readouterr().err
+        logger.remove(handler_id)
+
+    def test_fastmcp_logs_propagate_by_default_for_self_hosted(self, monkeypatch):
+        monkeypatch.delenv("FASTMCP_LOG_ENABLED", raising=False)
+        sink = io.StringIO()
+        setup_logging()
+        logger.remove()
+        handler_id = logger.add(sink, level="DEBUG", serialize=True)
+
+        logging.getLogger("fastmcp.server.server").warning(
+            "Self-hosted framework diagnostic"
+        )
+
+        assert "Self-hosted framework diagnostic" in sink.getvalue()
         logger.remove(handler_id)
 
     def test_setup_debug_logging_env_var(self, monkeypatch):

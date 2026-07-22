@@ -4,7 +4,7 @@ Span attributes follow the GenAI / MCP semantic conventions (April 2026):
   - ``gen_ai.operation.name``  = ``"execute_tool"``
   - ``gen_ai.tool.name``       = tool name
   - ``mcp.tool.name``          = tool name (MCP-specific alias)
-  - ``mcp.method``             = ``"tools/call"``
+  - ``mcp.method.name``        = ``"tools/call"``
 
 The middleware also injects ``trace_id`` into loguru context via
 ``logger.contextualize`` so that every log emitted during the tool
@@ -60,7 +60,27 @@ def _extract_tool_arguments(context: "MiddlewareContext") -> dict[str, Any]:
 
 
 class ObservabilityMiddleware(Middleware):
-    """Wrap each ``tools/call`` in an OTel span and log its outcome."""
+    """Trace MCP requests and nested tool execution without recording payloads."""
+
+    async def on_request(self, context: "MiddlewareContext", call_next: "CallNext"):
+        method = context.method or "unknown"
+        with _tracer.start_as_current_span(
+            f"mcp {method}",
+            record_exception=False,
+            set_status_on_exception=False,
+            attributes={"mcp.method.name": method},
+        ) as span:
+            try:
+                result = await call_next(context)
+            except Exception as exc:
+                error_type = type(exc).__name__
+                span.set_attribute("error.type", error_type)
+                span.set_status(StatusCode.ERROR, error_type)
+                span.add_event("exception", {"exception.type": error_type})
+                raise
+
+            span.set_status(StatusCode.OK)
+            return result
 
     async def on_call_tool(self, context: "MiddlewareContext", call_next: "CallNext"):
         tool_name = getattr(context.message, "name", "unknown")
@@ -75,7 +95,7 @@ class ObservabilityMiddleware(Middleware):
                 "gen_ai.operation.name": "execute_tool",
                 "gen_ai.tool.name": tool_name,
                 "mcp.tool.name": tool_name,
-                "mcp.method": "tools/call",
+                "mcp.method.name": "tools/call",
             },
         ) as span:
             # Inject trace_id into loguru so every log inside the tool carries it
