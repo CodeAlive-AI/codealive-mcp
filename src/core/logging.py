@@ -6,6 +6,7 @@ with OTel trace context automatically injected via a patcher.
 """
 
 import logging
+import os
 import sys
 import uuid
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -115,13 +116,23 @@ def setup_logging(debug: bool = False) -> None:
     # Intercept stdlib logging
     logging.basicConfig(handlers=[_InterceptHandler()], level=0, force=True)
 
+    # FastMCP validation and exception records can contain rejected argument
+    # values. In production its logger is disabled in favor of the privacy-safe
+    # CodeAlive middleware logs. Stop propagation explicitly because FastMCP's
+    # disabled setting otherwise leaves child loggers attached to the root.
+    fastmcp_logger = logging.getLogger("fastmcp")
+    if os.environ.get("FASTMCP_LOG_ENABLED", "").lower() in {"false", "0", "no"}:
+        fastmcp_logger.handlers.clear()
+        fastmcp_logger.addHandler(logging.NullHandler())
+        fastmcp_logger.propagate = False
+    else:
+        fastmcp_logger.propagate = True
+
     logger.info("Logging initialized at {level} level", level=_current_level)
 
 
 def setup_debug_logging() -> bool:
     """Backward-compatible helper: enable debug logging if ``DEBUG_MODE`` env is set."""
-    import os
-
     if os.environ.get("DEBUG_MODE", "").lower() in ["true", "1", "yes"]:
         setup_logging(debug=True)
         return True
