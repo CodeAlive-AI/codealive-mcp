@@ -53,6 +53,13 @@ def _package_version() -> str:
         return "unknown"
 
 
+def _environment_flag(name: str, *, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() not in {"false", "0", "no", "off"}
+
+
 # Initialize FastMCP server with lifespan and enhanced system instructions
 mcp = FastMCP(
     name="CodeAlive MCP Server",
@@ -301,6 +308,13 @@ def main():
             allowed_origins=allowed_origins or None,
             uvicorn_config={
                 "forwarded_allow_ips": "*",
+                # Access logs scale linearly with unauthenticated traffic. Keep
+                # the upstream default for self-hosted operators, while allowing
+                # hardened deployments to rely on sampled traces and safe events.
+                "access_log": _environment_flag(
+                    "CODEALIVE_MCP_ACCESS_LOG_ENABLED",
+                    default=True,
+                ),
             },
         )
     else:
