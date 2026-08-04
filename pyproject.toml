@@ -13,6 +13,7 @@ dependencies = [
     "opentelemetry-sdk==1.43.0",
     "opentelemetry-exporter-otlp-proto-http==1.43.0",
     "opentelemetry-instrumentation-httpx==0.64b0",
+    "opentelemetry-instrumentation-starlette==0.64b0",
     "opentelemetry-semantic-conventions==0.64b0",
 ]
 
@@ -45,6 +46,10 @@ fallback_version = "3.0.2"
 # Older versions silently ignore the whole [tool.uv] section on parse error.
 required-version = "==0.11.28"
 exclude-newer = "7 days"
+# Security exception: cryptography 50.0.0 fixes GHSA-g6cj-pr64-35w5 and was
+# released inside the normal quarantine window. Keep the exception package-
+# scoped so all unrelated dependencies remain subject to the seven-day delay.
+exclude-newer-package = { cryptography = "2026-08-01T00:00:00Z" }
 # Security minimums are older than the global seven-day quarantine. Exact direct
 # pins plus exclude-newer keep every future lock update inside the same policy.
 constraint-dependencies = [

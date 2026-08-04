@@ -88,7 +88,7 @@ class TestSuccessfulToolCall:
         assert span.attributes["gen_ai.operation.name"] == "execute_tool"
         assert span.attributes["gen_ai.tool.name"] == "get_data_sources"
         assert span.attributes["mcp.tool.name"] == "get_data_sources"
-        assert span.attributes["mcp.method"] == "tools/call"
+        assert span.attributes["mcp.method.name"] == "tools/call"
 
     @pytest.mark.asyncio
     async def test_span_status_ok_on_success(self, otel_setup):
@@ -141,6 +141,50 @@ class TestSuccessfulToolCall:
         assert lifecycle[0]["extra"]["tool_argument_shape"] == expected_shape
         assert lifecycle[1]["extra"]["tool_argument_shape"] == expected_shape
         assert tool_arguments["identifier"] not in str(lifecycle)
+
+
+class TestMcpRequest:
+    @pytest.mark.asyncio
+    async def test_request_span_wraps_nested_tool_span(self, otel_setup):
+        middleware = ObservabilityMiddleware()
+        context = _make_context("get_data_sources")
+        context.method = "tools/call"
+
+        async def call_tool(inner_context):
+            return await middleware.on_call_tool(
+                inner_context,
+                AsyncMock(return_value="ok"),
+            )
+
+        assert await middleware.on_request(context, call_tool) == "ok"
+
+        spans = {span.name: span for span in otel_setup.get_finished_spans()}
+        request_span = spans["mcp tools/call"]
+        tool_span = spans["tool get_data_sources"]
+        assert request_span.attributes == {"mcp.method.name": "tools/call"}
+        assert request_span.status.status_code == trace.StatusCode.OK
+        assert tool_span.parent.span_id == request_span.context.span_id
+
+    @pytest.mark.asyncio
+    async def test_request_failure_records_type_without_message(self, otel_setup):
+        middleware = ObservabilityMiddleware()
+        context = _make_context()
+        context.method = "tools/call"
+
+        with pytest.raises(ValueError, match="secret query text"):
+            await middleware.on_request(
+                context,
+                AsyncMock(side_effect=ValueError("secret query text")),
+            )
+
+        span = otel_setup.get_finished_spans()[0]
+        assert span.status.status_code == trace.StatusCode.ERROR
+        assert span.status.description == "ValueError"
+        assert span.attributes == {
+            "mcp.method.name": "tools/call",
+            "error.type": "ValueError",
+        }
+        assert "secret query text" not in str(span.events)
 
 
 # ---------------------------------------------------------------------------
