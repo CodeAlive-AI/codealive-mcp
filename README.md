@@ -1,5 +1,7 @@
 # CodeAlive MCP: Deepest Context Engine for your projects (especially for large codebases)
 
+[![MCP Toplist](https://mcptoplist.com/badge/io.github.CodeAlive-AI%2Fcodealive-mcp.svg)](https://mcptoplist.com/server/io.github.CodeAlive-AI%2Fcodealive-mcp)
+
 <!-- MCP Server Name: io.github.codealive-ai.codealive-mcp -->
 
 [![CodeAlive Logo](https://app.codealive.ai/images/logos/dark-logo.svg)](https://www.codealive.ai/)
