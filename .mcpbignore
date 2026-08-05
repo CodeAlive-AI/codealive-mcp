@@ -30,6 +30,7 @@ server.json
 smithery.yaml
 DEPLOYMENT.md
 PUBLISHING.md
+AGENTS.md
 CLAUDE.md
 Dockerfile
 Makefile
