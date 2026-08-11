@@ -248,6 +248,15 @@ async def test_verifier_rejects_extra_audience_and_missing_binding_claims():
     assert await verifier.verify_token("header.payload.signature") is None
 
     verifier._jwt.verify_token.return_value.claims = {
+        "aud": ["https://mcp.codealive.ai/api"],
+        "sub": "0123456789abcdef01234567",
+        "organisation_id": "1123456789abcdef01234567",
+        "mcp_connection_id": "2123456789abcdef01234567",
+        "client_id": "client",
+    }
+    assert await verifier.verify_token("header.payload.signature") is None
+
+    verifier._jwt.verify_token.return_value.claims = {
         "aud": "https://mcp.codealive.ai/api",
         "sub": "0123456789abcdef01234567",
         "organisation_id": "1123456789abcdef01234567",
@@ -416,3 +425,141 @@ def test_oauth_enabled_treats_default_https_port_as_same_resource():
             oauth_enabled=True,
             tool_api_resource="https://mcp.codealive.ai:443/api",
         )
+
+
+def _review_claims(**changes):
+    claims = {
+        "aud": "urn:codealive:tool-api",
+        "sub": "codealive-agents-server",
+        "review_id": "0123456789abcdef01234567",
+        "organisation_id": "1123456789abcdef01234567",
+        "review_tool_profile": "reviewer-tools:v1",
+        "primary_data_source_id": "2123456789abcdef01234567",
+        "azp": "codealive-agents-server",
+    }
+    claims.update(changes)
+    return claims
+
+
+@pytest.mark.asyncio
+async def test_verifier_accepts_signed_review_capability_and_rejects_mixed_bindings():
+    verifier = CodeAliveTokenVerifier(_config())
+    verifier._jwt.verify_token = AsyncMock(return_value=AccessToken(
+        token="header.payload.signature",
+        client_id="codealive-agents-server",
+        scopes=[],
+        claims=_review_claims(),
+    ))
+
+    accepted = await verifier.verify_token("header.payload.signature")
+    assert accepted is not None
+    assert accepted.token == "header.payload.signature"
+    assert accepted.subject == "0123456789abcdef01234567:reviewer-tools:v1"
+    assert accepted.scopes == []
+
+    verifier._jwt.verify_token.return_value.claims = _review_claims(
+        aud=["urn:codealive:tool-api", "https://mcp.codealive.ai/api"],
+    )
+    assert await verifier.verify_token("header.payload.signature") is None
+
+    verifier._jwt.verify_token.return_value.claims = _review_claims(
+        mcp_connection_id="3123456789abcdef01234567",
+    )
+    assert await verifier.verify_token("header.payload.signature") is None
+
+    verifier._jwt.verify_token.return_value = AccessToken(
+        token="header.payload.signature",
+        client_id="codealive-agents-server",
+        scopes=["mcp:tools"],
+        claims=_review_claims(),
+    )
+    assert await verifier.verify_token("header.payload.signature") is None
+
+    verifier._jwt.verify_token.return_value = AccessToken(
+        token="header.payload.signature",
+        client_id="codealive-agents-server",
+        scopes=[],
+        claims=_review_claims(review_tool_profile="reviewer-tools:v2"),
+    )
+    unknown_profile = await verifier.verify_token("header.payload.signature")
+    assert unknown_profile is not None
+    assert unknown_profile.subject.endswith(":reviewer-tools:v2")
+
+    missing_profile_claims = _review_claims()
+    missing_profile_claims.pop("review_tool_profile")
+    verifier._jwt.verify_token.return_value = AccessToken(
+        token="header.payload.signature",
+        client_id="codealive-agents-server",
+        scopes=[],
+        claims=missing_profile_claims,
+    )
+    missing_profile = await verifier.verify_token("header.payload.signature")
+    assert missing_profile is not None
+    assert missing_profile.subject.endswith(":unknown")
+
+
+@pytest.mark.asyncio
+async def test_unverified_review_shaped_payload_cannot_select_review_auth():
+    verifier = CodeAliveTokenVerifier(_config())
+    verifier._jwt.verify_token = AsyncMock(return_value=None)
+
+    assert await verifier.verify_token("eyJhbGciOiJSUzI1NiJ9.eyJhdWQiOiJ1cm46Y29kZWFsaXZlOnRvb2wtYXBpIn0.sig") is None
+    verifier._jwt.verify_token.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_signed_review_and_mcp_tokens_use_distinct_audience_bindings():
+    from fastmcp.server.auth.providers.jwt import JWTVerifier, RSAKeyPair
+
+    keys = RSAKeyPair.generate()
+    verifier = CodeAliveTokenVerifier(_config())
+    verifier._jwt = JWTVerifier(
+        public_key=keys.public_key,
+        issuer="https://auth.codealive.ai/",
+        audience=None,
+        algorithm="RS256",
+    )
+
+    review_token = keys.create_token(
+        subject="codealive-agents-server",
+        issuer="https://auth.codealive.ai/",
+        audience="urn:codealive:tool-api",
+        additional_claims={
+            "review_id": "0123456789abcdef01234567",
+            "organisation_id": "1123456789abcdef01234567",
+            "review_tool_profile": "synthesizer-tools:v1",
+            "primary_data_source_id": "2123456789abcdef01234567",
+            "azp": "codealive-agents-server",
+        },
+    )
+    mcp_token = keys.create_token(
+        subject="0123456789abcdef01234567",
+        issuer="https://auth.codealive.ai/",
+        audience="https://mcp.codealive.ai/api",
+        scopes=["mcp:tools"],
+        additional_claims={
+            "organisation_id": "1123456789abcdef01234567",
+            "mcp_connection_id": "2123456789abcdef01234567",
+            "client_id": "client",
+        },
+    )
+    other_keys = RSAKeyPair.generate()
+    forged_review = other_keys.create_token(
+        subject="codealive-agents-server",
+        issuer="https://auth.codealive.ai/",
+        audience="urn:codealive:tool-api",
+        additional_claims={
+            "review_id": "0123456789abcdef01234567",
+            "organisation_id": "1123456789abcdef01234567",
+            "review_tool_profile": "reviewer-tools:v1",
+            "primary_data_source_id": "2123456789abcdef01234567",
+        },
+    )
+
+    review = await verifier.verify_token(review_token)
+    mcp_user = await verifier.verify_token(mcp_token)
+    assert review is not None
+    assert review.subject == "0123456789abcdef01234567:synthesizer-tools:v1"
+    assert mcp_user is not None
+    assert mcp_user.subject == "0123456789abcdef01234567:2123456789abcdef01234567"
+    assert await verifier.verify_token(forged_review) is None

@@ -20,6 +20,7 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from .config import Config, validate_oauth_urls
+from .review_catalog import exact_audience
 
 _OBJECT_ID = re.compile(r"^[0-9a-fA-F]{24}$")
 _ACCESS_TOKEN_TYPE = "urn:ietf:params:oauth:token-type:access_token"
@@ -73,15 +74,22 @@ def _bearer_auth_parameters(challenge: str) -> list[tuple[str, str]]:
 
 
 class CodeAliveTokenVerifier(TokenVerifier):
-    """Accept legacy opaque API keys or strictly validate CodeAlive MCP JWTs."""
+    """Accept legacy API keys, MCP user JWTs, or signed review capabilities.
+
+    Signature, issuer, and algorithm are verified before any claim is used to
+    choose the credential class. Audience is an exact string match: MCP user
+    tokens use the MCP resource, review capabilities use the Tool API resource.
+    """
 
     def __init__(self, config: Config):
-        super().__init__(required_scopes=["mcp:tools"])
+        # Scopes are enforced per credential class after signature verification.
+        # A single required mcp:tools scope would reject review capabilities.
+        super().__init__(required_scopes=[])
         self._config = config
         self._jwt = JWTVerifier(
             jwks_uri=urljoin(config.oauth_issuer, "connect/jwks"),
             issuer=config.oauth_issuer,
-            audience=config.mcp_resource,
+            audience=None,
             algorithm="RS256",
             required_scopes=None,
         )
@@ -109,10 +117,14 @@ class CodeAliveTokenVerifier(TokenVerifier):
         if access is None:
             return None
         claims = access.claims or {}
-        audience = claims.get("aud")
-        exact_audience = audience == self._config.mcp_resource or audience == [self._config.mcp_resource]
-        if not exact_audience:
-            return None
+        if exact_audience(claims, self._config.mcp_resource):
+            return self._bind_mcp_user(access)
+        if exact_audience(claims, self._config.tool_api_resource):
+            return self._bind_review_capability(access)
+        return None
+
+    def _bind_mcp_user(self, access: AccessToken) -> AccessToken | None:
+        claims = access.claims or {}
         if set(access.scopes or []) != {"mcp:tools"}:
             return None
         required_string_claims = ("sub", "organisation_id", "mcp_connection_id", "client_id")
@@ -120,7 +132,11 @@ class CodeAliveTokenVerifier(TokenVerifier):
             return None
         if access.client_id is not None and access.client_id != claims["client_id"]:
             return None
-        if not _OBJECT_ID.fullmatch(claims["sub"]) or not _OBJECT_ID.fullmatch(claims["organisation_id"]) or not _OBJECT_ID.fullmatch(claims["mcp_connection_id"]):
+        if (
+            not _OBJECT_ID.fullmatch(claims["sub"])
+            or not _OBJECT_ID.fullmatch(claims["organisation_id"])
+            or not _OBJECT_ID.fullmatch(claims["mcp_connection_id"])
+        ):
             return None
         # The MCP SDK binds stateful transport sessions to subject/client/issuer.
         # Include the connection in the subject so two grants for the same User/client
@@ -132,6 +148,41 @@ class CodeAliveTokenVerifier(TokenVerifier):
             expires_at=access.expires_at,
             claims=claims,
             subject=f"{claims['sub']}:{claims['mcp_connection_id']}",
+        )
+
+    def _bind_review_capability(self, access: AccessToken) -> AccessToken | None:
+        claims = access.claims or {}
+        required_string_claims = (
+            "sub",
+            "review_id",
+            "organisation_id",
+            "primary_data_source_id",
+        )
+        if any(not isinstance(claims.get(name), str) or not claims[name] for name in required_string_claims):
+            return None
+        profile = claims.get("review_tool_profile")
+        if profile is not None and not isinstance(profile, str):
+            return None
+        if (
+            not _OBJECT_ID.fullmatch(claims["review_id"])
+            or not _OBJECT_ID.fullmatch(claims["organisation_id"])
+            or not _OBJECT_ID.fullmatch(claims["primary_data_source_id"])
+        ):
+            return None
+        # Review capabilities are a different credential class from MCP user
+        # tokens. Mixed binding claims mean the signature bound the wrong grant.
+        if claims.get("mcp_connection_id"):
+            return None
+        if "mcp:tools" in set(access.scopes or []):
+            return None
+        profile_label = profile if isinstance(profile, str) and profile else "unknown"
+        return AccessToken(
+            token=access.token,
+            client_id=str(claims.get("azp") or claims.get("client_id") or claims["sub"]),
+            scopes=[],
+            expires_at=access.expires_at,
+            claims=claims,
+            subject=f"{claims['review_id']}:{profile_label}",
         )
 
 

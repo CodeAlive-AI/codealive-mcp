@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 # Import core components
 from core import Config, MetadataAwareHostOriginGuardMiddleware, build_oauth_provider, codealive_lifespan, setup_logging, setup_debug_logging, init_tracing, normalize_base_url, _server_ready
 import core.client as _client_module  # for /ready flag access
-from middleware import N8NRemoveParametersMiddleware, ObservabilityMiddleware
+from middleware import N8NRemoveParametersMiddleware, ObservabilityMiddleware, ReviewToolCatalogMiddleware
 from tools import (
     get_data_sources,
     semantic_search,
@@ -43,6 +43,7 @@ from tools import (
     get_artifact_query_schema,
     query_artifact_metadata,
     chat,
+    ask_codebase,
 )
 
 
@@ -83,6 +84,7 @@ mcp = FastMCP(
 # Register middleware — order matters: n8n cleanup runs first, then tracing wraps the clean call
 mcp.add_middleware(N8NRemoveParametersMiddleware())
 mcp.add_middleware(ObservabilityMiddleware())
+mcp.add_middleware(ReviewToolCatalogMiddleware())
 
 
 def _runtime_metadata() -> dict[str, str]:
@@ -172,6 +174,10 @@ mcp.tool(
     title="Chat About Codebase",
     annotations=_READ_ONLY_TOOL,
 )(chat)
+mcp.tool(
+    title="Ask the Codebase",
+    annotations=_READ_ONLY_TOOL,
+)(ask_codebase)
 
 
 def main():

@@ -104,7 +104,7 @@ This is a Model Context Protocol (MCP) server that provides AI clients with acce
 ### Core Components
 
 - **`codealive_mcp_server.py`**: Main entry point — bootstraps logging, tracing, registers tools and middleware
-- **Eleven tools**: `get_data_sources`, `semantic_search`, `grep_search`, `get_repository_ontology`, `get_file_tree`, `read_file`, `fetch_artifacts`, `get_artifact_relationships`, `get_artifact_query_schema`, `query_artifact_metadata`, `chat`
+- **Eleven public tools**: `get_data_sources`, `semantic_search`, `grep_search`, `get_repository_ontology`, `get_file_tree`, `read_file`, `fetch_artifacts`, `get_artifact_relationships`, `get_artifact_query_schema`, `query_artifact_metadata`, `chat`. Review capabilities additionally advertise `ask_codebase` (routed to `/api/tools/ask_codebase`) and hide `chat`; reviewers also hide ontology. Web Server remains the authorization boundary.
 - **`core/client.py`**: `CodeAliveContext` dataclass + `codealive_lifespan` (httpx.AsyncClient lifecycle, `_server_ready` flag)
 - **`core/logging.py`**: loguru structured JSON logging + PII masking + OTel context injection
 - **`core/observability.py`**: OpenTelemetry TracerProvider setup with OTLP export

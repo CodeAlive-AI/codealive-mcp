@@ -6,7 +6,7 @@ from .repository import get_file_tree, get_repository_ontology, read_file
 from .fetch_artifacts import fetch_artifacts
 from .artifact_relationships import get_artifact_relationships
 from .artifact_query import get_artifact_query_schema, query_artifact_metadata
-from .chat import chat
+from .chat import ask_codebase, chat
 
 __all__ = [
     'get_data_sources',
@@ -20,4 +20,5 @@ __all__ = [
     'get_artifact_query_schema',
     'query_artifact_metadata',
     'chat',
+    'ask_codebase',
 ]

@@ -9,6 +9,8 @@ from fastmcp import Context
 from fastmcp.exceptions import ToolError
 from fastmcp.tools.tool import ToolResult
 
+from fastmcp.server.dependencies import get_access_token
+
 from core import (
     CodeAliveContext,
     Config,
@@ -19,6 +21,7 @@ from core import (
     log_api_request,
     log_api_response,
 )
+from core.review_catalog import is_verified_review_capability
 from utils import handle_api_error
 
 ToolApiResult = str | ToolResult
@@ -65,7 +68,17 @@ async def call_tool_api(
     context: CodeAliveContext = ctx.request_context.lifespan_context
     inbound_credential = get_api_key_from_context(ctx)
     config = context.config or Config.from_environment()
-    oauth_credential = config.oauth_enabled and is_oauth_credential(inbound_credential)
+    # Use the already-verified FastMCP token. Never decode the bearer to choose
+    # exchange vs forward; an unverified payload must not select the auth path.
+    review_capability = is_verified_review_capability(
+        get_access_token(),
+        config.tool_api_resource,
+    )
+    oauth_credential = (
+        config.oauth_enabled
+        and is_oauth_credential(inbound_credential)
+        and not review_capability
+    )
     body = {**omit_empty(payload), "output_format": "agentic"}
     endpoint = f"/api/tools/{tool_name}"
     full_url = urljoin(context.base_url, endpoint)
