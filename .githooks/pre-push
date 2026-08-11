@@ -1,6 +1,7 @@
 #!/usr/bin/env sh
-# Block pushes when the locked MCP dependency graph contains a known
-# vulnerability. This mirrors the `uv audit` gate in .github/workflows/ci.yml.
+# Block Git pushes when the locked MCP dependency graph contains a known
+# vulnerability. jj users invoke this file explicitly as required by AGENTS.md.
+# This mirrors the `uv audit` gate in .github/workflows/ci.yml.
 set -eu
 
 # CI runs the same audit itself; avoid doing it twice on runner-side pushes.

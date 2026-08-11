@@ -4,6 +4,11 @@
 
 This file provides guidance to coding agents working in this repository.
 
+## Version Control
+
+- This repository uses jj. Before changing files, load `working-with-jj`, stay in the current or
+  assigned root, and use jj—not raw Git—for VCS mutations.
+
 ## Development Commands
 
 ### Installation and Setup
@@ -386,6 +391,9 @@ Key points:
 5. **Mark async tests with `@pytest.mark.asyncio`.** The project uses `asyncio_mode = "strict"` — unmarked async tests will be silently skipped.
 
 ## Publishing and Releases
+
+Before any authorized `jj git push`, run `.githooks/pre-push` manually from the canonical
+checkout. Secondary jj workspaces have no `.git`, and Git hooks are not a jj policy boundary.
 
 ### Version Management — Keep All Three Files in Sync
 
