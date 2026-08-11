@@ -6,8 +6,9 @@ This file provides guidance to coding agents working in this repository.
 
 ## Version Control
 
-- This repository uses jj. Before changing files, load `working-with-jj`, stay in the current or
-  assigned root, and use jj—not raw Git—for VCS mutations.
+- This repository uses jj. Before changing files, load `working-with-jj` and
+  `codealive-jj-development`, stay in the current or assigned root, and use jj—not raw Git—for
+  VCS mutations.
 
 ## Development Commands
 

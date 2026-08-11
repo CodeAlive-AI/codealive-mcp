@@ -1,0 +1,32 @@
+{
+  "hooks": {
+    "WorktreeCreate": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$HOME/.local/bin/codealive-jj-claude-worktree\"",
+            "timeout": 120
+          }
+        ]
+      }
+    ],
+    "WorktreeRemove": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$HOME/.local/bin/codealive-jj-claude-worktree\"",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "deny": [
+      "EnterWorktree",
+      "Bash(git worktree *)"
+    ]
+  }
+}
