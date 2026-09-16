@@ -34,11 +34,27 @@ def isolated_environment():
 
 @pytest.fixture(scope="module")
 def live_mcp(tmp_path_factory):
-    requests = []
+    class Requests(list):
+        def __init__(self):
+            super().__init__()
+            self.spans = []
+
+    requests = Requests()
 
     class Backend(BaseHTTPRequestHandler):
         def do_POST(self):
-            payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            body = self.rfile.read(int(self.headers["Content-Length"]))
+            if self.path == "/v1/traces":
+                from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import ExportTraceServiceRequest
+                export = ExportTraceServiceRequest.FromString(body)
+                for resource in export.resource_spans:
+                    for scope in resource.scope_spans:
+                        requests.spans.extend((scope.scope.name, span) for span in scope.spans)
+                self.send_response(200)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            payload = json.loads(body)
             credential = self.headers.get("Authorization")
             requests.append((payload, credential, dict(self.headers)))
             time.sleep(0.01)  # overlap independent requests for credential isolation
@@ -62,7 +78,12 @@ def live_mcp(tmp_path_factory):
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         port = sock.getsockname()[1]
-    env = {**isolated_environment(), "CODEALIVE_BASE_URL": f"http://127.0.0.1:{backend.server_port}"}
+    env = {
+        **isolated_environment(),
+        "CODEALIVE_BASE_URL": f"http://127.0.0.1:{backend.server_port}",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": f"http://127.0.0.1:{backend.server_port}",
+        "OTEL_BSP_SCHEDULE_DELAY": "10",
+    }
     log = tmp_path_factory.mktemp("mcp-http") / "server.log"
     with log.open("w+") as output:
         process = subprocess.Popen(
@@ -194,3 +215,112 @@ asyncio.run(main())
         cwd=ROOT, env=env, capture_output=True, text=True, timeout=120,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case", ["http", "meta", "both", "different", "invalid", "none", "unsampled"])
+async def test_trace_propagation_over_real_http(live_mcp, case):
+    url, _, requests = live_mcp
+    http_trace = "4bf92f3577b34da6a3ce929d0e0e4736"
+    meta_trace = "5bf92f3577b34da6a3ce929d0e0e4736" if case == "different" else http_trace
+    flags = "00" if case == "unsampled" else "01"
+    traceparent = f"00-{http_trace}-00f067aa0ba902b7-{flags}"
+    headers = {"X-Trace-Id": "untrusted-never-echo-this"}
+    if case in {"http", "both", "different", "unsampled"}:
+        headers.update(traceparent=traceparent, tracestate="vendor=value")
+    elif case == "invalid":
+        headers["traceparent"] = "invalid"
+    params = {"name": "get_data_sources", "arguments": {"query": "trace-" + case}}
+    if case in {"meta", "both", "different"}:
+        params["_meta"] = {"traceparent": f"00-{meta_trace}-11f067aa0ba902b7-01", "tracestate": "vendor=meta"}
+    elif case == "invalid":
+        params["_meta"] = {"traceparent": 123}
+    response, payload = await wire_call(url, token="fake-trace", headers=headers, params=params)
+    assert payload["result"]["isError"] is False
+    response_id = response.headers["x-trace-id"]
+    assert len(response_id) == 32 and int(response_id, 16) != 0
+    outbound = next(item[2] for item in reversed(requests) if item[0].get("query") == "trace-" + case)
+    parts = outbound["traceparent"].split("-")
+    if case in {"meta", "both", "different"}:
+        assert parts[1] == meta_trace
+        assert outbound["tracestate"] == "vendor=meta"
+    else:
+        assert parts[1] == response_id
+    if case in {"http", "both", "different", "unsampled"}:
+        assert response_id == http_trace
+    assert parts[2] not in {"00f067aa0ba902b7", "11f067aa0ba902b7"}
+    if case == "unsampled":
+        assert int(parts[3], 16) & 1 == 0
+
+
+@pytest.mark.asyncio
+async def test_trace_context_isolated_across_concurrent_requests(live_mcp):
+    url, _, requests = live_mcp
+    async def request(index):
+        expected = f"{index + 1:032x}"
+        response, _ = await wire_call(url, token="fake", headers={"traceparent": f"00-{expected}-00f067aa0ba902b7-01"}, params={
+            "name": "get_data_sources", "arguments": {"query": f"concurrent-trace-{index}"},
+        })
+        assert response.headers["x-trace-id"] == expected
+        outbound = next(item[2] for item in reversed(requests) if item[0].get("query") == f"concurrent-trace-{index}")
+        assert outbound["traceparent"].split("-")[1] == expected
+    await asyncio.gather(*(request(index) for index in range(10)))
+
+
+@pytest.mark.asyncio
+async def test_exported_message_span_has_http_link_and_no_native_duplicate(live_mcp):
+    url, _, requests = live_mcp
+    remote_trace = "6bf92f3577b34da6a3ce929d0e0e4736"
+    http_trace = "7bf92f3577b34da6a3ce929d0e0e4736"
+    response, _ = await wire_call(url, token="fake", headers={
+        "traceparent": f"00-{http_trace}-00f067aa0ba902b7-01",
+    }, params={"name": "get_data_sources", "arguments": {}, "_meta": {
+        "traceparent": f"00-{remote_trace}-11f067aa0ba902b7-01",
+    }})
+    assert response.headers["x-trace-id"] == http_trace
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        spans = [(scope, span) for scope, span in requests.spans if span.trace_id.hex() == remote_trace]
+        if any(scope == "codealive-mcp.tools" for scope, span in spans):
+            break
+        await asyncio.sleep(0.02)
+    else:
+        pytest.fail("Local OTLP collector did not receive the MCP span")
+    server_spans = [span for _, span in spans if span.kind == 2]  # SERVER
+    assert len(server_spans) == 1
+    span = server_spans[0]
+    assert span.parent_span_id.hex() == "11f067aa0ba902b7"
+    assert span.name == "tools/call get_data_sources"
+    assert len(span.links) == 1
+    assert span.links[0].trace_id.hex() == http_trace
+    assert all(scope != "fastmcp" for scope, _ in spans)
+
+
+@pytest.mark.asyncio
+async def test_stdio_message_context_reaches_backend(live_mcp):
+    from mcp import ClientSession, StdioServerParameters
+    from mcp.client.stdio import stdio_client
+    _, env, requests = live_mcp
+    expected = "8bf92f3577b34da6a3ce929d0e0e4736"
+    parameters = StdioServerParameters(
+        command=sys.executable, args=[str(SERVER)],
+        env={**env, "CODEALIVE_API_KEY": "fake-stdio-trace"},
+    )
+    async with asyncio.timeout(15):
+        async with stdio_client(parameters) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                result = await session.call_tool("get_data_sources", {"query": "stdio-trace"}, meta={
+                    "traceparent": f"00-{expected}-00f067aa0ba902b7-01",
+                })
+                assert result.is_error is False
+    outbound = next(item[2] for item in reversed(requests) if item[0].get("query") == "stdio-trace")
+    assert outbound["traceparent"].split("-")[1] == expected
+
+
+def test_rejected_host_still_gets_http_trace_id(live_mcp):
+    url, _, _ = live_mcp
+    expected = "9bf92f3577b34da6a3ce929d0e0e4736"
+    response = httpx.post(url, headers={"Host": "untrusted.example", "traceparent": f"00-{expected}-00f067aa0ba902b7-01"})
+    assert response.status_code == 421
+    assert response.headers["x-trace-id"] == expected

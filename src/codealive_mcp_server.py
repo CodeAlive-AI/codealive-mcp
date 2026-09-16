@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from core import Config, MetadataAwareHostOriginGuardMiddleware, build_oauth_provider, codealive_lifespan, setup_logging, setup_debug_logging, init_tracing, normalize_base_url, _server_ready
 import core.client as _client_module  # for /ready flag access
 from middleware import N8NRemoveParametersMiddleware, ObservabilityMiddleware, ReviewToolCatalogMiddleware
+from middleware.http_trace import HttpTraceMiddleware
 from tools import (
     get_data_sources,
     semantic_search,
@@ -62,7 +63,16 @@ def _environment_flag(name: str, *, default: bool) -> bool:
 
 
 # Initialize FastMCP server with lifespan and enhanced system instructions
-mcp = FastMCP(
+class _TracedFastMCP(FastMCP):
+    def http_app(self, *args, **kwargs):
+        app = super().http_app(*args, **kwargs)
+        # FastMCP appends supplied transport middleware AFTER auth/host guards.
+        # Instrument the finished app so their rejected requests are traced too.
+        app.add_middleware(HttpTraceMiddleware)
+        return app
+
+
+mcp = _TracedFastMCP(
     name="CodeAlive MCP Server",
     version=_package_version(),
     instructions="""

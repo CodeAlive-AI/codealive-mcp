@@ -1,6 +1,8 @@
 """Tests for middleware.observability_middleware — OTel spans and loguru context."""
 
 import sys
+import asyncio
+from types import SimpleNamespace
 from typing import Sequence
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -13,6 +15,46 @@ from opentelemetry.sdk.trace.export import SimpleSpanProcessor, SpanExporter, Sp
 sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent.parent))
 
 from middleware.observability_middleware import ObservabilityMiddleware, _extract_tool_arguments
+
+
+@pytest.mark.asyncio
+async def test_meta_parent_links_ambient_and_restores_context(otel_setup):
+    from middleware.observability_middleware import _tracer
+    remote_trace = "4bf92f3577b34da6a3ce929d0e0e4736"
+    context = SimpleNamespace(method="tools/list", message=SimpleNamespace(meta={
+        "traceparent": f"00-{remote_trace}-00f067aa0ba902b7-01",
+    }))
+    middleware = ObservabilityMiddleware()
+    with _tracer.start_as_current_span("http") as http_span:
+        ambient = http_span.get_span_context()
+        await middleware.on_request(context, AsyncMock(return_value="ok"))
+        assert trace.get_current_span().get_span_context() == ambient
+    message = next(span for span in otel_setup.spans if span.name == "tools/list")
+    assert message.context.trace_id == int(remote_trace, 16)
+    assert message.parent.span_id == int("00f067aa0ba902b7", 16)
+    assert message.kind == trace.SpanKind.SERVER
+    assert [link.context for link in message.links] == [ambient]
+
+
+@pytest.mark.asyncio
+async def test_in_band_tool_error_is_not_success(otel_setup):
+    from fastmcp.tools import ToolResult
+    await _run_tool(ObservabilityMiddleware(), _make_context(), AsyncMock(
+        return_value=ToolResult(content="repair", is_error=True),
+    ))
+    assert len(otel_setup.spans) == 1
+    assert otel_setup.spans[0].status.status_code == trace.StatusCode.ERROR
+    assert otel_setup.spans[0].attributes["error.type"] == "tool_error"
+
+
+@pytest.mark.asyncio
+async def test_cancellation_ends_span_and_restores_context(otel_setup):
+    before = trace.get_current_span().get_span_context()
+    with pytest.raises(asyncio.CancelledError):
+        await _run_tool(ObservabilityMiddleware(), _make_context(), AsyncMock(side_effect=asyncio.CancelledError()))
+    assert trace.get_current_span().get_span_context() == before
+    assert len(otel_setup.spans) == 1
+    assert otel_setup.spans[0].end_time is not None
 
 
 class _CollectingExporter(SpanExporter):
@@ -57,6 +99,13 @@ def _make_context(tool_name: str = "semantic_search", arguments: dict | None = N
     return ctx
 
 
+async def _run_tool(middleware, context, call_next):
+    context.method = "tools/call"
+    return await middleware.on_request(
+        context, lambda inner: middleware.on_call_tool(inner, call_next),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Successful tool call
 # ---------------------------------------------------------------------------
@@ -68,7 +117,7 @@ class TestSuccessfulToolCall:
         context = _make_context("semantic_search")
         call_next = AsyncMock(return_value="<results>xml</results>")
 
-        result = await middleware.on_call_tool(context, call_next)
+        result = await _run_tool(middleware, context, call_next)
 
         assert result == "<results>xml</results>"
         call_next.assert_called_once_with(context)
@@ -79,12 +128,12 @@ class TestSuccessfulToolCall:
         context = _make_context("get_data_sources")
         call_next = AsyncMock(return_value="ok")
 
-        await middleware.on_call_tool(context, call_next)
+        await _run_tool(middleware, context, call_next)
 
         spans = otel_setup.get_finished_spans()
         assert len(spans) == 1
         span = spans[0]
-        assert span.name == "tool get_data_sources"
+        assert span.name == "tools/call get_data_sources"
         assert span.attributes["gen_ai.operation.name"] == "execute_tool"
         assert span.attributes["gen_ai.tool.name"] == "get_data_sources"
         assert span.attributes["mcp.tool.name"] == "get_data_sources"
@@ -96,7 +145,7 @@ class TestSuccessfulToolCall:
         context = _make_context()
         call_next = AsyncMock(return_value="ok")
 
-        await middleware.on_call_tool(context, call_next)
+        await _run_tool(middleware, context, call_next)
 
         span = otel_setup.get_finished_spans()[0]
         assert span.status.status_code == trace.StatusCode.OK
@@ -109,10 +158,10 @@ class TestSuccessfulToolCall:
         context.message = type("Msg", (), {})()
         call_next = AsyncMock(return_value="ok")
 
-        await middleware.on_call_tool(context, call_next)
+        await _run_tool(middleware, context, call_next)
 
         span = otel_setup.get_finished_spans()[0]
-        assert span.name == "tool unknown"
+        assert span.name == "tools/call unknown"
         assert span.attributes["mcp.tool.name"] == "unknown"
 
     @pytest.mark.asyncio
@@ -125,7 +174,7 @@ class TestSuccessfulToolCall:
         handler_id = logger.add(lambda message: records.append(message.record), level="DEBUG")
 
         try:
-            await middleware.on_call_tool(context, call_next)
+            await _run_tool(middleware, context, call_next)
         finally:
             logger.remove(handler_id)
 
@@ -145,7 +194,7 @@ class TestSuccessfulToolCall:
 
 class TestMcpRequest:
     @pytest.mark.asyncio
-    async def test_request_span_wraps_nested_tool_span(self, otel_setup):
+    async def test_request_and_tool_share_one_span(self, otel_setup):
         middleware = ObservabilityMiddleware()
         context = _make_context("get_data_sources")
         context.method = "tools/call"
@@ -158,12 +207,11 @@ class TestMcpRequest:
 
         assert await middleware.on_request(context, call_tool) == "ok"
 
-        spans = {span.name: span for span in otel_setup.get_finished_spans()}
-        request_span = spans["mcp tools/call"]
-        tool_span = spans["tool get_data_sources"]
-        assert request_span.attributes == {"mcp.method.name": "tools/call"}
+        spans = otel_setup.get_finished_spans()
+        assert len(spans) == 1
+        request_span = spans[0]
+        assert request_span.attributes["mcp.method.name"] == "tools/call"
         assert request_span.status.status_code == trace.StatusCode.OK
-        assert tool_span.parent.span_id == request_span.context.span_id
 
     @pytest.mark.asyncio
     async def test_request_failure_records_type_without_message(self, otel_setup):
@@ -199,7 +247,7 @@ class TestFailedToolCall:
         call_next = AsyncMock(side_effect=RuntimeError("connection timeout"))
 
         with pytest.raises(RuntimeError, match="connection timeout"):
-            await middleware.on_call_tool(context, call_next)
+            await _run_tool(middleware, context, call_next)
 
     @pytest.mark.asyncio
     async def test_span_status_error_on_failure(self, otel_setup):
@@ -208,7 +256,7 @@ class TestFailedToolCall:
         call_next = AsyncMock(side_effect=ValueError("bad input"))
 
         with pytest.raises(ValueError):
-            await middleware.on_call_tool(context, call_next)
+            await _run_tool(middleware, context, call_next)
 
         span = otel_setup.get_finished_spans()[0]
         assert span.status.status_code == trace.StatusCode.ERROR
@@ -221,7 +269,7 @@ class TestFailedToolCall:
         call_next = AsyncMock(side_effect=RuntimeError("boom"))
 
         with pytest.raises(RuntimeError):
-            await middleware.on_call_tool(context, call_next)
+            await _run_tool(middleware, context, call_next)
 
         span = otel_setup.get_finished_spans()[0]
         exception_events = [e for e in span.events if e.name == "exception"]
@@ -243,7 +291,7 @@ class TestFailedToolCall:
 
         try:
             with pytest.raises(ValueError, match="bad profile"):
-                await middleware.on_call_tool(context, call_next)
+                await _run_tool(middleware, context, call_next)
         finally:
             logger.remove(handler_id)
 

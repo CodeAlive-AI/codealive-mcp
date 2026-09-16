@@ -112,8 +112,8 @@ This is a Model Context Protocol (MCP) server that provides AI clients with acce
 
 ### Key Architectural Patterns
 
-1. **FastMCP Framework**: Uses FastMCP 3.x with lifespan context, middleware hooks, and built-in `Client` for testing
-2. **HTTP Auth via `get_http_headers`**: FastMCP 3.x strips the `authorization` header by default (to prevent accidental credential forwarding to downstream services). Our `get_api_key_from_context()` in `core/client.py` must use `get_http_headers(include={"authorization"})` to read Bearer tokens from HTTP/streamable-http clients. **Do not remove the `include=` parameter** — without it, all HTTP-transport clients (LibreChat, n8n, etc.) will fail with a misleading STDIO-mode error.
+1. **FastMCP Framework**: Uses FastMCP 4.x / MCP SDK 2, preserving legacy HTTP and stdio clients. Python fields use snake_case; wire JSON retains camelCase. See `docs/fastmcp4-migration.md` and the real legacy-client gate.
+2. **HTTP Auth via `get_http_headers`**: FastMCP strips the `authorization` header by default (to prevent accidental credential forwarding to downstream services). Our `get_api_key_from_context()` in `core/client.py` must use `get_http_headers(include={"authorization"})` to read Bearer tokens from HTTP/streamable-http clients. **Do not remove the `include=` parameter** — without it, all HTTP-transport clients (LibreChat, n8n, etc.) will fail with a misleading STDIO-mode error.
 3. **HTTP Client Management**: Single persistent `httpx.AsyncClient` with connection pooling, created in lifespan
 3. **Tool API v3 Backend Contract**: every MCP tool delegates to `POST /api/tools/{name}` and requests `output_format=agentic`
 4. **Environment Configuration**: Supports both .env files and command-line arguments with precedence
@@ -204,6 +204,8 @@ Every log record automatically gets `trace_id` and `span_id` injected by `_otel_
 - If `OTEL_EXPORTER_OTLP_ENDPOINT` is set, traces export via OTLP/HTTP; otherwise a no-op provider is used (trace IDs still appear in logs).
 - **`atexit.register(provider.shutdown)`** ensures pending spans are flushed on process exit. Do not skip this if modifying the init logic.
 - **HTTPX auto-instrumentation** (`HTTPXClientInstrumentor`) injects `traceparent` headers into all outbound HTTP calls. Do not add manual propagation.
+- **HTTP ingress** uses explicit `HttpTraceMiddleware` on the completed FastMCP HTTP app, outside auth/host guards. Global Starlette patching is too late after FastMCP imports it. Preserve `OTEL_PYTHON_STARLETTE_EXCLUDED_URLS` support.
+- **MCP span ownership**: startup sets FastMCP telemetry to `propagation_only`; our middleware creates one SERVER span per request, preferring valid `_meta.traceparent` and linking the ambient transport span. Tool hooks enrich that same span. See `docs/tracing.md` for the response header contract and local checks.
 
 ### Middleware Spans
 
@@ -212,7 +214,7 @@ The `ObservabilityMiddleware` creates a span per tool call with these attributes
 - `gen_ai.tool.name` / `mcp.tool.name` = tool name
 - `mcp.method` = `"tools/call"`
 
-On errors, the span gets `StatusCode.ERROR` + `record_exception()`. Do not add redundant span creation inside tool functions — the middleware handles it.
+On errors, the span gets `StatusCode.ERROR` plus a type-only exception event (never raw exception text). In-band `is_error` results are also errors. Do not add redundant span creation inside tool functions — the middleware handles it.
 
 #### Required MCP observability fix pattern
 
