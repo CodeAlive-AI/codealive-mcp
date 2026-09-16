@@ -37,10 +37,10 @@ async def test_all_tools_are_marked_read_only_with_titles():
         tool = actual[name]
         assert tool.title == title
         assert tool.annotations is not None
-        assert tool.annotations.readOnlyHint is True
-        assert tool.annotations.destructiveHint is False
-        assert tool.annotations.idempotentHint is True
-        assert tool.annotations.openWorldHint is True
+        assert tool.annotations.read_only_hint is True
+        assert tool.annotations.destructive_hint is False
+        assert tool.annotations.idempotent_hint is True
+        assert tool.annotations.open_world_hint is True
 
     relationships_description = actual["get_artifact_relationships"].description
     assert relationships_description is not None
@@ -48,22 +48,22 @@ async def test_all_tools_are_marked_read_only_with_titles():
     assert "not a search tool" in relationships_description
     assert "fetch_artifacts" in relationships_description
 
-    semantic_schema = actual["semantic_search"].inputSchema["properties"]
+    semantic_schema = actual["semantic_search"].input_schema["properties"]
     assert semantic_schema["question"]["minLength"] == 1
     max_results_schema = semantic_schema["max_results"]["anyOf"][0]
     assert max_results_schema["minimum"] == 1
     assert max_results_schema["maximum"] == 500
 
-    tree_schema = actual["get_file_tree"].inputSchema["properties"]
+    tree_schema = actual["get_file_tree"].input_schema["properties"]
     assert tree_schema["max_depth"]["anyOf"][0]["maximum"] == 8
     assert tree_schema["max_nodes"]["anyOf"][0]["maximum"] == 300
 
-    fetch_schema = actual["fetch_artifacts"].inputSchema["properties"]["identifiers"]
+    fetch_schema = actual["fetch_artifacts"].input_schema["properties"]["identifiers"]
     identifier_array_schema = next(branch for branch in fetch_schema["anyOf"] if branch.get("type") == "array")
     assert identifier_array_schema["minItems"] == 1
     assert identifier_array_schema["maxItems"] == 50
 
-    relationship_schema = actual["get_artifact_relationships"].inputSchema["properties"]
+    relationship_schema = actual["get_artifact_relationships"].input_schema["properties"]
     assert relationship_schema["profile"]["enum"] == [
         "calls_only",
         "inheritance_only",

@@ -85,7 +85,8 @@ async def test_stdio_server_lists_tools_and_uses_tool_api_v3_endpoint():
 
     with _mock_codealive_server() as (port, requests):
         env = {
-            **os.environ,
+            **{key: os.environ[key] for key in ("PATH", "SYSTEMROOT", "TMPDIR") if key in os.environ},
+            "PYTHON_DOTENV_DISABLED": "1",
             "CODEALIVE_API_KEY": "ca_1720000000000_0123456789abcdef0123456789abcdef0123456789a",
             "CODEALIVE_BASE_URL": f"http://127.0.0.1:{port}/api",
         }
@@ -116,7 +117,7 @@ async def test_stdio_server_lists_tools_and_uses_tool_api_v3_endpoint():
                 ]
 
                 result = await session.call_tool("get_data_sources", {})
-                assert result.isError is False
+                assert result.is_error is False
                 text_content = result.content[0].text
                 assert "backend" in text_content
                 assert "core-workspace" in text_content

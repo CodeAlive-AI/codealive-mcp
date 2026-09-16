@@ -7,7 +7,7 @@ import httpx
 import pytest
 from fastmcp import Context
 from fastmcp.exceptions import ToolError
-from fastmcp.tools.tool import ToolResult
+from fastmcp.tools import ToolResult
 
 from core.config import Config
 from tools.artifact_query import get_artifact_query_schema, query_artifact_metadata
