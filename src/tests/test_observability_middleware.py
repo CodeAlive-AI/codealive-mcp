@@ -48,6 +48,21 @@ async def test_in_band_tool_error_is_not_success(otel_setup):
 
 
 @pytest.mark.asyncio
+async def test_tool_attributes_are_available_at_span_creation():
+    tracer = MagicMock()
+    tracer.start_as_current_span.return_value.__enter__.return_value.is_recording.return_value = False
+    with patch("middleware.observability_middleware._tracer", tracer):
+        await _run_tool(ObservabilityMiddleware(), _make_context("semantic_search"), AsyncMock(return_value="ok"))
+    attributes = tracer.start_as_current_span.call_args.kwargs["attributes"]
+    assert attributes == {
+        "mcp.method.name": "tools/call",
+        "gen_ai.operation.name": "execute_tool",
+        "gen_ai.tool.name": "semantic_search",
+        "mcp.tool.name": "semantic_search",
+    }
+
+
+@pytest.mark.asyncio
 async def test_cancellation_ends_span_and_restores_context(otel_setup):
     before = trace.get_current_span().get_span_context()
     with pytest.raises(asyncio.CancelledError):
@@ -231,6 +246,9 @@ class TestMcpRequest:
         assert span.attributes == {
             "mcp.method.name": "tools/call",
             "error.type": "ValueError",
+            "gen_ai.operation.name": "execute_tool",
+            "gen_ai.tool.name": "semantic_search",
+            "mcp.tool.name": "semantic_search",
         }
         assert "secret query text" not in str(span.events)
 

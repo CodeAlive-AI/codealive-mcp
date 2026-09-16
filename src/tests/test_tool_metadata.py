@@ -79,3 +79,19 @@ def test_server_advertises_codealive_version_and_compact_instructions():
     assert len(mcp.instructions.split()) <= 150
     assert "DISCOVER → SEARCH → READ → EXPAND" in mcp.instructions
     assert "chat only when the user explicitly requests" in mcp.instructions.lower()
+
+
+def test_imported_server_selects_single_span_ownership_without_main():
+    import os
+    import subprocess
+    env = {
+        **{key: os.environ[key] for key in ("PATH", "SYSTEMROOT", "TMPDIR") if key in os.environ},
+        "PYTHON_DOTENV_DISABLED": "1",
+        "PYTHONPATH": str(Path(__file__).resolve().parents[1]),
+    }
+    result = subprocess.run([
+        sys.executable, "-c",
+        "from fastmcp import settings; settings.telemetry_mode = 'native'; "
+        "import codealive_mcp_server; assert settings.telemetry_mode == 'propagation_only'",
+    ], env=env, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stderr

@@ -24,6 +24,9 @@ class HttpTraceMiddleware:
         self.app = OpenTelemetryMiddleware(
             app,
             server_request_hook=_capture_trace_id,
+            # Generic ASGI naming uses the untrusted raw path before routing.
+            # Keep paths (including unmatched URLs) out of names as well as attrs.
+            default_span_details=lambda scope: ("HTTP request", {}),
             excluded_urls=get_excluded_urls("STARLETTE"),
             exclude_spans=["receive", "send"],
         )

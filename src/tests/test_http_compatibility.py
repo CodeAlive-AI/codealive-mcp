@@ -211,7 +211,7 @@ async def main():
 asyncio.run(main())
 '''
     result = subprocess.run(
-        [uv, "run", "--no-project", "--isolated", "--with", "mcp==1.28.1", "--exclude-newer", "7 days", "python", "-c", script, url, sys.executable, str(SERVER)],
+        [uv, "run", "--no-project", "--isolated", "--with", "mcp==1.28.1", "--exclude-newer", "2026-09-09T00:00:00Z", "python", "-c", script, url, sys.executable, str(SERVER)],
         cwd=ROOT, env=env, capture_output=True, text=True, timeout=120,
     )
     assert result.returncode == 0, result.stdout + result.stderr

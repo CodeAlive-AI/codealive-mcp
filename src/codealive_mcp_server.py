@@ -13,7 +13,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
-from fastmcp import FastMCP
+from fastmcp import FastMCP, settings as fastmcp_settings
 from loguru import logger
 from starlette.middleware import Middleware
 from starlette.requests import Request
@@ -63,6 +63,10 @@ def _environment_flag(name: str, *, default: bool) -> bool:
 
 
 # Initialize FastMCP server with lifespan and enhanced system instructions
+# Ownership must also hold for imported HTTP/stdio apps that bypass main().
+fastmcp_settings.telemetry_mode = "propagation_only"
+
+
 class _TracedFastMCP(FastMCP):
     def http_app(self, *args, **kwargs):
         app = super().http_app(*args, **kwargs)

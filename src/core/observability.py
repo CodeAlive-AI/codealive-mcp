@@ -31,10 +31,21 @@ _SENSITIVE_ATTRIBUTE_PREFIXES = (
 )
 _SENSITIVE_ATTRIBUTES = {
     "client.address",
+    "client.port",
+    # ASGI 0.64b0 emits legacy names by default; http/dup emits both sets.
+    "net.peer.ip",
+    "net.peer.port",
+    "http.host",
+    "http.server_name",
+    "http.target",
+    "http.user_agent",
     "http.url",
     "mcp.session.id",
     "mcp.resource.uri",
     "network.peer.address",
+    "network.peer.port",
+    "server.address",
+    "url.path",
     "url.full",
     "url.query",
     "user_agent.original",

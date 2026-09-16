@@ -22,6 +22,57 @@ from core.oauth import (
 )
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("outcome", ["rejected", "accepted", "exception", "cancelled"])
+async def test_jwt_verification_span_preserves_parent_and_hides_credentials(monkeypatch, outcome):
+    from opentelemetry import trace
+    from opentelemetry.sdk.trace import TracerProvider
+    from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+    from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+    import core.oauth as oauth
+
+    provider = TracerProvider()
+    exported = InMemorySpanExporter()
+    provider.add_span_processor(SimpleSpanProcessor(exported))
+    tracer = provider.get_tracer("test.auth")
+    monkeypatch.setattr(oauth, "_tracer", tracer)
+    verifier = CodeAliveTokenVerifier(_config())
+    observed = []
+
+    async def verify(token):
+        observed.append(trace.get_current_span().get_span_context())
+        await asyncio.sleep(0)
+        if outcome == "exception":
+            raise RuntimeError("private-token private-claims")
+        if outcome == "cancelled":
+            raise asyncio.CancelledError()
+        if outcome == "accepted":
+            return AccessToken(token=token, client_id="test", scopes=[], claims={})
+        return None
+
+    verifier._jwt.verify_token = verify
+    try:
+        with tracer.start_as_current_span("http") as parent:
+            parent_context = parent.get_span_context()
+            if outcome in {"exception", "cancelled"}:
+                expected = RuntimeError if outcome == "exception" else asyncio.CancelledError
+                with pytest.raises(expected):
+                    await verifier.verify_token("private-token.payload.signature")
+            else:
+                await verifier.verify_token("private-token.payload.signature")
+            assert trace.get_current_span().get_span_context() == parent_context
+        auth = next(span for span in exported.get_finished_spans() if span.name == "auth.verify_token")
+        assert auth.context == observed[0]
+        assert auth.context.trace_id == parent_context.trace_id
+        assert auth.parent.span_id == parent_context.span_id
+        assert auth.end_time is not None
+        assert "private-" not in auth.to_json()
+        if outcome in {"rejected", "exception"}:
+            assert auth.status.status_code == trace.StatusCode.ERROR
+    finally:
+        provider.shutdown()
+
+
 def _config(**changes) -> Config:
     values = {
         "oauth_issuer": "https://auth.codealive.ai/",

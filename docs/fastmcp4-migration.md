@@ -14,6 +14,10 @@ separate MCP SDK 1.28.1 client over HTTP and stdio. It checks wire aliases,
 in-band errors, Unicode, missing credentials, concurrent credential isolation,
 and n8n's extra arguments. The old-client environment is isolated with uv;
 its first run needs package-index access. Installation failures fail the gate.
+The isolated client's dependency resolution uses the fixed cutoff
+`2026-09-09T00:00:00Z`, not a sliding seven-day window. It is not a hash-locked
+offline environment; changing the cutoff requires rerunning both transports.
+CI runs both checks below with dotenv loading disabled before packaging images.
 
 Run both commands before release:
 

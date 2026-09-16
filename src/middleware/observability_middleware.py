@@ -99,6 +99,14 @@ class ObservabilityMiddleware(Middleware):
         method = context.method or "unknown"
         parent, links = _message_parent(context)
         tool = getattr(context.message, "name", "unknown") if method == "tools/call" else None
+        attributes = {"mcp.method.name": method}
+        if tool:
+            # Samplers and on_start processors need these at span creation.
+            attributes.update({
+                "gen_ai.operation.name": "execute_tool",
+                "gen_ai.tool.name": tool,
+                "mcp.tool.name": tool,
+            })
         with _tracer.start_as_current_span(
             f"{method} {tool}" if tool else method,
             context=parent,
@@ -106,7 +114,7 @@ class ObservabilityMiddleware(Middleware):
             kind=SpanKind.SERVER,
             record_exception=False,
             set_status_on_exception=False,
-            attributes={"mcp.method.name": method},
+            attributes=attributes,
         ) as span:
             try:
                 result = await call_next(context)
