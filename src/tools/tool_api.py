@@ -7,7 +7,7 @@ from urllib.parse import urljoin
 import httpx
 from fastmcp import Context
 from fastmcp.exceptions import ToolError
-from fastmcp.tools.tool import ToolResult
+from fastmcp.tools import ToolResult
 
 from fastmcp.server.dependencies import get_access_token
 

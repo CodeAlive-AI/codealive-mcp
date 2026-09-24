@@ -11,6 +11,8 @@ from collections.abc import Awaitable, Callable
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
+from opentelemetry import trace
+from opentelemetry.trace import StatusCode
 from fastmcp.server.auth import AccessToken, RemoteAuthProvider, TokenVerifier
 from fastmcp.server.auth.providers.jwt import JWTVerifier
 from fastmcp.server.http import HostOriginGuardMiddleware
@@ -26,6 +28,7 @@ _OBJECT_ID = re.compile(r"^[0-9a-fA-F]{24}$")
 _ACCESS_TOKEN_TYPE = "urn:ietf:params:oauth:token-type:access_token"
 _TOKEN_EXCHANGE_GRANT = "urn:ietf:params:oauth:grant-type:token-exchange"
 _LEGACY_API_KEY = re.compile(r"^ca_[0-9]{10,16}_[A-Za-z0-9_-]{43}$")
+_tracer = trace.get_tracer("codealive-mcp.auth")
 
 
 def is_jwt_shaped(token: str) -> bool:
@@ -113,7 +116,23 @@ class CodeAliveTokenVerifier(TokenVerifier):
 
         if not is_jwt_shaped(token):
             return None
-        access = await self._jwt.verify_token(token)
+        # FastMCP uses httpx2, outside our httpx instrumentation. Measure the
+        # verification boundary (including cached or remote JWKS lookup) without
+        # replacing its client, cache, validation or SSRF protections.
+        with _tracer.start_as_current_span(
+            "auth.verify_token", record_exception=False, set_status_on_exception=False,
+        ) as span:
+            try:
+                access = await self._jwt.verify_token(token)
+            except Exception as exc:
+                error_type = type(exc).__name__
+                span.set_attribute("error.type", error_type)
+                span.set_status(StatusCode.ERROR, error_type)
+                span.add_event("exception", {"exception.type": error_type})
+                raise
+            if access is None:
+                span.set_attribute("error.type", "invalid_token")
+                span.set_status(StatusCode.ERROR, "invalid_token")
         if access is None:
             return None
         claims = access.claims or {}

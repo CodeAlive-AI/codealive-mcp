@@ -22,7 +22,7 @@ class TestInitTracing:
         monkeypatch.setenv("OTEL_TRACES_SAMPLER_ARG", "0.05")
 
         with patch("core.observability.HTTPXClientInstrumentor"):
-            with patch("core.observability.StarletteInstrumentor"):
+            with patch("core.observability.fastmcp_settings"):
                 with patch("core.observability.trace.set_tracer_provider") as mock_set:
                     init_tracing()
 
@@ -39,7 +39,7 @@ class TestInitTracing:
         monkeypatch.delenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", raising=False)
 
         with patch("core.observability.HTTPXClientInstrumentor") as mock_httpx:
-            with patch("core.observability.StarletteInstrumentor") as mock_starlette:
+            with patch("core.observability.fastmcp_settings") as mock_starlette:
                 with patch("core.observability.trace.set_tracer_provider") as mock_set:
                     init_tracing()
 
@@ -48,7 +48,7 @@ class TestInitTracing:
                     from opentelemetry.sdk.trace import TracerProvider
                     assert isinstance(provider, TracerProvider)
                     mock_httpx.return_value.instrument.assert_called_once_with()
-                    mock_starlette.return_value.instrument.assert_called_once_with()
+                    assert mock_starlette.telemetry_mode == "propagation_only"
 
     @pytest.mark.parametrize(
         "variable",
@@ -65,7 +65,7 @@ class TestInitTracing:
         mock_processor = MagicMock()
 
         with patch("core.observability.HTTPXClientInstrumentor"):
-            with patch("core.observability.StarletteInstrumentor"):
+            with patch("core.observability.fastmcp_settings"):
                 with patch("core.observability.trace.set_tracer_provider"):
                     with patch(
                         "opentelemetry.exporter.otlp.proto.http.trace_exporter.OTLPSpanExporter",
@@ -89,11 +89,11 @@ class TestInitTracing:
         monkeypatch.delenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", raising=False)
 
         with patch("core.observability.HTTPXClientInstrumentor") as mock_httpx:
-            with patch("core.observability.StarletteInstrumentor") as mock_starlette:
+            with patch("core.observability.fastmcp_settings") as mock_starlette:
                 with patch("core.observability.trace.set_tracer_provider"):
                     init_tracing()
                     mock_httpx.return_value.instrument.assert_called_once_with()
-                    mock_starlette.return_value.instrument.assert_called_once_with()
+                    assert mock_starlette.telemetry_mode == "propagation_only"
 
     def test_resource_uses_safe_environment_metadata(self, monkeypatch):
         monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
@@ -106,7 +106,7 @@ class TestInitTracing:
         monkeypatch.setenv("ENVIRONMENT", "production")
 
         with patch("core.observability.HTTPXClientInstrumentor"):
-            with patch("core.observability.StarletteInstrumentor"):
+            with patch("core.observability.fastmcp_settings"):
                 with patch("core.observability.trace.set_tracer_provider") as mock_set:
                     init_tracing()
 
@@ -135,7 +135,7 @@ class TestInitTracing:
             monkeypatch.delenv(variable, raising=False)
 
         with patch("core.observability.HTTPXClientInstrumentor"):
-            with patch("core.observability.StarletteInstrumentor"):
+            with patch("core.observability.fastmcp_settings"):
                 with patch("core.observability.trace.set_tracer_provider") as mock_set:
                     init_tracing()
 

@@ -5,7 +5,7 @@ generic or traces-specific OTLP endpoint is configured. Otherwise tracing is
 configured without an exporter so the rest of the code can call
 ``trace.get_tracer()`` unconditionally.
 
-Starlette and HTTPX instrumentation connect inbound MCP requests to outbound
+Explicit ASGI and HTTPX instrumentation connect inbound MCP requests to outbound
 CodeAlive API calls without recording request or response bodies.
 """
 
@@ -13,10 +13,10 @@ import atexit
 import os
 from collections.abc import Sequence
 
+from fastmcp import settings as fastmcp_settings
 from loguru import logger
 from opentelemetry import trace
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
-from opentelemetry.instrumentation.starlette import StarletteInstrumentor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import Event, ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
@@ -31,10 +31,21 @@ _SENSITIVE_ATTRIBUTE_PREFIXES = (
 )
 _SENSITIVE_ATTRIBUTES = {
     "client.address",
+    "client.port",
+    # ASGI 0.64b0 emits legacy names by default; http/dup emits both sets.
+    "net.peer.ip",
+    "net.peer.port",
+    "http.host",
+    "http.server_name",
+    "http.target",
+    "http.user_agent",
     "http.url",
     "mcp.session.id",
     "mcp.resource.uri",
     "network.peer.address",
+    "network.peer.port",
+    "server.address",
+    "url.path",
     "url.full",
     "url.query",
     "user_agent.original",
@@ -162,8 +173,9 @@ def init_tracing() -> None:
     # Flush pending spans on process exit
     atexit.register(provider.shutdown)
 
-    # Instrument before FastMCP creates its Starlette app. Neither integration
-    # captures bodies by default; health endpoints are excluded through the
-    # standard OTEL_PYTHON_STARLETTE_EXCLUDED_URLS deployment setting.
-    StarletteInstrumentor().instrument()
+    # HTTP instrumentation is explicit in the transport middleware: globally
+    # patching Starlette here misses FastMCP's already-imported Starlette class.
+    # Own the MCP spans in our middleware, including metadata-first parenting.
+    # Native FastMCP 4.0.3 prefers ambient HTTP context over message metadata.
+    fastmcp_settings.telemetry_mode = "propagation_only"
     HTTPXClientInstrumentor().instrument()

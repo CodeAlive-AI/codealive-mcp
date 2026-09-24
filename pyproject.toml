@@ -5,7 +5,8 @@ description = "MCP server for the CodeAlive API"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "fastmcp==3.4.3",
+    "fastmcp==4.0.3",
+    "mcp==2.2.0",
     "httpx==0.28.1",
     "python-dotenv==1.2.2",
     "loguru==0.7.3",
@@ -13,7 +14,7 @@ dependencies = [
     "opentelemetry-sdk==1.43.0",
     "opentelemetry-exporter-otlp-proto-http==1.43.0",
     "opentelemetry-instrumentation-httpx==0.64b0",
-    "opentelemetry-instrumentation-starlette==0.64b0",
+    "opentelemetry-instrumentation-asgi==0.64b0",
     "opentelemetry-semantic-conventions==0.64b0",
 ]
 
@@ -23,7 +24,6 @@ test = [
     "pytest-asyncio==1.4.0",
     "pytest-mock==3.15.1",
     "pytest-cov==7.1.0",
-    "mcp==1.28.1",
     "jsonschema==4.26.0",
 ]
 
