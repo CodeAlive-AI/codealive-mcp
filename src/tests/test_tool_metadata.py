@@ -80,6 +80,25 @@ def test_server_advertises_codealive_version_and_compact_instructions():
     assert "DISCOVER → SEARCH → READ → EXPAND" in mcp.instructions
     assert "chat only when the user explicitly requests" in mcp.instructions.lower()
 
+@pytest.mark.asyncio
+async def test_relationships_description_states_the_call_site_contract():
+    """The three call-site rules are only enforceable through the tool description: the backend can
+    omit positions for a repository indexed before call sites shipped, and a model that reads a
+    missing position as "no call" draws the opposite conclusion from the truth."""
+    # Arrange / Act
+    async with Client(mcp) as client:
+        tools = await client.list_tools()
+
+    # Assert
+    description = {tool.name: tool for tool in tools}["get_artifact_relationships"].description
+    assert description is not None
+    assert "call_sites" in description
+    assert "call_site_count" in description
+    # Missing position means "not indexed yet", never "no call".
+    assert "never" in description.lower()
+    # No parameter enables them, so the model must not go hunting for one.
+    assert "no parameter" in description.lower()
+
 
 def test_imported_server_selects_single_span_ownership_without_main():
     import os

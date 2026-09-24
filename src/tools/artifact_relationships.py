@@ -33,6 +33,17 @@ async def get_artifact_relationships(
     This is a graph expansion tool, not a search tool. Use identifiers returned
     by semantic_search, grep_search, fetch_artifacts, read_file, or prior
     relationship results.
+
+    Call relationships also carry `call_sites` — each one a `position` written as
+    `path:line`, where the call is actually written — plus `call_site_count` for
+    how many exist in total. Read those exact lines instead of fetching the whole
+    caller. There is no parameter for this: positions come back whenever they are
+    known, so do not look for a flag. A call item with no `call_sites` means the position is not
+    indexed yet (the repository was indexed before call sites shipped, or that one
+    edge could not be located); it never means the call does not happen — the item
+    being listed at all is what says the call exists. A `confidence` on a site
+    appears only when the position is approximate; its absence means exact. For
+    incoming calls the file shown is the caller's file, not this artifact's.
     """
     tool_name = "get_artifact_relationships"
     require_text(identifier, tool_name, "identifier")
